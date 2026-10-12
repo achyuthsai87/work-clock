@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Work Clock">
+<meta name="theme-color" content="#2f6fed">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<title>Work Clock</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏱️</text></svg>">
+<style>
+  :root{
+    --bg:#f2f4f8; --card:#ffffff; --ink:#1b2430; --muted:#6b7686;
+    --accent:#2f6fed; --accent-dark:#2459c4; --green:#1e9e5a; --red:#e05252;
+    --radius:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+       background:var(--bg); color:var(--ink); padding:calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 24px);}
+  .wrap{max-width:520px; margin:0 auto;}
+  h1{font-size:22px; margin:4px 0 2px; display:flex; align-items:center; gap:8px;}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:14px;}
+  .card{background:var(--card); border-radius:var(--radius); padding:16px; margin-bottom:12px;
+        box-shadow:0 1px 3px rgba(20,30,60,.08);}
+  .big-btn{display:block; width:100%; border:0; border-radius:var(--radius); padding:20px;
+           font-size:20px; font-weight:700; color:#fff; background:var(--green); cursor:pointer;}
+  .big-btn:active{transform:scale(.98);}
+  .big-btn.out{background:var(--red);}
+  .big-btn:disabled{opacity:.5;}
+  .status-line{text-align:center; margin-top:10px; color:var(--muted); font-size:14px;}
+  .status-line b{color:var(--ink); font-variant-numeric:tabular-nums;}
+  .stats{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;}
+  .stat{background:var(--card); border-radius:var(--radius); padding:12px 10px; text-align:center;
+        box-shadow:0 1px 3px rgba(20,30,60,.08);}
+  .stat .label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px;}
+  .stat .val{font-size:17px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums;}
+  .stat .val small{font-size:12px; color:var(--muted); font-weight:400; display:block;}
+  .row{display:flex; justify-content:space-between; align-items:center; padding:11px 2px;
+       border-bottom:1px solid #eef1f6; font-size:14px;}
+  .row:last-child{border-bottom:0;}
+  .row .d{font-weight:600;}
+  .row .t{color:var(--muted); font-size:12.5px; margin-top:2px;}
+  .row .m{text-align:right; font-variant-numeric:tabular-nums;}
+  .row .m b{font-size:15px;}
+  .row .m span{display:block; font-size:12px; color:var(--muted);}
+  .icon-btn{border:0; background:#eef2fa; color:var(--accent); border-radius:10px; padding:7px 10px;
+            font-size:13px; font-weight:600; margin-left:6px; cursor:pointer;}
+  .icon-btn.danger{background:#fdeeee; color:var(--red);}
+  .link{background:none; border:0; color:var(--accent); font-size:14px; font-weight:600; cursor:pointer; padding:8px 0;}
+  .modal-bg{position:fixed; inset:0; background:rgba(15,25,45,.45); display:none; align-items:flex-end; justify-content:center; z-index:50;}
+  .modal-bg.open{display:flex;}
+  .modal{background:#fff; width:100%; max-width:520px; border-radius:20px 20px 0 0; padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);}
+  .modal h2{margin:0 0 12px; font-size:18px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.4px;}
+  .field input{width:100%; font-size:17px; padding:12px; border:1.5px solid #dfe4ee; border-radius:12px; font-family:inherit;}
+  .btn-row{display:flex; gap:10px; margin-top:6px;}
+  .btn{flex:1; border:0; border-radius:12px; padding:14px; font-size:16px; font-weight:700; cursor:pointer;}
+  .btn.primary{background:var(--accent); color:#fff;}
+  .btn.ghost{background:#eef1f6; color:var(--ink);}
+  .settings-row{display:flex; align-items:center; justify-content:space-between; padding:10px 2px; font-size:15px;}
+  .settings-row input{width:90px; font-size:16px; padding:8px 10px; border:1.5px solid #dfe4ee; border-radius:10px; text-align:right; font-family:inherit;}
+  canvas{width:100%; height:170px; display:block;}
+  .empty{text-align:center; color:var(--muted); padding:18px 0; font-size:14px;}
+  .cancel-shift{display:block; margin:10px auto 0; background:none; border:0; color:var(--red); font-size:13px; cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⏱️ Work Clock</h1>
+  <div class="sub">Offline time &amp; earnings tracker — your data never leaves this phone.</div>
+
+  <div class="card">
+    <button id="clockBtn" class="big-btn">Clock In</button>
+    <div id="statusLine" class="status-line"></div>
+    <button id="cancelShift" class="cancel-shift" style="display:none">Discard this shift</button>
+    <div style="text-align:center"><button id="manualBtn" class="link">+ Add a shift manually</button></div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="label">Today</div><div class="val" id="statToday">—</div></div>
+    <div class="stat"><div class="label" id="monthLabel">This month</div><div class="val" id="statMonth">—</div></div>
+    <div class="stat"><div class="label">All time</div><div class="val" id="statAll">—</div></div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <div style="font-weight:700; margin-bottom:8px">Monthly earnings</div>
+    <canvas id="chart" width="600" height="340"></canvas>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:700; margin-bottom:4px">Shift history</div>
+    <div id="history"></div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:700; margin-bottom:4px">Settings</div>
+    <div class="settings-row"><span>Pay rate ($/hour)</span><input id="rateInput" type="number" min="0" step="0.25" inputmode="decimal"></div>
+    <div class="settings-row"><span>Export backup</span><span><button class="icon-btn" id="csvBtn">CSV</button><button class="icon-btn" id="jsonBtn">JSON</button></span></div>
+    <div class="settings-row"><span>Restore backup</span><span><button class="icon-btn" id="importBtn">Import</button><input type="file" id="importFile" accept="application/json" style="display:none"></span></div>
+    <div class="settings-row"><span style="color:var(--red)">Delete all data</span><button class="icon-btn danger" id="wipeBtn">Delete</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2 id="modalTitle">Add shift</h2>
+    <div class="field"><label>Date</label><input type="date" id="fDate"></div>
+    <div class="field"><label>Clock in</label><input type="time" id="fIn"></div>
+    <div class="field"><label>Clock out</label><input type="time" id="fOut"></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="modalCancel">Cancel</button>
+      <button class="btn primary" id="modalSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const KEY = "workclock.v1";
+let db = {rate: 14, shifts: []};
+try { const raw = localStorage.getItem(KEY); if (raw) db = Object.assign(db, JSON.parse(raw)); } catch(e){}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} }
+const $ = id => document.getElementById(id);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function fmtTime(ts){ const d=new Date(ts); let h=d.getHours(), m=d.getMinutes();
+  const ap = h>=12?"PM":"AM"; h=h%12||12; return h+":"+String(m).padStart(2,"0")+" "+ap; }
+function fmtDate(ts){ const d=new Date(ts); return MONTHS[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear(); }
+function dayKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function monthKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function monthLabel(key){ const [y,m]=key.split("-").map(Number); return MONTHS[m-1]+" "+y; }
+function hrs(s){ return (s.end - s.start)/3600000; }
+function money(n){ return "$"+n.toFixed(2); }
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function openShift(){ return db.shifts.find(s=>!s.end); }
+
+let timer=null;
+function render(){
+  const btn=$("clockBtn"), line=$("statusLine"), cancel=$("cancelShift");
+  const open=openShift();
+  if(open){
+    btn.textContent="Clock Out"; btn.classList.add("out");
+    cancel.style.display="block";
+    const tick=()=>{ const el=(Date.now()-open.start)/1000;
+      const h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
+      line.innerHTML="Clocked in at <b>"+esc(fmtTime(open.start))+"</b> · <b>"+
+        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"</b> elapsed"; };
+    tick(); clearInterval(timer); timer=setInterval(tick,1000);
+  } else {
+    btn.textContent="Clock In"; btn.classList.remove("out"); cancel.style.display="none";
+    clearInterval(timer);
+    line.innerHTML = db.shifts.length ? "Not clocked in." : "Tap <b>Clock In</b> when your shift starts.";
+  }
+
+  // stats
+  const today=dayKey(Date.now()), mk=monthKey(Date.now());
+  let th=0, mh=0, ah=0;
+  db.shifts.forEach(s=>{ if(!s.end) return; const h=hrs(s); ah+=h;
+    if(dayKey(s.start)===today) th+=h; if(monthKey(s.start)===mk) mh+=h; });
+  $("statToday").innerHTML = th.toFixed(2)+"h<small>"+money(th*db.rate)+"</small>";
+  $("statMonth").innerHTML = mh.toFixed(2)+"h<small>"+money(mh*db.rate)+"</small>";
+  $("monthLabel").textContent = monthLabel(mk);
+  $("statAll").innerHTML = money(ah*db.rate)+"<small>"+ah.toFixed(1)+"h total</small>";
+
+  // history grouped by day
+  const done=db.shifts.filter(s=>s.end).sort((a,b)=>b.start-a.start);
+  const box=$("history"); box.innerHTML="";
+  if(!done.length){ box.innerHTML='<div class="empty">No shifts yet. Clock in to start tracking.</div>'; }
+  let lastDay="";
+  done.forEach(s=>{
+    const dk=dayKey(s.start);
+    if(dk!==lastDay){ lastDay=dk;
+      const d=document.createElement("div");
+      d.style.cssText="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px";
+      d.textContent=fmtDate(s.start); box.appendChild(d);
+    }
+    const h=hrs(s), row=document.createElement("div"); row.className="row";
+    row.innerHTML='<div><div class="d">'+esc(fmtTime(s.start))+" – "+esc(fmtTime(s.end))+'</div>'+
+      '<div class="t">'+h.toFixed(2)+' hours</div></div>'+
+      '<div class="m"><b>'+money(h*db.rate)+'</b>'+
+      '<span><button class="icon-btn" data-edit="'+s.id+'">Edit</button>'+
+      '<button class="icon-btn danger" data-del="'+s.id+'">Delete</button></span></div>';
+    box.appendChild(row);
+  });
+  box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ if(confirm("Delete this shift?")){
+    db.shifts=db.shifts.filter(s=>s.id!==b.dataset.del); save(); render(); }});
+  box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal(db.shifts.find(s=>s.id===b.dataset.edit)));
+
+  drawChart();
+  $("rateInput").value=db.rate;
+}
+
+function drawChart(){
+  const cv=$("chart"), ctx=cv.getContext("2d");
+  const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
+  const now=new Date(); const keys=[];
+  for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); keys.push(monthKey(d.getTime())); }
+  const sums={}; keys.forEach(k=>sums[k]=0);
+  db.shifts.forEach(s=>{ if(!s.end) return; const k=monthKey(s.start); if(k in sums) sums[k]+=hrs(s)*db.rate; });
+  const max=Math.max(1,...Object.values(sums));
+  const padL=8, padB=26, padT=8, cw=(W-padL)/6, bh=H-padB-padT;
+  ctx.font="11px -apple-system, sans-serif"; ctx.textAlign="center";
+  keys.forEach((k,i)=>{
+    const v=sums[k], h=Math.max(3,(v/max)*bh), x=padL+i*cw+cw/2;
+    const g=ctx.createLinearGradient(0,H-padB-h,0,H-padB);
+    g.addColorStop(0,"#2f6fed"); g.addColorStop(1,"#9dbcf7");
+    ctx.fillStyle=g;
+    const bw=Math.min(44,cw-18);
+    ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-h, bw, h, 6); ctx.fill();
+    ctx.fillStyle="#6b7686";
+    ctx.fillText(monthLabel(k).split(" ")[0], x, H-10);
+    if(v>0){ ctx.fillStyle="#1b2430"; ctx.fillText("$"+Math.round(v), x, H-padB-h-6); }
+  });
+}
+
+// modal
+let editingId=null;
+function openModal(shift){
+  editingId = shift ? shift.id : null;
+  $("modalTitle").textContent = shift ? "Edit shift" : "Add shift";
+  const d = shift ? new Date(shift.start) : new Date();
+  $("fDate").value = dayKey(shift?shift.start:Date.now());
+  const t2 = ts => { const x=new Date(ts); return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0"); };
+  $("fIn").value = shift ? t2(shift.start) : "";
+  $("fOut").value = (shift && shift.end) ? t2(shift.end) : "";
+  $("modalBg").classList.add("open");
+}
+function closeModal(){ $("modalBg").classList.remove("open"); editingId=null; }
+$("modalCancel").onclick=closeModal;
+$("modalBg").addEventListener("click",e=>{ if(e.target===$("modalBg")) closeModal(); });
+$("modalSave").onclick=()=>{
+  const dv=$("fDate").value, iv=$("fIn").value, ov=$("fOut").value;
+  if(!dv||!iv||!ov){ alert("Please fill date, clock-in and clock-out."); return; }
+  const start=new Date(dv+"T"+iv).getTime(), end=new Date(dv+"T"+ov).getTime();
+  if(!(end>start)){ alert("Clock-out must be after clock-in."); return; }
+  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; }
+  else db.shifts.push({id:uid(), start, end});
+  save(); closeModal(); render();
+};
+$("manualBtn").onclick=()=>openModal(null);
+
+// clock in/out
+$("clockBtn").onclick=()=>{
+  const open=openShift();
+  if(open){ open.end=Date.now(); }
+  else db.shifts.push({id:uid(), start:Date.now(), end:null});
+  save(); render();
+};
+$("cancelShift").onclick=()=>{ if(confirm("Discard the current open shift?")){
+  db.shifts=db.shifts.filter(s=>s.end); save(); render(); }};
+
+// settings
+$("rateInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value);
+  if(v>=0){ db.rate=v; save(); render(); } });
+function download(name, text, type){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+$("csvBtn").onclick=()=>{
+  let csv="Date,Clock In,Clock Out,Hours,Earned\n";
+  db.shifts.filter(s=>s.end).sort((a,b)=>a.start-b.start).forEach(s=>{
+    const h=hrs(s);
+    csv+=[fmtDate(s.start),fmtTime(s.start),fmtTime(s.end),h.toFixed(2),(h*db.rate).toFixed(2)].join(",")+"\n";
+  });
+  download("workclock.csv",csv,"text/csv");
+};
+$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify(db,null,2),"application/json");
+$("importBtn").onclick=()=>$("importFile").click();
+$("importFile").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result);
+      if(!Array.isArray(d.shifts)||typeof d.rate!=="number") throw 0;
+      if(confirm("Replace all current data with this backup?")){ db=d; save(); render(); }
+    }catch(_){ alert("That file doesn't look like a Work Clock backup."); } };
+  r.readAsText(f); e.target.value="";
+});
+$("wipeBtn").onclick=()=>{ if(confirm("Delete ALL shifts and reset? This can't be undone.")){
+  db={rate:db.rate,shifts:[]}; save(); render(); }};
+
+window.addEventListener("resize",drawChart);
+render();
+})();
+/* Register the service worker so the app works fully offline once installed. */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function(){ navigator.serviceWorker.register("./sw.js"); });
+}
+</script>
+</body>
+</html>
