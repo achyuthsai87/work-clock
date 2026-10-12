@@ -74,7 +74,9 @@
   .modal h2{margin:0 0 12px; font-size:18px;}
   .field{margin-bottom:12px;}
   .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.4px;}
-  .field input{width:100%; font-size:17px; padding:12px; border:1.5px solid var(--field-bd); border-radius:12px; font-family:inherit; background:var(--card); color:var(--ink);}
+  .field input{display:block; width:100%; min-width:0; max-width:100%; -webkit-appearance:none; appearance:none; font-size:17px; padding:12px; border:1.5px solid var(--field-bd); border-radius:12px; font-family:inherit; background:var(--card); color:var(--ink);}
+  .field input[type="date"],.field input[type="time"]{min-height:50px; text-align:center;}
+  .field input::-webkit-date-and-time-value{min-width:0; text-align:center;}
   .btn-row{display:flex; gap:10px; margin-top:6px;}
   .btn{flex:1; border:0; border-radius:12px; padding:14px; font-size:16px; font-weight:700; cursor:pointer;}
   .btn.primary{background:var(--accent); color:#fff;}
