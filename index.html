@@ -117,6 +117,19 @@
   .btn.ghost{background:var(--chip); color:var(--ink);}
   .settings-row{display:flex; align-items:center; justify-content:space-between; padding:10px 2px; font-size:15px;}
   .settings-row input{width:90px; font-size:16px; padding:8px 10px; border:1.5px solid var(--field-bd); border-radius:10px; text-align:right; font-family:inherit; background:var(--card); color:var(--ink);}
+  #syncStatus.err{color:var(--red); font-weight:600;}
+  .btn.primary{background:var(--accent); color:#fff;}
+  .ana-nav{display:flex; align-items:center; justify-content:space-between; margin:6px 0 4px;}
+  .ana-nav button{border:0; background:var(--chip); color:var(--ink); width:36px; height:32px; border-radius:10px; font-size:18px; font-weight:700; cursor:pointer;}
+  .ana-nav button:disabled{opacity:.35;}
+  .ana-nav span{font-size:14px; font-weight:700;}
+  .ana-tile .d{display:inline-block; font-size:11px; font-weight:700; margin-left:6px;}
+  .ana-tile .d.up{color:var(--green);} .ana-tile .d.dn{color:var(--red);}
+  .ana-grid.three{grid-template-columns:1fr 1fr 1fr;} .ana-grid.three .v{font-size:15px;}
+  .wk{display:flex; align-items:center; gap:8px; margin:7px 0; font-size:12.5px;}
+  .wk .n{width:30px; color:var(--muted);} .wk .bar{flex:1; height:10px; background:var(--chip); border-radius:6px; overflow:hidden;}
+  .wk .bar i{display:block; height:100%; background:linear-gradient(90deg,#2f6fed,#7fa6f5); border-radius:6px;}
+  .wk .v{width:74px; text-align:right; font-variant-numeric:tabular-nums;}
   .seg{display:flex; background:var(--chip); border-radius:10px; padding:3px; gap:2px;}
   .seg button{border:0; background:transparent; color:var(--muted); font-size:13px; font-weight:600; padding:7px 12px; border-radius:8px; cursor:pointer; font-family:inherit;}
   .seg button.on{background:var(--card); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.18);}
@@ -203,9 +216,17 @@
   <section class="tabpane" id="tab-analytics">
   <div class="page-title">Analytics</div>
 <div class="card" style="margin-top:12px">
-    <div class="card-head"><span class="t">Analytics</span><span class="seg" id="anaSeg"><button data-p="week">Week</button><button data-p="month">Month</button></span></div>
+    <div class="card-head"><span class="t">Analytics</span><span class="seg" id="anaSeg"><button data-p="week">Week</button><button data-p="month">Month</button><button data-p="year">Year</button></span></div>
+    <div class="ana-nav"><button id="anaPrev" aria-label="Previous">‹</button><span id="anaRange"></span><button id="anaNext" aria-label="Next">›</button></div>
     <canvas id="anaChart" width="600" height="300"></canvas>
     <div class="ana-grid" id="anaStats"></div>
+  </div>
+
+<div class="card" style="margin-top:12px">
+    <div style="font-weight:700; margin-bottom:8px">Insights <span style="font-weight:400;color:var(--muted);font-size:12px">all time</span></div>
+    <div class="ana-grid" id="anaInsights"></div>
+    <div style="font-weight:700; margin:16px 0 4px; font-size:14px">By weekday</div>
+    <div id="anaWeekday"></div>
   </div>
 
 <div class="card" style="margin-top:12px">
@@ -226,11 +247,21 @@
 
 <div class="card">
     <div style="font-weight:700; margin-bottom:4px">Google Sheets sync</div>
-    <div class="sub" style="margin-bottom:8px">Clock-outs, edits and deletes go to your sheet automatically. Queues while offline.</div>
-    <div class="settings-row"><span>Auto-sync</span><button class="icon-btn" id="syncToggle">Off</button></div>
-    <div class="field" style="margin-top:6px"><label>Web app URL</label><input id="syncUrl" placeholder="https://script.google.com/.../exec" inputmode="url" autocomplete="off"></div>
-    <div class="field"><label>Secret</label><input id="syncSecret" type="password" placeholder="Same secret as in the script" autocomplete="off"></div>
+    <div class="sub" style="margin-bottom:8px">Two-way backup to your sheet. Reinstalling the app? Enter the URL + secret and tap Save &amp; connect to get your shifts back.</div>
+    <form id="syncForm" autocomplete="on" action="#" onsubmit="return false">
+      <div class="field"><label for="syncUrl">Web app URL</label><input id="syncUrl" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://script.google.com/.../exec" inputmode="url"></div>
+      <div class="field"><label for="syncSecret">Secret</label><input id="syncSecret" name="password" type="password" autocomplete="current-password" placeholder="Same secret as in the script"></div>
+      <button type="submit" class="btn primary" id="syncSaveBtn" style="width:100%">Save &amp; connect</button>
+    </form>
+    <div class="settings-row" style="margin-top:10px"><span>Auto-sync</span><button class="icon-btn" id="syncToggle">Off</button></div>
+    <div class="settings-row"><span>Sheet data</span><span><button class="icon-btn" id="syncUpBtn">Upload all</button><button class="icon-btn" id="syncDownBtn">Restore</button></span></div>
     <div class="settings-row"><span id="syncStatus">Not set up</span><button class="icon-btn" id="syncNowBtn">Sync now</button></div>
+  </div>
+
+<div class="card">
+    <div style="font-weight:700; margin-bottom:4px">App</div>
+    <div class="sub" style="margin-bottom:8px">Updates install by themselves when you open the app online. You never need to delete it. Your data stays on the device.</div>
+    <div class="settings-row"><span>Version <span id="appVer" style="color:var(--muted)"></span></span><button class="icon-btn" id="updateBtn">Update now</button></div>
   </div>
   </section>
 
@@ -384,39 +415,107 @@ function drawChart(){
 // ---------- Analytics ----------
 function startOfWeek(ts){ const d=new Date(ts); const diff=(d.getDay()+6)%7; d.setHours(0,0,0,0); return d.getTime()-diff*86400000; }
 
+let anaOff=0;
+function dayStart(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+// Buckets for the selected period: week -> 7 days, month -> its days, year -> 12 months. off = periods back/forward.
+function buildBuckets(p, off){
+  const B=[], now=new Date(); let title="";
+  const add=(a,b,label)=>B.push({a:a.getTime(), b:b.getTime(), label, hours:0, earned:0, n:0});
+  if(p==="week"){
+    const m=dayStart(now); m.setDate(m.getDate()-((m.getDay()+6)%7)+off*7);
+    const names=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    for(let i=0;i<7;i++){ const a=new Date(m); a.setDate(m.getDate()+i); const b=new Date(a); b.setDate(a.getDate()+1); add(a,b,names[i]); }
+    const e=new Date(m); e.setDate(m.getDate()+6);
+    title=MONTHS[m.getMonth()]+" "+m.getDate()+" – "+MONTHS[e.getMonth()]+" "+e.getDate();
+  } else if(p==="month"){
+    const f=new Date(now.getFullYear(), now.getMonth()+off, 1), n=new Date(f.getFullYear(), f.getMonth()+1, 0).getDate();
+    for(let i=1;i<=n;i++) add(new Date(f.getFullYear(),f.getMonth(),i), new Date(f.getFullYear(),f.getMonth(),i+1), String(i));
+    title=["January","February","March","April","May","June","July","August","September","October","November","December"][f.getMonth()]+" "+f.getFullYear();
+  } else {
+    const y=now.getFullYear()+off;
+    for(let i=0;i<12;i++) add(new Date(y,i,1), new Date(y,i+1,1), MONTHS[i][0]);
+    title=String(y);
+  }
+  db.shifts.forEach(s=>{ if(!s.end) return; const t=s.start;
+    for(const x of B){ if(t>=x.a && t<x.b){ const h=hrs(s); x.hours+=h; x.earned+=h*db.rate; x.n++; break; } } });
+  return {B, title};
+}
+function pctTag(cur, prev){
+  if(!(prev>0)) return "";
+  const d=Math.round((cur-prev)/prev*100); if(d===0) return "";
+  return '<span class="d '+(d>0?"up":"dn")+'">'+(d>0?"▲":"▼")+Math.abs(d)+"%</span>";
+}
 function renderAnalytics(){
   const p = db.anaPeriod || "week";
   document.querySelectorAll("#anaSeg button").forEach(b=>b.classList.toggle("on", b.dataset.p===p));
-  const now = Date.now();
-  let days = [];
-  if(p==="week"){
-    const s=startOfWeek(now), names=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-    for(let i=0;i<7;i++){ const t=s+i*86400000; days.push({key:dayKey(t), label:names[i], hours:0, earned:0}); }
-  } else {
-    const d=new Date(now), n=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
-    for(let i=1;i<=n;i++){ const t=new Date(d.getFullYear(), d.getMonth(), i).getTime(); days.push({key:dayKey(t), label:String(i), hours:0, earned:0}); }
-  }
-  const map={}; days.forEach(x=>map[x.key]=x);
-  let shifts=0;
-  db.shifts.forEach(s=>{ if(!s.end) return; const k=dayKey(s.start);
-    if(map[k]){ const h=hrs(s); map[k].hours+=h; map[k].earned+=h*db.rate; shifts++; }});
-  const earned=days.reduce((a,x)=>a+x.earned,0), hours=days.reduce((a,x)=>a+x.hours,0);
-  const elapsed = p==="week" ? ((new Date(now).getDay()+6)%7)+1 : new Date(now).getDate();
-  const best = days.reduce((a,x)=> x.earned>a.earned ? x : a, days[0]);
-  const g=$("anaStats"); g.innerHTML="";
+  if(anaOff>0) anaOff=0;
+  const cur=buildBuckets(p, anaOff), prev=buildBuckets(p, anaOff-1), days=cur.B;
+  $("anaRange").textContent = anaOff===0 ? cur.title+" · now" : cur.title;
+  $("anaNext").disabled = anaOff>=0;
+  const sum=(arr,k)=>arr.reduce((a,x)=>a+x[k],0);
+  const earned=sum(days,"earned"), hours=sum(days,"hours"), shifts=sum(days,"n");
+  const pEarned=sum(prev.B,"earned"), pHours=sum(prev.B,"hours");
+  const worked=days.filter(x=>x.n>0);
+  const best=days.reduce((a,x)=> x.earned>a.earned ? x : a, days[0]);
+  const longest=db.shifts.filter(x=>x.end && x.start>=days[0].a && x.start<days[days.length-1].b).reduce((m,x)=>Math.max(m,hrs(x)),0);
+  const nowT=Date.now(); const done=days.filter(x=>x.b<=nowT).length || (anaOff===0 ? Math.max(1,days.filter(x=>x.a<=nowT).length) : days.length);
+  const bucketWord = p==="year" ? "month" : "day";
   const tiles=[
-    ["Earned", money(earned)],
-    ["Hours", hours.toFixed(1)+"h"],
-    ["Shifts", String(shifts)],
-    ["Avg / day", (hours/Math.max(1,elapsed)).toFixed(1)+"h"],
-    ["Best day", best.earned>0 ? money(best.earned)+"<small>"+esc(best.label)+"</small>" : "—"]
+    ["Earned", money(earned)+pctTag(earned,pEarned)],
+    ["Hours", hours.toFixed(1)+"h"+pctTag(hours,pHours)],
+    ["Shifts", String(shifts)+"<small>"+worked.length+" "+bucketWord+(worked.length===1?"":"s")+"</small>"],
+    ["Avg shift", shifts ? (hours/shifts).toFixed(1)+"h" : "—"],
+    ["Avg / "+bucketWord, (hours/Math.max(1,done)).toFixed(1)+"h<small>"+money(earned/Math.max(1,done))+"</small>"],
+    ["Best "+bucketWord, best.earned>0 ? money(best.earned)+"<small>"+esc(p==="year"?MONTHS[days.indexOf(best)]:best.label)+"</small>" : "—"],
+    ["Longest shift", longest>0 ? longest.toFixed(1)+"h" : "—"]
   ];
-  // show 4 tiles: earned, hours, avg/day, best day (shifts folded into subtext of hours)
-  const show=[tiles[0],tiles[1],tiles[3],tiles[4]];
-  show[1]=["Hours", hours.toFixed(1)+"h<small>"+shifts+" shifts</small>"];
-  show.forEach(([l,v])=>{ const d=document.createElement("div"); d.className="ana-tile";
+  if(earned>0 && anaOff===0 && p!=="week" && done>0 && done<days.length) tiles.push(["On pace for", money(earned/done*days.length)+"<small>"+(hours/done*days.length).toFixed(0)+"h</small>"]);
+  else if(earned>0 && anaOff===0 && p==="week" && done>0 && done<7) tiles.push(["On pace for", money(earned/done*7)+"<small>"+(hours/done*7).toFixed(0)+"h</small>"]);
+  const g=$("anaStats"); g.innerHTML="";
+  tiles.forEach(([l,v])=>{ const d=document.createElement("div"); d.className="ana-tile";
     d.innerHTML='<div class="l">'+l+'</div><div class="v">'+v+'</div>'; g.appendChild(d); });
   drawAnaChart(days, p);
+  renderInsights();
+}
+function renderInsights(){
+  const done=db.shifts.filter(x=>x.end).sort((a,b)=>a.start-b.start);
+  const g=$("anaInsights"), w=$("anaWeekday"); g.innerHTML=""; w.innerHTML="";
+  if(!done.length){ g.innerHTML='<div class="empty" style="grid-column:1/-1">Insights appear after your first shift.</div>'; return; }
+  const H=x=>hrs(x), totalH=done.reduce((a,x)=>a+H(x),0);
+  const dayMap={}, wkMap={}, moMap={}, wd=Array.from({length:7},()=>({h:0,days:new Set()}));
+  let inMin=0, outMin=0, longest=done[0];
+  done.forEach(x=>{
+    const s=new Date(x.start), e=new Date(x.end), k=dayKey(x.start);
+    dayMap[k]=(dayMap[k]||0)+H(x);
+    const wk=dayStart(new Date(startOfWeek(x.start))).getTime(); wkMap[wk]=(wkMap[wk]||0)+H(x)*db.rate;
+    const mk=monthKey(x.start); moMap[mk]=(moMap[mk]||0)+H(x)*db.rate;
+    const di=(s.getDay()+6)%7; wd[di].h+=H(x); wd[di].days.add(k);
+    inMin+=s.getHours()*60+s.getMinutes(); outMin+=e.getHours()*60+e.getMinutes();
+    if(H(x)>H(longest)) longest=x;
+  });
+  const t=m=>{ m=Math.round(m); const d=new Date(); d.setHours(Math.floor(m/60), m%60, 0, 0); return fmtTime(d.getTime()); };
+  // streak: consecutive calendar days with a shift, counting back from today (or yesterday)
+  let streak=0; const c=dayStart(new Date()); if(!(dayKey(c.getTime()) in dayMap)) c.setDate(c.getDate()-1);
+  while(dayKey(c.getTime()) in dayMap){ streak++; c.setDate(c.getDate()-1); }
+  const bestWk=Math.max(...Object.values(wkMap)), bestMo=Object.entries(moMap).sort((a,b)=>b[1]-a[1])[0];
+  const nDays=Object.keys(dayMap).length;
+  const tiles=[
+    ["Days worked", String(nDays)+"<small>"+done.length+" shifts</small>"],
+    ["Avg shift", (totalH/done.length).toFixed(1)+"h"],
+    ["Typical start", t(inMin/done.length)],
+    ["Typical finish", t(outMin/done.length)],
+    ["Current streak", streak+" day"+(streak===1?"":"s")],
+    ["Longest shift", H(longest).toFixed(1)+"h<small>"+esc(fmtDate(longest.start))+"</small>"],
+    ["Best week", money(bestWk)],
+    ["Best month", money(bestMo[1])+"<small>"+esc(monthLabel(bestMo[0]))+"</small>"]
+  ];
+  tiles.forEach(([l,v])=>{ const d=document.createElement("div"); d.className="ana-tile";
+    d.innerHTML='<div class="l">'+l+'</div><div class="v">'+v+'</div>'; g.appendChild(d); });
+  const names=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], mx=Math.max(...wd.map(x=>x.h),0.01);
+  wd.forEach((x,i)=>{ const avg=x.days.size? x.h/x.days.size : 0;
+    const r=document.createElement("div"); r.className="wk";
+    r.innerHTML='<span class="n">'+names[i]+'</span><span class="bar"><i style="width:'+Math.round(x.h/mx*100)+'%"></i></span><span class="v">'+(x.days.size? avg.toFixed(1)+"h avg":"—")+'</span>';
+    w.appendChild(r); });
 }
 
 function drawAnaChart(days, p){
@@ -439,18 +538,33 @@ function drawAnaChart(days, p){
     ctx.fillStyle=g;
     ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-h, bw, h, 5); ctx.fill();
     if(d.hours>0 && (p==="week" || d===best)){ ctx.fillStyle=colInk; ctx.fillText(d.hours.toFixed(1)+"h", x, H-padB-h-5); }
-    if(p==="week" || i%5===0 || i===n-1){ ctx.fillStyle=colMuted; ctx.fillText(d.label, x, H-7); }
+    if(p!=="month" || i%5===0 || i===n-1){ ctx.fillStyle=colMuted; ctx.fillText(d.label, x, H-7); }
   });
 }
 
-document.querySelectorAll("#anaSeg button").forEach(b=>b.onclick=()=>{ db.anaPeriod=b.dataset.p; save(); renderAnalytics(); });
+document.querySelectorAll("#anaSeg button").forEach(b=>b.onclick=()=>{ db.anaPeriod=b.dataset.p; anaOff=0; save(); renderAnalytics(); });
+$("anaPrev").onclick=()=>{ anaOff--; renderAnalytics(); };
+$("anaNext").onclick=()=>{ if(anaOff<0){ anaOff++; renderAnalytics(); } };
 
 // ---------- Google Sheets sync (via Apps Script web app) ----------
 function syncCfg(){ return db.sync || (db.sync = {url:"", secret:"", enabled:false}); }
 function shiftPayload(s){
   const h=hrs(s);
   return {id:s.id, date:fmtDate(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
-          hours:Math.round(h*100)/100, earned:Math.round(h*db.rate*100)/100};
+          hours:Math.round(h*100)/100, earned:Math.round(h*db.rate*100)/100, start:s.start, end:s.end};
+}
+// Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
+async function syncCall(body){
+  const c=syncCfg();
+  let res;
+  try{
+    res=await fetch(c.url, {method:"POST", redirect:"follow",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify(Object.assign({secret:c.secret}, body))});
+  }catch(e){ const err=new Error(navigator.onLine ? "Can't reach the script. Check the URL and that access is set to Anyone." : "Offline"); err.offline=!navigator.onLine; throw err; }
+  let j; try{ j=await res.json(); }catch(e){ throw new Error("Script didn't answer properly. Replace it with the latest Code.gs and redeploy."); }
+  if(!j || !j.ok) throw new Error((j && j.error) || "Script error");
+  return j;
 }
 function queueSync(ev){
   const c=syncCfg();
@@ -470,25 +584,50 @@ async function flushOutbox(){
   flushing=true;
   try{
     while(db.outbox.length){
-      const ev=db.outbox[0];
-      const payload=Object.assign({secret:c.secret}, ev);
-      await fetch(c.url, {method:"POST", mode:"no-cors",
-        headers:{"Content-Type":"text/plain"}, body:JSON.stringify(payload)});
+      await syncCall(db.outbox[0]);
       db.outbox.shift();
-      db.lastSync=Date.now();
-      save();
+      db.lastSync=Date.now(); c.err=""; save();
     }
-  }catch(e){ /* network failed — remaining events stay queued */ }
+  }catch(e){ if(!e.offline) c.err=e.message; save(); }   // remaining events stay queued
   flushing=false;
   updateSyncStatus();
 }
-function updateSyncStatus(){
+// Merge shifts that exist in the sheet but not on this device (restore after reinstall).
+async function syncPull(){
+  const j=await syncCall({action:"list"});
+  const have=new Set(db.shifts.map(x=>x.id));
+  const pendingDel=new Set((db.outbox||[]).filter(e=>e.action==="delete").map(e=>e.id));
+  let added=0;
+  (j.shifts||[]).forEach(r=>{
+    if(!r.id || have.has(r.id) || pendingDel.has(r.id) || !r.start || !r.end) return;
+    db.shifts.push({id:String(r.id), start:+r.start, end:+r.end}); added++;
+  });
+  if(added){ save(); render(); }
+  return added;
+}
+async function syncUploadAll(){
+  const list=db.shifts.filter(x=>x.end).map(shiftPayload);
+  await syncCall({action:"bulk", shifts:list});
+  return list.length;
+}
+async function syncRun(label, fn){
+  const el=$("syncStatus"), c=syncCfg();
+  if(!c.url){ el.textContent="Paste the web app URL first"; el.classList.add("err"); return; }
+  el.classList.remove("err"); el.textContent=label+"…";
+  try{ const r=await fn(); c.err=""; save(); updateSyncStatus(typeof r==="string"?r:""); }
+  catch(e){ c.err=e.message; save(); updateSyncStatus(); }
+}
+function updateSyncStatus(msg){
   const c=syncCfg(), el=$("syncStatus");
   if(!el) return;
-  if(!c.enabled || !c.url){ el.textContent="Not set up"; return; }
+  el.classList.remove("err");
+  if(!c.url){ el.textContent="Not set up"; return; }
+  if(c.err){ el.classList.add("err"); el.textContent=c.err; return; }
+  if(msg){ el.textContent=msg; return; }
   const n=(db.outbox||[]).length;
-  if(n>0) el.textContent=n+" change"+(n===1?"":"s")+" pending";
-  else if(db.lastSync) el.textContent="Synced \u00b7 "+fmtTime(db.lastSync);
+  if(!c.enabled) el.textContent="Auto-sync is off";
+  else if(n>0) el.textContent=n+" change"+(n===1?"":"s")+" waiting"+(navigator.onLine?"":" (offline)");
+  else if(db.lastSync) el.textContent="Synced · "+fmtTime(db.lastSync);
   else el.textContent="Ready";
 }
 function updateSyncToggle(){
@@ -693,12 +832,32 @@ $("wipeBtn").onclick=()=>{ if(confirm("Delete ALL shifts and reset? This can't b
 $("syncUrl").value=syncCfg().url||"";
 $("syncSecret").value=syncCfg().secret||"";
 updateSyncToggle(); updateSyncStatus();
-$("syncUrl").addEventListener("change",e=>{ syncCfg().url=e.target.value.trim(); save(); updateSyncStatus(); flushOutbox(); });
-$("syncSecret").addEventListener("change",e=>{ syncCfg().secret=e.target.value; save(); });
+function readSyncFields(){ const c=syncCfg(); c.url=$("syncUrl").value.trim(); c.secret=$("syncSecret").value; save(); }
+$("syncUrl").addEventListener("change",()=>{ readSyncFields(); syncCfg().err=""; updateSyncStatus(); });
+$("syncSecret").addEventListener("change",()=>{ readSyncFields(); syncCfg().err=""; updateSyncStatus(); });
+$("syncForm").addEventListener("submit",e=>{ e.preventDefault(); readSyncFields(); const c=syncCfg();
+  if(!/^https:\/\/script\.google\.com\/.+\/exec/.test(c.url)){ c.err="URL should look like https://script.google.com/macros/s/…/exec"; save(); updateSyncStatus(); return; }
+  if(!c.secret){ c.err="Enter the secret from your script"; save(); updateSyncStatus(); return; }
+  c.enabled=true; save(); updateSyncToggle();
+  syncRun("Connecting", async()=>{ await syncCall({action:"ping"}); const n=await syncPull(); await flushOutbox();
+    return n ? "Connected · restored "+n+" shift"+(n===1?"":"s") : "Connected ✓"; }); });
 $("syncToggle").onclick=()=>{ const c=syncCfg(); c.enabled=!c.enabled; save(); updateSyncToggle(); updateSyncStatus(); if(c.enabled) flushOutbox(); };
-$("syncNowBtn").onclick=()=>flushOutbox();
-window.addEventListener("online",flushOutbox);
-flushOutbox();
+$("syncNowBtn").onclick=()=>syncRun("Syncing", async()=>{ await flushOutbox(); if(syncCfg().err) throw new Error(syncCfg().err); const n=await syncPull(); return n?"Restored "+n+" shift"+(n===1?"":"s"):"Up to date ✓"; });
+$("syncUpBtn").onclick=()=>syncRun("Uploading", async()=>{ const n=await syncUploadAll(); return "Uploaded "+n+" shift"+(n===1?"":"s")+" ✓"; });
+$("syncDownBtn").onclick=()=>syncRun("Restoring", async()=>{ const n=await syncPull(); return n?"Restored "+n+" shift"+(n===1?"":"s")+" ✓":"Nothing new in the sheet"; });
+// pull on open + whenever the app comes back to the foreground (iOS keeps PWAs alive)
+async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.onLine) return;
+  try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
+// app updates without deleting the app
+const APP_VERSION="2026.10.12.4";
+$("appVer").textContent=APP_VERSION;
+$("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
+  try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
+       const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); }catch(e){}
+  location.reload(); };
+window.addEventListener("online",autoSync);
+autoSync();
 
 window.addEventListener("resize",()=>{ drawChart(); if(document.getElementById("tab-analytics").classList.contains("on")) renderAnalytics(); });
 
@@ -714,7 +873,18 @@ render();
 })();
 /* Register the service worker so the app works fully offline once installed. */
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function(){ navigator.serviceWorker.register("./sw.js"); });
+  var hadController = !!navigator.serviceWorker.controller, reloaded = false;
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("./sw.js").then(function(reg){
+      document.addEventListener("visibilitychange", function(){ if(!document.hidden) reg.update().catch(function(){}); });
+    });
+  });
+  // a new version took over: reload once (never while the Add shift sheet is open)
+  navigator.serviceWorker.addEventListener("controllerchange", function(){
+    if(!hadController || reloaded) return; reloaded = true;
+    var m = document.getElementById("modalBg");
+    if(!(m && m.classList.contains("open"))) location.reload();
+  });
 }
 </script>
 </body>

@@ -11,3 +11,11 @@ All data stays on your device (localStorage). Works fully offline once installed
 
 ## Deploy
 Static site. Push to `main`; GitHub Pages serves the repo root. Bump `CACHE` in `sw.js` when changing cached assets.
+
+## Google Sheets sync
+Two-way backup (device ⇄ your sheet). One-time setup in [`apps-script/README.md`](apps-script/README.md).
+After a reinstall: Settings → enter URL + secret → **Save & connect** restores every shift.
+
+## Updating
+The app updates itself when opened online (service worker, network-first). No need to delete/reinstall.
+If something looks stale: Settings → App → **Update now** (keeps your data).
