@@ -80,6 +80,19 @@
   </section>
   <section class="tabpane" id="tab-analytics">
   <div class="page-title">Analytics</div>
+<div class="card goal-card" style="margin-top:12px">
+    <div class="ring-wrap">
+      <svg viewBox="0 0 120 120" class="ring" aria-hidden="true"><circle class="ring-bg" cx="60" cy="60" r="48"/><circle class="ring-fg" id="goalRing" cx="60" cy="60" r="48" stroke-dasharray="301.59" stroke-dashoffset="301.59" transform="rotate(-90 60 60)"/></svg>
+      <div class="ring-mid"><div class="ring-pct" id="goalPct">—</div><div class="ring-sub">this week</div></div>
+    </div>
+    <div class="goal-text">
+      <div class="t">Weekly goal</div>
+      <div class="goal-line" id="goalSub">No goal yet</div>
+      <div class="goal-msg" id="goalMsg"></div>
+      <button class="link" id="goalSet" style="padding:6px 0 0">Set goal</button>
+    </div>
+  </div>
+
 <div class="card" style="margin-top:12px">
     <div class="card-head"><span class="t">Analytics</span><span class="seg" id="anaSeg"><button data-p="week">Week</button><button data-p="month">Month</button><button data-p="year">Year</button></span></div>
     <div class="ana-nav"><button id="anaPrev" aria-label="Previous">‹</button><span id="anaRange"></span><button id="anaNext" aria-label="Next">›</button></div>
@@ -88,10 +101,28 @@
   </div>
 
 <div class="card" style="margin-top:12px">
+    <div class="card-head"><span class="t">Activity</span><span class="sub" style="margin:0;font-size:12px">last 15 weeks</span></div>
+    <div class="hm" id="hm" role="img" aria-label="Activity heatmap"></div>
+    <div class="hm-foot"><span id="hmInfo">Tap a square</span><span class="hm-legend">Less <i class="l0"></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i> More</span></div>
+  </div>
+
+<div class="card" style="margin-top:12px">
     <div style="font-weight:700; margin-bottom:8px">Insights <span style="font-weight:400;color:var(--muted);font-size:12px">all time</span></div>
     <div class="ana-grid" id="anaInsights"></div>
     <div style="font-weight:700; margin:16px 0 4px; font-size:14px">By weekday</div>
     <div id="anaWeekday"></div>
+  </div>
+
+<div class="card" style="margin-top:12px">
+    <div class="card-head"><span class="t" id="lvlTitle">Level 1</span><span class="sub" style="margin:0;font-size:12px" id="lvlSub"></span></div>
+    <div class="xp"><i id="xpBar"></i></div>
+    <button class="fact" id="factBtn" type="button"><span class="fact-e" id="factE">✨</span><span id="factTxt">Clock a few shifts and fun facts will show up here.</span></button>
+  </div>
+
+<div class="card" style="margin-top:12px">
+    <div class="card-head"><span class="t">Achievements</span><span class="sub" style="margin:0;font-size:12px" id="badgeCount"></span></div>
+    <div class="next" id="badgeNext"></div>
+    <div class="badges" id="badges"></div>
   </div>
 
 <div class="card" style="margin-top:12px">
@@ -104,6 +135,7 @@
 <div class="card">
     <div style="font-weight:700; margin-bottom:4px">Settings</div>
     <div class="settings-row"><span>Pay rate ($/hour)</span><input id="rateInput" type="number" min="0" step="0.25" inputmode="decimal"></div>
+    <div class="settings-row"><span>Weekly goal ($)</span><input id="goalInput" type="number" min="0" step="10" inputmode="decimal" placeholder="none"></div>
     <div class="settings-row"><span>Appearance</span><span class="seg" id="themeSeg"><button data-t="auto">Auto</button><button data-t="light">Light</button><button data-t="dark">Dark</button></span></div>
     <div class="settings-row"><span>Export</span><span><button class="icon-btn" id="csvBtn">CSV</button><button class="icon-btn" id="xlsxBtn">Excel</button><button class="icon-btn" id="jsonBtn">Backup</button></span></div>
     <div class="settings-row"><span>Restore backup</span><span><button class="icon-btn" id="importBtn">Import</button><input type="file" id="importFile" accept="application/json" style="display:none"></span></div>

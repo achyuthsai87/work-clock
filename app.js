@@ -20,6 +20,7 @@ function cleanCore(d){   // the user's data only (shifts + display prefs)
   const out = {rate: 14, theme: "auto", shifts: []};
   if(!d || typeof d !== "object") return out;
   const r = Number(d.rate); if(Number.isFinite(r) && r >= 0 && r <= 100000) out.rate = r;
+  const g = Number(d.goal); if(Number.isFinite(g) && g > 0 && g <= 1000000) out.goal = g;
   if(["auto","light","dark"].includes(d.theme)) out.theme = d.theme;
   if(["week","month","year"].includes(d.anaPeriod)) out.anaPeriod = d.anaPeriod;
   const seen = new Set();
@@ -135,7 +136,7 @@ function render(){
 
   drawChart();
   applyTheme();
-  $("rateInput").value=db.rate;
+  $("rateInput").value=db.rate; if(document.activeElement!==$("goalInput")) $("goalInput").value=db.goal||"";
 }
 
 function drawChart(){
@@ -229,7 +230,105 @@ function renderAnalytics(){
     d.innerHTML='<div class="l">'+l+'</div><div class="v">'+v+'</div>'; g.appendChild(d); });
   drawAnaChart(days, p);
   renderInsights();
+  renderFun();
 }
+// ---------- The fun stuff: goal ring, heatmap, level, badges, fun facts ----------
+let heatData={}, factIdx=0;
+function renderFun(){
+  const done=db.shifts.filter(x=>x.end), rate=db.rate;
+  const dayMap={}; done.forEach(s=>{ const k=dayKey(s.start), h=hrs(s); const o=dayMap[k]||(dayMap[k]={h:0,e:0}); o.h+=h; o.e+=h*rate; });
+  heatData=dayMap;
+
+  // weekly goal ring
+  const wk=buildBuckets("week",0).B, wkE=wk.reduce((a,x)=>a+x.earned,0), goal=db.goal||0, C=2*Math.PI*48, ring=$("goalRing");
+  if(goal>0){
+    const pct=wkE/goal;
+    $("goalPct").textContent=Math.round(pct*100)+"%"; $("goalSub").textContent=money(wkE)+" of "+money(goal);
+    $("goalMsg").textContent = pct>=1 ? "Goal smashed this week 🎉" : (rate>0 ? "About "+((goal-wkE)/rate).toFixed(1)+"h to go" : "Keep going");
+    ring.classList.toggle("done", pct>=1); $("goalSet").textContent="Change goal";
+    requestAnimationFrame(()=>ring.setAttribute("stroke-dashoffset", String(C*(1-Math.min(pct,1)))));
+  } else {
+    $("goalPct").textContent="—"; $("goalSub").textContent="No goal yet"; $("goalMsg").textContent="Pick a number to aim for each week";
+    ring.classList.remove("done"); ring.setAttribute("stroke-dashoffset", String(C)); $("goalSet").textContent="Set goal";
+  }
+
+  // activity heatmap: 15 weeks x 7 days, Monday first
+  const grid=$("hm"); grid.textContent="";
+  const mon=dayStart(new Date()); mon.setDate(mon.getDate()-((mon.getDay()+6)%7)-14*7);
+  const todayK=dayKey(Date.now());
+  for(let c=0;c<15;c++) for(let r=0;r<7;r++){
+    const d=new Date(mon); d.setDate(mon.getDate()+c*7+r);
+    const k=dayKey(d.getTime()), v=dayMap[k], i=document.createElement("i");
+    const lv=!v?0:v.h<3?1:v.h<6?2:v.h<9?3:4;
+    i.className="l"+lv+(d.getTime()>Date.now()?" fut":"")+(k===todayK?" today":"");
+    i.dataset.t=String(d.getTime()); grid.appendChild(i);
+  }
+
+  // totals, streaks, records
+  const totH=done.reduce((a,x)=>a+hrs(x),0), totE=totH*rate, n=done.length;
+  let bestRun=0, run=0, prev=null;
+  Object.keys(dayMap).sort().forEach(k=>{ const t=new Date(k+"T00:00:00").getTime();
+    run=(prev!==null && Math.round((t-prev)/86400000)===1) ? run+1 : 1; prev=t; bestRun=Math.max(bestRun,run); });
+  const longest=done.reduce((m,x)=>Math.max(m,hrs(x)),0);
+  const early=done.some(x=>new Date(x.start).getHours()<7);
+  const night=done.some(x=>new Date(x.end).getHours()>=22 || dayKey(x.end)!==dayKey(x.start));
+
+  // level (more hours => higher level, each one takes a bit longer)
+  const lvl=Math.floor(Math.sqrt(totH/1.5))+1, lo=1.5*(lvl-1)*(lvl-1), hi=1.5*lvl*lvl;
+  const names=["Rookie","Regular","Steady","Pro","Veteran","Legend"];
+  $("lvlTitle").textContent="Level "+lvl+" · "+names[Math.min(names.length-1,Math.floor((lvl-1)/3))];
+  $("lvlSub").textContent=(hi-totH).toFixed(1)+"h to level "+(lvl+1);
+  $("xpBar").style.width=Math.round(Math.max(0,Math.min(1,(totH-lo)/(hi-lo)))*100)+"%";
+
+  // fun facts (tap to cycle)
+  const facts=[];
+  if(totH>0){
+    facts.push(["🎬","You've clocked "+totH.toFixed(0)+" hours — about "+(totH/2).toFixed(0)+" movies back to back."]);
+    facts.push(["📺","That's roughly "+Math.round(totH/0.75)+" episodes of a 45-minute show."]);
+    facts.push(["✈️","Enough time to fly from New York to Tokyo "+(totH/14).toFixed(1)+" times."]);
+    if(totE>0){
+      facts.push(["☕","You've earned about "+Math.round(totE/5)+" coffees ($5 each)."]);
+      facts.push(["🍕","That's around "+Math.round(totE/15)+" pizzas ($15 each)."]);
+      facts.push(["⏱️","You make about "+money(rate/60)+" every minute you're clocked in."]);
+    }
+    const wd=Array(7).fill(0), names7=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+    done.forEach(x=>{ wd[(new Date(x.start).getDay()+6)%7]+=hrs(x); });
+    facts.push(["📅","Your busiest day is "+names7[wd.indexOf(Math.max.apply(null,wd))]+"."]);
+  }
+  if(facts.length){ const f=facts[factIdx%facts.length]; $("factE").textContent=f[0]; $("factTxt").textContent=f[1]; }
+  else { $("factE").textContent="✨"; $("factTxt").textContent="Clock a few shifts and fun facts will show up here."; }
+
+  // achievements
+  const B=[
+    ["🎬","First shift","Log a shift",n>=1,Math.min(n/1,1)],
+    ["🔟","10 shifts","Log 10 shifts",n>=10,Math.min(n/10,1)],
+    ["💯","50 shifts","Log 50 shifts",n>=50,Math.min(n/50,1)],
+    ["⏱️","100 hours","Clock 100 hours",totH>=100,Math.min(totH/100,1)],
+    ["🏔️","500 hours","Clock 500 hours",totH>=500,Math.min(totH/500,1)],
+    ["🔥","3-day streak","Work 3 days in a row",bestRun>=3,Math.min(bestRun/3,1)],
+    ["🚀","7-day streak","Work 7 days in a row",bestRun>=7,Math.min(bestRun/7,1)],
+    ["🌅","Early bird","Start before 7 AM",early,early?1:0],
+    ["🌙","Night owl","Work past 10 PM",night,night?1:0],
+    ["🏃","Marathon","A shift of 10h or more",longest>=10,Math.min(longest/10,1)],
+    ["💵","$1,000","Earn $1,000",totE>=1000,Math.min(totE/1000,1)],
+    ["💎","$5,000","Earn $5,000",totE>=5000,Math.min(totE/5000,1)]
+  ];
+  const box=$("badges"); box.textContent="";
+  B.forEach(b=>{ const d=document.createElement("div"); d.className="badge"+(b[3]?" on":"");
+    const e=document.createElement("div"), t=document.createElement("div"), s=document.createElement("div");
+    e.className="e"; e.textContent=b[0]; t.className="bt"; t.textContent=b[1]; s.className="bd"; s.textContent=b[2];
+    d.appendChild(e); d.appendChild(t); d.appendChild(s); box.appendChild(d); });
+  $("badgeCount").textContent=B.filter(b=>b[3]).length+" / "+B.length;
+  const nxt=B.filter(b=>!b[3]).sort((a,b)=>b[4]-a[4])[0];
+  $("badgeNext").textContent = nxt ? "Next up: "+nxt[1]+(nxt[4]>0&&nxt[4]<1?" — "+Math.round(nxt[4]*100)+"%":"") : "You've unlocked everything 🏆";
+}
+$("hm").addEventListener("click",e=>{ const i=e.target.closest("i"); if(!i) return;
+  const t=Number(i.dataset.t), v=heatData[dayKey(t)];
+  $("hmInfo").textContent=fmtDate(t)+" · "+(v ? v.h.toFixed(1)+"h · "+money(v.e) : (t>Date.now()?"upcoming":"no shifts")); });
+$("factBtn").addEventListener("click",()=>{ factIdx++; renderFun(); });
+$("goalInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); db.goal=(Number.isFinite(v)&&v>0)?Math.min(v,1000000):0; if(!db.goal) delete db.goal; save(); renderAnalytics(); });
+$("goalSet").addEventListener("click",()=>{ document.querySelector('.tabbar [data-tab="settings"]').click(); setTimeout(()=>$("goalInput").focus(),350); });
+
 function renderInsights(){
   const done=db.shifts.filter(x=>x.end).sort((a,b)=>a.start-b.start);
   const g=$("anaInsights"), w=$("anaWeekday"); g.innerHTML=""; w.innerHTML="";
@@ -568,7 +667,7 @@ $("csvBtn").onclick=()=>{
   });
   download("workclock.csv",csv,"text/csv");
 };
-$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, theme:db.theme, anaPeriod:db.anaPeriod, shifts:db.shifts},null,2),"application/json");  // never includes sync URL/secret
+$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, shifts:db.shifts},null,2),"application/json");  // never includes sync URL/secret
 $("importBtn").onclick=()=>$("importFile").click();
 $("importFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -584,7 +683,7 @@ $("importFile").addEventListener("change",e=>{
   r.readAsText(f); e.target.value="";
 });
 $("wipeBtn").onclick=()=>{ if(confirm("Delete ALL shifts and reset? This can't be undone.")){
-  const keep={rate:db.rate, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
+  const keep={rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
   db=Object.assign({shifts:[], outbox:[]}, keep); save(); render(); updateSyncStatus(); }};
 
 // google sheets sync settings
@@ -609,7 +708,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.12.7";
+const APP_VERSION="2026.10.12.8";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
