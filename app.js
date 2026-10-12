@@ -232,6 +232,108 @@ function renderAnalytics(){
   renderInsights();
   renderFun();
 }
+// ---------- Data lab: the statistics behind your shifts ----------
+const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
+const sdev=a=>{ if(a.length<2) return 0; const m=mean(a); return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/(a.length-1)); };
+const median=a=>{ const b=a.slice().sort((x,y)=>x-y), n=b.length; return n%2 ? b[(n-1)/2] : (b[n/2-1]+b[n/2])/2; };
+function pearson(x,y){ const mx=mean(x), my=mean(y); let sxy=0,sxx=0,syy=0;
+  for(let i=0;i<x.length;i++){ sxy+=(x[i]-mx)*(y[i]-my); sxx+=(x[i]-mx)*(x[i]-mx); syy+=(y[i]-my)*(y[i]-my); }
+  return sxx&&syy ? sxy/Math.sqrt(sxx*syy) : 0; }
+const T05=[4.303,3.182,2.776,2.571,2.447,2.365,2.306,2.262,2.228,2.201,2.179,2.160,2.145,2.131,2.120,2.110,2.101,2.093,2.086,2.080,2.074,2.069,2.064,2.060,2.056,2.052,2.048,2.045];  // two-tailed t, df 2..29
+function linreg(y){
+  const n=y.length, xs=y.map((_,i)=>i), mx=mean(xs), my=mean(y);
+  let sxx=0,sxy=0; xs.forEach((x,i)=>{ sxx+=(x-mx)*(x-mx); sxy+=(x-mx)*(y[i]-my); });
+  const b=sxx?sxy/sxx:0, a=my-b*mx; let sse=0,sst=0;
+  y.forEach((v,i)=>{ const e=v-(a+b*i); sse+=e*e; sst+=(v-my)*(v-my); });
+  const df=n-2, s=df>0?Math.sqrt(sse/df):0, se=sxx&&s?s/Math.sqrt(sxx):0, t=se?b/se:0;
+  const crit=df>=2 ? (df<=29?T05[df-2]:1.96) : Infinity;
+  return {n,a,b,mx,sxx,s,r2:sst?1-sse/sst:0,sig:Math.abs(t)>crit};
+}
+function labStats(done, dayMap){
+  const L={n:done.length};
+  const lens=done.map(hrs); L.lens=lens;
+  if(lens.length){ L.mean=mean(lens); L.med=median(lens); L.sd=sdev(lens); L.cv=L.mean?L.sd/L.mean:0; }
+  const sm=x=>{ const d=new Date(x); return d.getHours()*60+d.getMinutes(); };
+  const starts=done.map(x=>sm(x.start)), ends=done.filter(x=>dayKey(x.end)===dayKey(x.start)).map(x=>sm(x.end));
+  L.starts=starts; L.typStart=starts.length?mean(starts):null; L.typEnd=ends.length?mean(ends):null;
+  L.early=L.n>=5 && starts.some(m=>m<=L.typStart-30);                                  // clocked in 30+ min before your usual start
+  L.late =L.n>=5 && L.typEnd!==null && done.some(x=>dayKey(x.end)!==dayKey(x.start) || sm(x.end)>=L.typEnd+60);   // stayed 1h+ past your usual finish
+  L.onDot=L.n>=8 ? starts.filter(m=>Math.abs(m-L.typStart)<=10).length : 0;
+  // weekly series: complete weeks since your first week with data
+  const wk=[]; for(let w=12;w>=1;w--){ wk.push(buildBuckets("week",-w).B.reduce((a,x)=>a+x.hours,0)); }
+  while(wk.length && wk[0]===0) wk.shift();
+  L.weeks=wk;
+  if(wk.length>=4){ L.reg=linreg(wk); const r=L.reg, x=wk.length;
+    L.pred=Math.max(0, r.a+r.b*x); L.half=2*r.s*Math.sqrt(1+1/r.n+Math.pow(x-r.mx,2)/(r.sxx||1));
+    const mw=mean(wk); L.wcv=mw?sdev(wk)/mw:1; }
+  // daily series
+  const dk=Object.keys(dayMap); L.days=dk.map(k=>({k,h:dayMap[k].h,e:dayMap[k].e}));
+  const dh=L.days.map(d=>d.h); L.dmean=dh.length?mean(dh):0; L.dsd=sdev(dh);
+  L.maxZ=0; L.zDay=null; if(L.dsd>0) L.days.forEach(d=>{ const z=(d.h-L.dmean)/L.dsd; if(z>L.maxZ){ L.maxZ=z; L.zDay=d; } });
+  return L;
+}
+function drawTrend(L){
+  const cv=$("trendChart"), ctx=cv.getContext("2d"), dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  if(!W) return; cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
+  if(!L.reg){ return; }
+  const cs=getComputedStyle(document.documentElement), acc=cs.getPropertyValue("--accent").trim()||"#4a78e8", mut=cs.getPropertyValue("--muted").trim()||"#6b7686", grn=cs.getPropertyValue("--green").trim()||"#2f9e6e";
+  const y=L.weeks, n=y.length, padL=30, padR=16, padT=14, padB=22, top=Math.max(1,...y,L.pred+L.half)*1.08;
+  const X=i=>padL+(i/n)*(W-padL-padR), Y=v=>padT+(1-v/top)*(H-padT-padB);
+  ctx.font="10.5px -apple-system, sans-serif"; ctx.textAlign="right"; ctx.fillStyle=mut; ctx.strokeStyle=mut; ctx.lineWidth=.5; ctx.globalAlpha=.35;
+  [0,.5,1].forEach(f=>{ const v=top*f; ctx.beginPath(); ctx.moveTo(padL,Y(v)); ctx.lineTo(W-padR,Y(v)); ctx.stroke(); }); ctx.globalAlpha=1;
+  [0,.5,1].forEach(f=>ctx.fillText(Math.round(top*f)+"h",padL-6,Y(top*f)+3));
+  ctx.textAlign="center"; ctx.fillText("now",X(n),H-6); ctx.fillText(n+"w ago",X(0),H-6);
+  // regression line (dashed), actual weekly hours (solid), forecast with ~95% interval
+  ctx.setLineDash([5,4]); ctx.strokeStyle=mut; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(X(0),Y(L.reg.a)); ctx.lineTo(X(n),Y(L.reg.a+L.reg.b*n)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle=acc; ctx.lineWidth=2.5; ctx.lineJoin="round"; ctx.beginPath(); y.forEach((v,i)=>{ i?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v)); }); ctx.stroke();
+  ctx.fillStyle=acc; y.forEach((v,i)=>{ ctx.beginPath(); ctx.arc(X(i),Y(v),3.2,0,7); ctx.fill(); });
+  const lo=Math.max(0,L.pred-L.half), hi=L.pred+L.half;
+  ctx.strokeStyle=grn; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(X(n),Y(lo)); ctx.lineTo(X(n),Y(hi)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X(n)-5,Y(lo)); ctx.lineTo(X(n)+5,Y(lo)); ctx.moveTo(X(n)-5,Y(hi)); ctx.lineTo(X(n)+5,Y(hi)); ctx.stroke();
+  ctx.fillStyle=grn; ctx.beginPath(); ctx.arc(X(n),Y(L.pred),4.2,0,7); ctx.fill();
+}
+function renderLab(L, rate){
+  $("labN").textContent="n = "+L.n+" shifts";
+  const g=$("labTiles"); g.textContent="";
+  const tile=(l,v,sub)=>{ const d=document.createElement("div"); d.className="ana-tile"; const a=document.createElement("div"), b=document.createElement("div");
+    a.className="l"; a.textContent=l; b.className="v"; b.textContent=v; if(sub){ const sm=document.createElement("small"); sm.textContent=sub; b.appendChild(sm); }
+    d.appendChild(a); d.appendChild(b); g.appendChild(d); };
+  const histo=$("histo"), find=$("findings"); histo.textContent=""; find.textContent="";
+  if(L.n<3){ tile("Mean shift","—"); tile("Std dev","—"); $("trendNote").textContent="Log a few more shifts to unlock the stats."; drawTrend({}); 
+    const li=document.createElement("li"); li.textContent="Findings appear after about 10 shifts."; find.appendChild(li); return; }
+  tile("Mean shift", L.mean.toFixed(2)+"h", "median "+L.med.toFixed(1));
+  tile("Std dev", "±"+L.sd.toFixed(2)+"h", "CV "+Math.round(L.cv*100)+"%");
+  tile("Consistency", String(Math.max(0,Math.round(100*(1-L.cv))))+"/100");
+  if(L.reg) tile("Weekly trend", (L.reg.b>=0?"+":"−")+Math.abs(L.reg.b).toFixed(2)+"h/wk", L.reg.sig?"p<0.05 ✓":"n.s.");
+  if(L.reg) tile("Week forecast", L.pred.toFixed(1)+"h", "±"+L.half.toFixed(1)+" · "+money(L.pred*rate));
+  if(L.reg) tile("Fit (R²)", L.reg.r2.toFixed(2), "n = "+L.reg.n+" weeks");
+  // trend chart + note
+  if(L.reg){ drawTrend(L);
+    $("trendNote").textContent="Dashed line = linear fit. Green dot = forecast for this week with a rough 95% interval ("+Math.max(0,L.pred-L.half).toFixed(0)+"–"+(L.pred+L.half).toFixed(0)+"h)."; }
+  else { drawTrend({}); $("trendNote").textContent="Need 4+ weeks of data for a trend line."; }
+  // histogram of shift lengths (2h bins)
+  const bins=[0,0,0,0,0,0], lab=["0–2h","2–4h","4–6h","6–8h","8–10h","10h+"];
+  L.lens.forEach(h=>{ bins[Math.min(5,Math.floor(h/2))]++; });
+  const mx=Math.max.apply(null,bins);
+  bins.forEach((c,i)=>{ const r=document.createElement("div"); r.className="wk"; const a=document.createElement("span"), bar=document.createElement("span"), v=document.createElement("span"), f=document.createElement("i");
+    a.className="n"; a.style.width="44px"; a.textContent=lab[i]; bar.className="bar"; f.style.width=Math.round(c/mx*100)+"%"; bar.appendChild(f); v.className="v"; v.style.width="68px"; v.style.whiteSpace="nowrap"; v.textContent=c+" ("+Math.round(c/L.n*100)+"%)";
+    r.appendChild(a); r.appendChild(bar); r.appendChild(v); histo.appendChild(r); });
+  // findings
+  const F=[], nd=L.days.length, add=t=>F.push(t);
+  if(nd>=10){ const sorted=L.days.slice().sort((a,b)=>b.e-a.e), k=Math.max(1,Math.round(nd*0.2)), tot=sorted.reduce((a,x)=>a+x.e,0);
+    if(tot>0) add("Pareto: your best "+k+" days ("+Math.round(k/nd*100)+"%) bring in "+Math.round(sorted.slice(0,k).reduce((a,x)=>a+x.e,0)/tot*100)+"% of your earnings."); }
+  if(L.n>=10){ const r=pearson(L.starts,L.lens);
+    if(Math.abs(r)>=0.3) add("Later clock-ins go with "+(r<0?"shorter":"longer")+" shifts (r = "+r.toFixed(2)+")."); else add("Clock-in time barely predicts shift length (r = "+r.toFixed(2)+")."); }
+  if(L.zDay && L.maxZ>=2) add("Biggest outlier: "+fmtDate(new Date(L.zDay.k+"T00:00:00").getTime())+", "+L.zDay.h.toFixed(1)+"h — "+L.maxZ.toFixed(1)+"σ above your daily mean.");
+  const wd=Array.from({length:7},()=>[]), names=["Mondays","Tuesdays","Wednesdays","Thursdays","Fridays","Saturdays","Sundays"];
+  L.days.forEach(d=>{ wd[(new Date(d.k+"T00:00:00").getDay()+6)%7].push(d.h); });
+  let bw=-1, bd=0; wd.forEach((a,i)=>{ if(a.length>=3){ const dv=mean(a)-L.dmean; if(Math.abs(dv)>Math.abs(bd)){ bd=dv; bw=i; } } });
+  if(bw>=0 && Math.abs(bd)>=0.5) add(names[bw]+" run "+Math.abs(bd).toFixed(1)+"h "+(bd>0?"longer":"shorter")+" than your typical day.");
+  if(L.reg) add(L.reg.sig ? "Weekly hours are trending "+(L.reg.b>0?"up":"down")+" "+Math.abs(L.reg.b).toFixed(2)+"h per week (statistically significant, p<0.05)." : "No statistically significant trend in weekly hours — your schedule is stable.");
+  if(!F.length) add("Keep logging shifts — more data, better insights.");
+  F.slice(0,5).forEach(t=>{ const li=document.createElement("li"); li.textContent=t; find.appendChild(li); });
+}
+
 // ---------- The fun stuff: goal ring, heatmap, level, badges, fun facts ----------
 let heatData={}, factIdx=0;
 function renderFun(){
@@ -270,8 +372,8 @@ function renderFun(){
   Object.keys(dayMap).sort().forEach(k=>{ const t=new Date(k+"T00:00:00").getTime();
     run=(prev!==null && Math.round((t-prev)/86400000)===1) ? run+1 : 1; prev=t; bestRun=Math.max(bestRun,run); });
   const longest=done.reduce((m,x)=>Math.max(m,hrs(x)),0);
-  const early=done.some(x=>new Date(x.start).getHours()<7);
-  const night=done.some(x=>new Date(x.end).getHours()>=22 || dayKey(x.end)!==dayKey(x.start));
+  const L=labStats(done, dayMap); renderLab(L, rate);
+  const early=L.early, night=L.late;
 
   // level (more hours => higher level, each one takes a bit longer)
   const lvl=Math.floor(Math.sqrt(totH/1.5))+1, lo=1.5*(lvl-1)*(lvl-1), hi=1.5*lvl*lvl;
@@ -293,6 +395,8 @@ function renderFun(){
     }
     const wd=Array(7).fill(0), names7=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
     done.forEach(x=>{ wd[(new Date(x.start).getDay()+6)%7]+=hrs(x); });
+    if(L.n>=3) facts.push(["📊","Your average shift is "+L.mean.toFixed(2)+"h with a standard deviation of "+L.sd.toFixed(2)+"h — "+(L.cv<0.25?"a very tight distribution.":"a nicely varied schedule.")]);
+    if(L.reg) facts.push(["🔮","Regression says you'll work about "+L.pred.toFixed(0)+"h this week (±"+L.half.toFixed(0)+"h)."]);
     facts.push(["📅","Your busiest day is "+names7[wd.indexOf(Math.max.apply(null,wd))]+"."]);
   }
   if(facts.length){ const f=facts[factIdx%facts.length]; $("factE").textContent=f[0]; $("factTxt").textContent=f[1]; }
@@ -307,8 +411,14 @@ function renderFun(){
     ["🏔️","500 hours","Clock 500 hours",totH>=500,Math.min(totH/500,1)],
     ["🔥","3-day streak","Work 3 days in a row",bestRun>=3,Math.min(bestRun/3,1)],
     ["🚀","7-day streak","Work 7 days in a row",bestRun>=7,Math.min(bestRun/7,1)],
-    ["🌅","Early bird","Start before 7 AM",early,early?1:0],
-    ["🌙","Night owl","Work past 10 PM",night,night?1:0],
+    ["🌅","Early bird","Clock in 30 min before your usual start",early,early?1:0],
+    ["🌙","Night owl","Stay 1h past your usual finish",night,night?1:0],
+    ["⏰","On the dot","5 shifts within 10 min of your usual start",L.onDot>=5,Math.min(L.onDot/5,1)],
+    ["🧪","n = 30","30 shifts: the central limit theorem kicks in",n>=30,Math.min(n/30,1)],
+    ["🔔","Bell curve","20+ shifts with std dev under 1.5h",n>=20&&L.sd<=1.5,Math.min(n/20,1)*(L.sd?Math.min(1,1.5/L.sd):1)],
+    ["📈","Significant!","A statistically significant weekly trend (p<0.05)",!!(L.reg&&L.reg.sig),L.reg?Math.min(1,Math.abs(L.reg.b)*3):0],
+    ["🧘","Low variance","6+ weeks with weekly hours within ±15%",!!(L.reg&&L.weeks.length>=6&&L.wcv<0.15),L.reg&&L.wcv?Math.min(1,.15/L.wcv):0],
+    ["🦄","Outlier","A day 2σ above your average",L.maxZ>=2,Math.min(L.maxZ/2,1)],
     ["🏃","Marathon","A shift of 10h or more",longest>=10,Math.min(longest/10,1)],
     ["💵","$1,000","Earn $1,000",totE>=1000,Math.min(totE/1000,1)],
     ["💎","$5,000","Earn $5,000",totE>=5000,Math.min(totE/5000,1)]
@@ -708,7 +818,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.12.8";
+const APP_VERSION="2026.10.12.9";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

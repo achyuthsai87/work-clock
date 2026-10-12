@@ -309,3 +309,12 @@ html[data-theme="dark"] .btn.primary{color:#0c1020;}
 .badge.on{opacity:1; filter:none; background:color-mix(in srgb,var(--accent) 12%,var(--chip));}
 .badge .e{font-size:26px; line-height:1.1;} .badge .bt{font-size:12.5px; font-weight:650; margin-top:6px;} .badge .bd{font-size:10.5px; color:var(--muted); margin-top:2px; line-height:1.25;}
 @media (prefers-reduced-motion:reduce){ .ring-fg,.xp i,.fact{transition:none;} }
+
+/* ===== Data lab ===== */
+.lab-h{font-weight:650; font-size:14px; margin:18px 0 6px;}
+#trendChart{width:100%; height:170px; display:block;}
+.lab-note{font-size:12px; color:var(--muted); margin-top:6px; line-height:1.4;}
+.findings{list-style:none; margin:0; padding:0;}
+.findings li{position:relative; padding:9px 0 9px 22px; font-size:14px; line-height:1.4; border-bottom:1px solid var(--line);}
+.findings li:last-child{border-bottom:0;}
+.findings li::before{content:"\25B8"; position:absolute; left:4px; color:var(--accent);}
