@@ -19,3 +19,6 @@ After a reinstall: Settings → enter URL + secret → **Save & connect** restor
 ## Updating
 The app updates itself when opened online (service worker, network-first). No need to delete/reinstall.
 If something looks stale: Settings → App → **Update now** (keeps your data).
+
+## Security
+See [SECURITY.md](SECURITY.md). After updating `apps-script/Code.gs`, set a **16+ character** `SECRET` and redeploy (Manage deployments → New version).
