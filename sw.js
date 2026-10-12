@@ -1,7 +1,7 @@
 /* Work Clock service worker: the app works fully offline.
    Pages use network-first, so edits you push to the repo apply on the
    next online open with no version-bump dance. Everything else is cached. */
-const CACHE = "workclock-v8";
+const CACHE = "workclock-v11";
 const ASSETS = [
   "./",
   "./index.html",
