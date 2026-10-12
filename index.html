@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Work Clock">
+<meta name="theme-color" content="#2f6fed">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<title>Work Clock</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏱️</text></svg>">
+<style>
+  :root{
+    --bg:#f2f4f8; --card:#ffffff; --ink:#1b2430; --muted:#6b7686;
+    --accent:#2f6fed; --accent-dark:#2459c4; --green:#1e9e5a; --red:#e05252;
+    --line:#eef1f6; --field-bd:#dfe4ee; --chip:#eef2fa; --chip-red:#fdeeee;
+    --radius:16px;
+  }
+  html{color-scheme:light;}
+  html[data-theme="dark"]{
+    --bg:#0e1320; --card:#182032; --ink:#e9edf5; --muted:#8f99ad;
+    --accent:#5b8cff; --accent-dark:#4a7de0; --green:#2fbf71; --red:#f26d6d;
+    --line:#263049; --field-bd:#2c3852; --chip:#22304d; --chip-red:#3d2226;
+    color-scheme:dark;
+  }
+  @media (prefers-color-scheme:dark){
+    html[data-theme="auto"]{
+      --bg:#0e1320; --card:#182032; --ink:#e9edf5; --muted:#8f99ad;
+      --accent:#5b8cff; --accent-dark:#4a7de0; --green:#2fbf71; --red:#f26d6d;
+      --line:#263049; --field-bd:#2c3852; --chip:#22304d; --chip-red:#3d2226;
+      color-scheme:dark;
+    }
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+       background:var(--bg); color:var(--ink); padding:calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 108px);}
+  .wrap{max-width:520px; margin:0 auto;}
+  h1{font-size:22px; margin:4px 0 2px; display:flex; align-items:center; gap:8px;}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:14px;}
+  .card{background:var(--card); border-radius:var(--radius); padding:16px; margin-bottom:12px;
+        box-shadow:0 1px 3px rgba(20,30,60,.08);}
+  .big-btn{display:block; width:100%; border:0; border-radius:var(--radius); padding:20px;
+           font-size:20px; font-weight:700; color:#fff; background:var(--green); cursor:pointer;}
+  .big-btn:active{transform:scale(.98);}
+  .big-btn.out{background:var(--red);}
+  .big-btn:disabled{opacity:.5;}
+  .status-line{text-align:center; margin-top:10px; color:var(--muted); font-size:14px;}
+  .status-line b{color:var(--ink); font-variant-numeric:tabular-nums;}
+  .stats{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;}
+  .stat{background:var(--card); border-radius:var(--radius); padding:12px 10px; text-align:center;
+        box-shadow:0 1px 3px rgba(20,30,60,.08);}
+  .stat .label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px;}
+  .stat .val{font-size:17px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums;}
+  .stat .val small{font-size:12px; color:var(--muted); font-weight:400; display:block;}
+  .row{display:flex; justify-content:space-between; align-items:center; padding:11px 2px;
+       border-bottom:1px solid var(--line); font-size:14px;}
+  .row:last-child{border-bottom:0;}
+  .row .d{font-weight:600;}
+  .row .t{color:var(--muted); font-size:12.5px; margin-top:2px;}
+  .row .m{text-align:right; font-variant-numeric:tabular-nums;}
+  .row .m b{font-size:15px;}
+  .row .m span{display:block; font-size:12px; color:var(--muted);}
+  .icon-btn{border:0; background:var(--chip); color:var(--accent); border-radius:10px; padding:7px 10px;
+            font-size:13px; font-weight:600; margin-left:6px; cursor:pointer;}
+  .icon-btn.danger{background:var(--chip-red); color:var(--red);}
+  .link{background:none; border:0; color:var(--accent); font-size:14px; font-weight:600; cursor:pointer; padding:8px 0;}
+  .modal-bg{position:fixed; inset:0; background:rgba(15,25,45,.45); display:none; align-items:flex-end; justify-content:center; z-index:50;}
+  .modal-bg.open{display:flex;}
+  .modal{background:var(--card); width:100%; max-width:520px; border-radius:20px 20px 0 0; padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);}
+  .modal h2{margin:0 0 12px; font-size:18px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.4px;}
+  .field input{width:100%; font-size:17px; padding:12px; border:1.5px solid var(--field-bd); border-radius:12px; font-family:inherit; background:var(--card); color:var(--ink);}
+  .btn-row{display:flex; gap:10px; margin-top:6px;}
+  .btn{flex:1; border:0; border-radius:12px; padding:14px; font-size:16px; font-weight:700; cursor:pointer;}
+  .btn.primary{background:var(--accent); color:#fff;}
+  .btn.ghost{background:var(--chip); color:var(--ink);}
+  .settings-row{display:flex; align-items:center; justify-content:space-between; padding:10px 2px; font-size:15px;}
+  .settings-row input{width:90px; font-size:16px; padding:8px 10px; border:1.5px solid var(--field-bd); border-radius:10px; text-align:right; font-family:inherit; background:var(--card); color:var(--ink);}
+  .seg{display:flex; background:var(--chip); border-radius:10px; padding:3px; gap:2px;}
+  .seg button{border:0; background:transparent; color:var(--muted); font-size:13px; font-weight:600; padding:7px 12px; border-radius:8px; cursor:pointer; font-family:inherit;}
+  .seg button.on{background:var(--card); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.18);}
+  canvas{width:100%; height:170px; display:block;}
+  .empty{text-align:center; color:var(--muted); padding:18px 0; font-size:14px;}
+  .cancel-shift{display:block; margin:10px auto 0; background:none; border:0; color:var(--red); font-size:13px; cursor:pointer;}
+  .hero{background:linear-gradient(135deg,#2f6fed,#7b5cff); border-radius:20px; padding:20px 18px; color:#fff; margin-bottom:12px; box-shadow:0 8px 20px rgba(47,111,237,.28); animation:rise .4s ease both;}
+  .hero-top{display:flex; justify-content:space-between; font-size:13px; opacity:.85;}
+  .hero-earn{font-size:40px; font-weight:800; margin-top:6px; letter-spacing:-.5px; font-variant-numeric:tabular-nums;}
+  .hero-sub{font-size:13px; opacity:.82; margin-top:2px;}
+  html[data-theme="dark"] .hero{background:linear-gradient(135deg,#2a4a8f,#4b3a86); box-shadow:0 8px 20px rgba(0,0,0,.4);}
+  @media (prefers-color-scheme:dark){ html[data-theme="auto"] .hero{background:linear-gradient(135deg,#2a4a8f,#4b3a86); box-shadow:0 8px 20px rgba(0,0,0,.4);} }
+  .card-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .card-head .t{font-weight:700; font-size:16px;}
+  .ana-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
+  .ana-tile{background:var(--chip); border-radius:12px; padding:10px 12px;}
+  .ana-tile .l{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
+  .ana-tile .v{font-size:16px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums;}
+  .ana-tile .v small{font-size:11px; color:var(--muted); font-weight:400; margin-left:4px;}
+  #anaChart{width:100%; height:150px; display:block;}
+  .dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:#2fbf71; margin-right:6px; animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,191,113,.55);}70%{box-shadow:0 0 0 9px rgba(47,191,113,0);}100%{box-shadow:0 0 0 0 rgba(47,191,113,0);}}
+  @keyframes rise{from{opacity:0; transform:translateY(10px);}to{opacity:1; transform:none;}}
+  .card{animation:rise .4s ease both;}
+  .big-btn{background:linear-gradient(135deg,#27b56b,#1e9e5a); box-shadow:0 8px 18px rgba(30,158,90,.32);}
+  .big-btn.out{background:linear-gradient(135deg,#f27070,#d64545); box-shadow:0 8px 18px rgba(214,69,69,.32);}
+  /* Liquid-glass tab bar + panes */
+  .tabpane{display:none;}
+  .tabpane.on{display:block; animation:fadeSlide .28s ease;}
+  @keyframes fadeSlide{from{opacity:0; transform:translateY(8px);}to{opacity:1; transform:none;}}
+  .page-title{font-size:30px; font-weight:800; letter-spacing:-.5px; margin:8px 2px 14px;}
+  .tabbar{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(env(safe-area-inset-bottom) + 12px);
+    width:min(470px, calc(100% - 28px)); display:flex; z-index:40;
+    padding:8px 6px; border-radius:28px;
+    background:rgba(255,255,255,.58);
+    -webkit-backdrop-filter:blur(24px) saturate(180%); backdrop-filter:blur(24px) saturate(180%);
+    border:1px solid rgba(255,255,255,.55);
+    box-shadow:0 10px 32px rgba(20,30,60,.20), inset 0 1px 0 rgba(255,255,255,.65);}
+  html[data-theme="dark"] .tabbar{background:rgba(26,34,52,.55); border:1px solid rgba(255,255,255,.12);
+    box-shadow:0 10px 32px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.09);}
+  @media (prefers-color-scheme:dark){ html[data-theme="auto"] .tabbar{background:rgba(26,34,52,.55); border:1px solid rgba(255,255,255,.12);
+    box-shadow:0 10px 32px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.09);} }
+  .tabbar button{flex:1; border:0; background:transparent; display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:8px 2px; border-radius:20px; color:var(--muted); font-size:10.5px; font-weight:600; cursor:pointer; font-family:inherit;
+    transition:background .2s, color .2s;}
+  .tabbar button svg{width:24px; height:24px;}
+  .tabbar button.on{color:var(--accent); background:rgba(47,111,237,.14);}
+  .tabbar button.on svg{filter:drop-shadow(0 2px 6px rgba(47,111,237,.35));}
+  .hero{position:relative; overflow:hidden;}
+  .hero::after{content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(115deg, rgba(255,255,255,.25) 0%, rgba(255,255,255,0) 42%);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="tabpane on" id="tab-home">
+<div class="hero">
+    <div class="hero-top"><span id="greet">Hello</span><span id="heroDate"></span></div>
+    <div class="hero-earn" id="heroEarn">$0.00</div>
+    <div class="hero-sub" id="heroSub">earned today</div>
+  </div>
+
+<div class="card">
+    <button id="clockBtn" class="big-btn">Clock In</button>
+    <div id="statusLine" class="status-line"></div>
+    <button id="cancelShift" class="cancel-shift" style="display:none">Discard this shift</button>
+    <div style="text-align:center"><button id="manualBtn" class="link">+ Add a shift manually</button></div>
+  </div>
+
+<div class="stats">
+    <div class="stat"><div class="label">Today</div><div class="val" id="statToday">—</div></div>
+    <div class="stat"><div class="label" id="monthLabel">This month</div><div class="val" id="statMonth">—</div></div>
+    <div class="stat"><div class="label">All time</div><div class="val" id="statAll">—</div></div>
+  </div>
+  </section>
+  <section class="tabpane" id="tab-history">
+  <div class="page-title">History</div>
+<div class="card">
+    
+    <div id="history"></div>
+  </div>
+  </section>
+  <section class="tabpane" id="tab-analytics">
+  <div class="page-title">Analytics</div>
+<div class="card" style="margin-top:12px">
+    <div class="card-head"><span class="t">Analytics</span><span class="seg" id="anaSeg"><button data-p="week">Week</button><button data-p="month">Month</button></span></div>
+    <canvas id="anaChart" width="600" height="300"></canvas>
+    <div class="ana-grid" id="anaStats"></div>
+  </div>
+
+<div class="card" style="margin-top:12px">
+    <div style="font-weight:700; margin-bottom:8px">Monthly earnings</div>
+    <canvas id="chart" width="600" height="340"></canvas>
+  </div>
+  </section>
+  <section class="tabpane" id="tab-settings">
+  <div class="page-title">Settings</div>
+<div class="card">
+    <div style="font-weight:700; margin-bottom:4px">Settings</div>
+    <div class="settings-row"><span>Pay rate ($/hour)</span><input id="rateInput" type="number" min="0" step="0.25" inputmode="decimal"></div>
+    <div class="settings-row"><span>Appearance</span><span class="seg" id="themeSeg"><button data-t="auto">Auto</button><button data-t="light">Light</button><button data-t="dark">Dark</button></span></div>
+    <div class="settings-row"><span>Export</span><span><button class="icon-btn" id="csvBtn">CSV</button><button class="icon-btn" id="xlsxBtn">Excel</button><button class="icon-btn" id="jsonBtn">Backup</button></span></div>
+    <div class="settings-row"><span>Restore backup</span><span><button class="icon-btn" id="importBtn">Import</button><input type="file" id="importFile" accept="application/json" style="display:none"></span></div>
+    <div class="settings-row"><span style="color:var(--red)">Delete all data</span><button class="icon-btn danger" id="wipeBtn">Delete</button></div>
+  </div>
+
+<div class="card">
+    <div style="font-weight:700; margin-bottom:4px">Google Sheets sync</div>
+    <div class="sub" style="margin-bottom:8px">Clock-outs, edits and deletes go to your sheet automatically. Queues while offline.</div>
+    <div class="settings-row"><span>Auto-sync</span><button class="icon-btn" id="syncToggle">Off</button></div>
+    <div class="field" style="margin-top:6px"><label>Web app URL</label><input id="syncUrl" placeholder="https://script.google.com/.../exec" inputmode="url" autocomplete="off"></div>
+    <div class="field"><label>Secret</label><input id="syncSecret" type="password" placeholder="Same secret as in the script" autocomplete="off"></div>
+    <div class="settings-row"><span id="syncStatus">Not set up</span><button class="icon-btn" id="syncNowBtn">Sync now</button></div>
+  </div>
+  </section>
+
+  <nav class="tabbar">
+    <button data-tab="home" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg><span>Home</span></button>
+    <button data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>History</span></button>
+    <button data-tab="analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>
+    <button data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
+  </nav>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2 id="modalTitle">Add shift</h2>
+    <div class="field"><label>Date</label><input type="date" id="fDate"></div>
+    <div class="field"><label>Clock in</label><input type="time" id="fIn"></div>
+    <div class="field"><label>Clock out</label><input type="time" id="fOut"><div style="font-size:12px;color:var(--muted);margin-top:5px">Working past midnight? If clock-out is earlier than clock-in, it counts as the next day.</div></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="modalCancel">Cancel</button>
+      <button class="btn primary" id="modalSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const KEY = "workclock.v1";
+let db = {rate: 14, theme: "auto", shifts: []};
+try { const raw = localStorage.getItem(KEY); if (raw) db = Object.assign(db, JSON.parse(raw)); } catch(e){}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} }
+
+function applyTheme(){
+  const t = db.theme || "auto";
+  document.documentElement.dataset.theme = t;
+  const dark = t==="dark" || (t==="auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const mc = document.querySelector('meta[name="theme-color"]');
+  if (mc) mc.setAttribute("content", dark ? "#0e1320" : "#2f6fed");
+  document.querySelectorAll("#themeSeg button").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
+}
+const $ = id => document.getElementById(id);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function fmtTime(ts){ const d=new Date(ts); let h=d.getHours(), m=d.getMinutes();
+  const ap = h>=12?"PM":"AM"; h=h%12||12; return h+":"+String(m).padStart(2,"0")+" "+ap; }
+function fmtDate(ts){ const d=new Date(ts); return MONTHS[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear(); }
+function dayKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function monthKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function monthLabel(key){ const [y,m]=key.split("-").map(Number); return MONTHS[m-1]+" "+y; }
+function hrs(s){ return (s.end - s.start)/3600000; }
+function money(n){ return "$"+n.toFixed(2); }
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function openShift(){ return db.shifts.find(s=>!s.end); }
+
+let timer=null;
+function render(){
+  const btn=$("clockBtn"), line=$("statusLine"), cancel=$("cancelShift");
+  const open=openShift();
+  if(open){
+    btn.textContent="Clock Out"; btn.classList.add("out");
+    cancel.style.display="block";
+    const tick=()=>{ const el=(Date.now()-open.start)/1000;
+      const h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
+      line.innerHTML='<span class="dot"></span>Clocked in at <b>'+esc(fmtTime(open.start))+"</b> · <b>"+
+        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"</b> elapsed"; };
+    tick(); clearInterval(timer); timer=setInterval(tick,1000);
+  } else {
+    btn.textContent="Clock In"; btn.classList.remove("out"); cancel.style.display="none";
+    clearInterval(timer);
+    line.innerHTML = db.shifts.length ? "Not clocked in." : "Tap <b>Clock In</b> when your shift starts.";
+  }
+
+  // stats
+  const today=dayKey(Date.now()), mk=monthKey(Date.now());
+  let th=0, mh=0, ah=0;
+  db.shifts.forEach(s=>{ if(!s.end) return; const h=hrs(s); ah+=h;
+    if(dayKey(s.start)===today) th+=h; if(monthKey(s.start)===mk) mh+=h; });
+  $("statToday").innerHTML = th.toFixed(2)+"h<small>"+money(th*db.rate)+"</small>";
+  $("statMonth").innerHTML = mh.toFixed(2)+"h<small>"+money(mh*db.rate)+"</small>";
+  $("monthLabel").textContent = monthLabel(mk);
+  $("statAll").innerHTML = money(ah*db.rate)+"<small>"+ah.toFixed(1)+"h total</small>";
+
+  // hero
+  const hrNow=new Date().getHours();
+  $("greet").textContent = hrNow<12?"Good morning":hrNow<17?"Good afternoon":"Good evening";
+  const nd=new Date();
+  $("heroDate").textContent = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][nd.getDay()]+", "+fmtDate(Date.now());
+  $("heroEarn").textContent = money(th*db.rate);
+  $("heroSub").textContent = th>0 ? th.toFixed(2)+"h worked today" : "No shifts yet today — tap Clock In below";
+  renderAnalytics();
+
+  // history grouped by day
+  const done=db.shifts.filter(s=>s.end).sort((a,b)=>b.start-a.start);
+  const box=$("history"); box.innerHTML="";
+  if(!done.length){ box.innerHTML='<div class="empty">No shifts yet. Clock in to start tracking.</div>'; }
+  let lastDay="";
+  done.forEach(s=>{
+    const dk=dayKey(s.start);
+    if(dk!==lastDay){ lastDay=dk;
+      const d=document.createElement("div");
+      d.style.cssText="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px";
+      d.textContent=fmtDate(s.start); box.appendChild(d);
+    }
+    const h=hrs(s), row=document.createElement("div"); row.className="row";
+    row.innerHTML='<div><div class="d">'+esc(fmtTime(s.start))+" – "+esc(fmtTime(s.end))+'</div>'+
+      '<div class="t">'+h.toFixed(2)+' hours</div></div>'+
+      '<div class="m"><b>'+money(h*db.rate)+'</b>'+
+      '<span><button class="icon-btn" data-edit="'+s.id+'">Edit</button>'+
+      '<button class="icon-btn danger" data-del="'+s.id+'">Delete</button></span></div>';
+    box.appendChild(row);
+  });
+  box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ if(confirm("Delete this shift?")){
+    const id=b.dataset.del;
+    db.shifts=db.shifts.filter(s=>s.id!==id); save(); render(); queueSync({action:"delete", id:id}); }});
+  box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal(db.shifts.find(s=>s.id===b.dataset.edit)));
+
+  drawChart();
+  applyTheme();
+  $("rateInput").value=db.rate;
+}
+
+function drawChart(){
+  const cv=$("chart"), ctx=cv.getContext("2d");
+  const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
+  const now=new Date(); const keys=[];
+  for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); keys.push(monthKey(d.getTime())); }
+  const sums={}; keys.forEach(k=>sums[k]=0);
+  db.shifts.forEach(s=>{ if(!s.end) return; const k=monthKey(s.start); if(k in sums) sums[k]+=hrs(s)*db.rate; });
+  const max=Math.max(1,...Object.values(sums));
+  const cs=getComputedStyle(document.documentElement);
+  const colMuted=(cs.getPropertyValue("--muted")||"#6b7686").trim();
+  const colInk=(cs.getPropertyValue("--ink")||"#1b2430").trim();
+  const padL=8, padB=26, padT=8, cw=(W-padL)/6, bh=H-padB-padT;
+  ctx.font="11px -apple-system, sans-serif"; ctx.textAlign="center";
+  keys.forEach((k,i)=>{
+    const v=sums[k], h=Math.max(3,(v/max)*bh), x=padL+i*cw+cw/2;
+    const g=ctx.createLinearGradient(0,H-padB-h,0,H-padB);
+    g.addColorStop(0,"#2f6fed"); g.addColorStop(1,"#9dbcf7");
+    ctx.fillStyle=g;
+    const bw=Math.min(44,cw-18);
+    ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-h, bw, h, 6); ctx.fill();
+    ctx.fillStyle=colMuted;
+    ctx.fillText(monthLabel(k).split(" ")[0], x, H-10);
+    if(v>0){ ctx.fillStyle=colInk; ctx.fillText("$"+Math.round(v), x, H-padB-h-6); }
+  });
+}
+
+// ---------- Analytics ----------
+function startOfWeek(ts){ const d=new Date(ts); const diff=(d.getDay()+6)%7; d.setHours(0,0,0,0); return d.getTime()-diff*86400000; }
+
+function renderAnalytics(){
+  const p = db.anaPeriod || "week";
+  document.querySelectorAll("#anaSeg button").forEach(b=>b.classList.toggle("on", b.dataset.p===p));
+  const now = Date.now();
+  let days = [];
+  if(p==="week"){
+    const s=startOfWeek(now), names=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    for(let i=0;i<7;i++){ const t=s+i*86400000; days.push({key:dayKey(t), label:names[i], hours:0, earned:0}); }
+  } else {
+    const d=new Date(now), n=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    for(let i=1;i<=n;i++){ const t=new Date(d.getFullYear(), d.getMonth(), i).getTime(); days.push({key:dayKey(t), label:String(i), hours:0, earned:0}); }
+  }
+  const map={}; days.forEach(x=>map[x.key]=x);
+  let shifts=0;
+  db.shifts.forEach(s=>{ if(!s.end) return; const k=dayKey(s.start);
+    if(map[k]){ const h=hrs(s); map[k].hours+=h; map[k].earned+=h*db.rate; shifts++; }});
+  const earned=days.reduce((a,x)=>a+x.earned,0), hours=days.reduce((a,x)=>a+x.hours,0);
+  const elapsed = p==="week" ? ((new Date(now).getDay()+6)%7)+1 : new Date(now).getDate();
+  const best = days.reduce((a,x)=> x.earned>a.earned ? x : a, days[0]);
+  const g=$("anaStats"); g.innerHTML="";
+  const tiles=[
+    ["Earned", money(earned)],
+    ["Hours", hours.toFixed(1)+"h"],
+    ["Shifts", String(shifts)],
+    ["Avg / day", (hours/Math.max(1,elapsed)).toFixed(1)+"h"],
+    ["Best day", best.earned>0 ? money(best.earned)+"<small>"+esc(best.label)+"</small>" : "—"]
+  ];
+  // show 4 tiles: earned, hours, avg/day, best day (shifts folded into subtext of hours)
+  const show=[tiles[0],tiles[1],tiles[3],tiles[4]];
+  show[1]=["Hours", hours.toFixed(1)+"h<small>"+shifts+" shifts</small>"];
+  show.forEach(([l,v])=>{ const d=document.createElement("div"); d.className="ana-tile";
+    d.innerHTML='<div class="l">'+l+'</div><div class="v">'+v+'</div>'; g.appendChild(d); });
+  drawAnaChart(days, p);
+}
+
+function drawAnaChart(days, p){
+  const cv=$("anaChart"), ctx=cv.getContext("2d");
+  const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
+  const cs=getComputedStyle(document.documentElement);
+  const colMuted=(cs.getPropertyValue("--muted")||"#6b7686").trim();
+  const colInk=(cs.getPropertyValue("--ink")||"#1b2430").trim();
+  const maxH=Math.max(0.5,...days.map(d=>d.hours));
+  const padB=22, padT=18, n=days.length, slot=W/n, bw=Math.min(34, slot*0.55);
+  const best=days.reduce((a,x)=> x.hours>a.hours ? x : a, days[0]);
+  ctx.font="10.5px -apple-system, sans-serif"; ctx.textAlign="center";
+  days.forEach((d,i)=>{
+    const h=Math.max(2,(d.hours/maxH)*(H-padB-padT));
+    const x=i*slot+slot/2;
+    const g=ctx.createLinearGradient(0,H-padB-h,0,H-padB);
+    if(d===best && d.hours>0){ g.addColorStop(0,"#2fbf71"); g.addColorStop(1,"#9fe0bd"); }
+    else { g.addColorStop(0,"#2f6fed"); g.addColorStop(1,"#9dbcf7"); }
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-h, bw, h, 5); ctx.fill();
+    if(d.hours>0 && (p==="week" || d===best)){ ctx.fillStyle=colInk; ctx.fillText(d.hours.toFixed(1)+"h", x, H-padB-h-5); }
+    if(p==="week" || i%5===0 || i===n-1){ ctx.fillStyle=colMuted; ctx.fillText(d.label, x, H-7); }
+  });
+}
+
+document.querySelectorAll("#anaSeg button").forEach(b=>b.onclick=()=>{ db.anaPeriod=b.dataset.p; save(); renderAnalytics(); });
+
+// ---------- Google Sheets sync (via Apps Script web app) ----------
+function syncCfg(){ return db.sync || (db.sync = {url:"", secret:"", enabled:false}); }
+function shiftPayload(s){
+  const h=hrs(s);
+  return {id:s.id, date:fmtDate(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
+          hours:Math.round(h*100)/100, earned:Math.round(h*db.rate*100)/100};
+}
+function queueSync(ev){
+  const c=syncCfg();
+  if(!c.enabled || !c.url) return;
+  db.outbox=db.outbox||[];
+  db.outbox.push(ev);
+  save();
+  updateSyncStatus();
+  flushOutbox();
+}
+let flushing=false;
+async function flushOutbox(){
+  const c=syncCfg();
+  db.outbox=db.outbox||[];
+  if(flushing) return;
+  if(!c.enabled || !c.url || !db.outbox.length || !navigator.onLine){ updateSyncStatus(); return; }
+  flushing=true;
+  try{
+    while(db.outbox.length){
+      const ev=db.outbox[0];
+      const payload=Object.assign({secret:c.secret}, ev);
+      await fetch(c.url, {method:"POST", mode:"no-cors",
+        headers:{"Content-Type":"text/plain"}, body:JSON.stringify(payload)});
+      db.outbox.shift();
+      db.lastSync=Date.now();
+      save();
+    }
+  }catch(e){ /* network failed — remaining events stay queued */ }
+  flushing=false;
+  updateSyncStatus();
+}
+function updateSyncStatus(){
+  const c=syncCfg(), el=$("syncStatus");
+  if(!el) return;
+  if(!c.enabled || !c.url){ el.textContent="Not set up"; return; }
+  const n=(db.outbox||[]).length;
+  if(n>0) el.textContent=n+" change"+(n===1?"":"s")+" pending";
+  else if(db.lastSync) el.textContent="Synced \u00b7 "+fmtTime(db.lastSync);
+  else el.textContent="Ready";
+}
+function updateSyncToggle(){
+  const b=$("syncToggle");
+  if(b) b.textContent=syncCfg().enabled ? "On" : "Off";
+}
+// ---------- /Google Sheets sync ----------
+
+// modal
+let editingId=null;
+function openModal(shift){
+  editingId = shift ? shift.id : null;
+  $("modalTitle").textContent = shift ? "Edit shift" : "Add shift";
+  const d = shift ? new Date(shift.start) : new Date();
+  $("fDate").value = dayKey(shift?shift.start:Date.now());
+  const t2 = ts => { const x=new Date(ts); return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0"); };
+  $("fIn").value = shift ? t2(shift.start) : "";
+  $("fOut").value = (shift && shift.end) ? t2(shift.end) : "";
+  $("modalBg").classList.add("open");
+}
+function closeModal(){ $("modalBg").classList.remove("open"); editingId=null; }
+$("modalCancel").onclick=closeModal;
+$("modalBg").addEventListener("click",e=>{ if(e.target===$("modalBg")) closeModal(); });
+$("modalSave").onclick=()=>{
+  const dv=$("fDate").value, iv=$("fIn").value, ov=$("fOut").value;
+  if(!dv||!iv||!ov){ alert("Please fill date, clock-in and clock-out."); return; }
+  const start=new Date(dv+"T"+iv).getTime();
+  let end=new Date(dv+"T"+ov).getTime();
+  if(end===start){ alert("Clock-out must be after clock-in."); return; }
+  if(end<start) end+=86400000; // overnight shift: clock-out is the next day
+  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; queueSync({action:"upsert", shift:shiftPayload(s)}); }
+  else { const ns={id:uid(), start, end}; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
+  save(); closeModal(); render();
+};
+$("manualBtn").onclick=()=>openModal(null);
+
+// clock in/out
+$("clockBtn").onclick=()=>{
+  const open=openShift();
+  if(open){ open.end=Date.now(); save(); render(); queueSync({action:"upsert", shift:shiftPayload(open)}); }
+  else { db.shifts.push({id:uid(), start:Date.now(), end:null}); save(); render(); }
+};
+$("cancelShift").onclick=()=>{ if(confirm("Discard the current open shift?")){
+  db.shifts=db.shifts.filter(s=>s.end); save(); render(); }};
+
+// settings
+document.querySelectorAll("#themeSeg button").forEach(b=>b.onclick=()=>{
+  db.theme=b.dataset.t; save(); applyTheme(); drawChart();
+});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{
+  if((db.theme||"auto")==="auto"){ applyTheme(); drawChart(); }
+});
+$("rateInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value);
+  if(v>=0){ db.rate=v; save(); render(); } });
+function download(name, text, type){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+/* ===== XLSX EXPORT (pure functions — also unit-tested in node) ===== */
+const XLSX_CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function xlsxCrc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=XLSX_CRC_T[(c^b[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function xlsxEsc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function xlsxZip(files){
+  const enc=new TextEncoder();
+  const parts=[], central=[];
+  let offset=0;
+  files.forEach(f=>{
+    const name=enc.encode(f.name), data=f.data, crc=xlsxCrc32(data);
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true);
+    lh.setUint32(14,crc,true); lh.setUint32(18,data.length,true); lh.setUint32(22,data.length,true);
+    lh.setUint16(26,name.length,true);
+    parts.push(lh.buffer,name,data);
+    central.push({name:name,crc:crc,size:data.length,offset:offset});
+    offset+=30+name.length+data.length;
+  });
+  const cdStart=offset; let cdSize=0;
+  central.forEach(e=>{
+    const h=new DataView(new ArrayBuffer(46));
+    h.setUint32(0,0x02014b50,true); h.setUint16(4,20,true); h.setUint16(6,20,true);
+    h.setUint32(16,e.crc,true); h.setUint32(20,e.size,true); h.setUint32(24,e.size,true);
+    h.setUint16(28,e.name.length,true); h.setUint32(42,e.offset,true);
+    parts.push(h.buffer,e.name);
+    cdSize+=46+e.name.length;
+  });
+  const end=new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true);
+  end.setUint16(8,central.length,true); end.setUint16(10,central.length,true);
+  end.setUint32(12,cdSize,true); end.setUint32(16,cdStart,true);
+  parts.push(end.buffer);
+  return new Blob(parts,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function xlsxDateSerial(y,mo,d){ return Math.round((Date.UTC(y,mo,d)/86400000+25569)*1e6)/1e6; }
+function buildXLSXBlob(shifts, rate){
+  const enc=new TextEncoder();
+  const rows=shifts.filter(s=>s.end).sort((a,b)=>a.start-b.start);
+  const n=rows.length, R0=5, TR=R0+n;
+  const C=(ref,s,t,inner)=>'<c r="'+ref+'" s="'+s+'"'+(t?' t="'+t+'"':'')+'>'+inner+'</c>';
+  const S=v=>'<is><t>'+xlsxEsc(v)+'</t></is>';
+  const V=v=>'<v>'+v+'</v>';
+  const M2=v=>'$'+v.toFixed(2);
+  const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const fD=ts=>{const d=new Date(ts);return MON[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear();};
+  let sd='';
+  sd+='<row r="1">'+C("A1",2,"inlineStr",S("Work Clock \u2014 Shift Export"))+'</row>';
+  sd+='<row r="2">'+C("A2",1,"inlineStr",S("Generated "+fD(Date.now())+" \u00b7 "+n+" shift"+(n===1?"":"s")+" \u00b7 Pay rate "+M2(rate)+"/hr"))+'</row>';
+  sd+='<row r="3"></row>';
+  sd+='<row r="4">'+["Date","Clock In","Clock Out","Hours","Earned"].map((h,i)=>C("ABCDE"[i]+"4",2,"inlineStr",S(h))).join("")+'</row>';
+  rows.forEach((s,i)=>{
+    const r=R0+i, a=new Date(s.start), b=new Date(s.end);
+    const dIn=xlsxDateSerial(a.getFullYear(),a.getMonth(),a.getDate());
+    const dOut=xlsxDateSerial(b.getFullYear(),b.getMonth(),b.getDate());
+    const tIn=Math.round((dIn+(a.getHours()*60+a.getMinutes())/1440)*1440)/1440;
+    const tOut=Math.round((dOut+(b.getHours()*60+b.getMinutes())/1440)*1440)/1440;
+    const h=Math.round(((s.end-s.start)/3600000)*100)/100;
+    const e=Math.round(h*rate*100)/100;
+    sd+='<row r="'+r+'">'+C("A"+r,3,0,V(dIn))+C("B"+r,4,0,V(tIn))+C("C"+r,4,0,V(tOut))+C("D"+r,5,0,V(h))+C("E"+r,6,0,V(e))+'</row>';
+  });
+  const fDsum=n>0?'<f>SUM(D'+R0+':D'+(R0+n-1)+')</f><v>0</v>':'<v>0</v>';
+  const fEsum=n>0?'<f>SUM(E'+R0+':E'+(R0+n-1)+')</f><v>0</v>':'<v>0</v>';
+  sd+='<row r="'+TR+'">'+C("C"+TR,1,"inlineStr",S("Total:"))+'<c r="D'+TR+'" s="7">'+fDsum+'</c><c r="E'+TR+'" s="8">'+fEsum+'</c></row>';
+
+  const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    +'<dimension ref="A1:E'+TR+'"/>'
+    +'<sheetViews><sheetView workbookViewId="0"/></sheetViews>'
+    +'<cols><col min="1" max="1" width="15" customWidth="1"/><col min="2" max="3" width="13" customWidth="1"/><col min="4" max="4" width="10" customWidth="1"/><col min="5" max="5" width="13" customWidth="1"/></cols>'
+    +'<sheetData>'+sd+'</sheetData></worksheet>';
+
+  const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    +'<numFmts count="3"><numFmt numFmtId="164" formatCode="mmm d, yyyy"/><numFmt numFmtId="165" formatCode="h:mm AM/PM"/><numFmt numFmtId="166" formatCode="&quot;$&quot;#,##0.00"/></numFmts>'
+    +'<fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>'
+    +'<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF2F6FED"/><bgColor indexed="64"/></patternFill></fill></fills>'
+    +'<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+    +'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+    +'<cellXfs count="9">'
+    +'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+    +'<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"/>'
+    +'<xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'
+    +'<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+    +'<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+    +'<xf numFmtId="2" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+    +'<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+    +'<xf numFmtId="2" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+    +'<xf numFmtId="166" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+    +'</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+
+  const ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>';
+  const rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+  const wb='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Shifts" sheetId="1" r:id="rId1"/></sheets></workbook>';
+  const wbr='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>';
+
+  return xlsxZip([
+    {name:"[Content_Types].xml", data:enc.encode(ct)},
+    {name:"_rels/.rels", data:enc.encode(rels)},
+    {name:"xl/workbook.xml", data:enc.encode(wb)},
+    {name:"xl/_rels/workbook.xml.rels", data:enc.encode(wbr)},
+    {name:"xl/styles.xml", data:enc.encode(styles)},
+    {name:"xl/worksheets/sheet1.xml", data:enc.encode(sheet)}
+  ]);
+}
+/* ===== /XLSX EXPORT ===== */
+
+$("xlsxBtn").onclick=()=>{
+  const blob=buildXLSXBlob(db.shifts, db.rate);
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="workclock-"+dayKey(Date.now())+".xlsx";
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+};
+$("csvBtn").onclick=()=>{
+  let csv="Date,Clock In,Clock Out,Hours,Earned\n";
+  db.shifts.filter(s=>s.end).sort((a,b)=>a.start-b.start).forEach(s=>{
+    const h=hrs(s);
+    csv+=[fmtDate(s.start),fmtTime(s.start),fmtTime(s.end),h.toFixed(2),(h*db.rate).toFixed(2)].join(",")+"\n";
+  });
+  download("workclock.csv",csv,"text/csv");
+};
+$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify(db,null,2),"application/json");
+$("importBtn").onclick=()=>$("importFile").click();
+$("importFile").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result);
+      if(!Array.isArray(d.shifts)||typeof d.rate!=="number") throw 0;
+      if(confirm("Replace all current data with this backup?")){ db=d; save(); render(); }
+    }catch(_){ alert("That file doesn't look like a Work Clock backup."); } };
+  r.readAsText(f); e.target.value="";
+});
+$("wipeBtn").onclick=()=>{ if(confirm("Delete ALL shifts and reset? This can't be undone.")){
+  const keep={rate:db.rate, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync};
+  db=Object.assign({shifts:[], outbox:[]}, keep); save(); render(); updateSyncStatus(); }};
+
+// google sheets sync settings
+$("syncUrl").value=syncCfg().url||"";
+$("syncSecret").value=syncCfg().secret||"";
+updateSyncToggle(); updateSyncStatus();
+$("syncUrl").addEventListener("change",e=>{ syncCfg().url=e.target.value.trim(); save(); updateSyncStatus(); flushOutbox(); });
+$("syncSecret").addEventListener("change",e=>{ syncCfg().secret=e.target.value; save(); });
+$("syncToggle").onclick=()=>{ const c=syncCfg(); c.enabled=!c.enabled; save(); updateSyncToggle(); updateSyncStatus(); if(c.enabled) flushOutbox(); };
+$("syncNowBtn").onclick=()=>flushOutbox();
+window.addEventListener("online",flushOutbox);
+flushOutbox();
+
+window.addEventListener("resize",()=>{ drawChart(); if(document.getElementById("tab-analytics").classList.contains("on")) renderAnalytics(); });
+
+// tab bar
+document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tabbar button").forEach(x=>x.classList.toggle("on",x===b));
+  const t=b.dataset.tab;
+  document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("on",p.id==="tab-"+t));
+  window.scrollTo(0,0);
+  if(t==="analytics"){ renderAnalytics(); drawChart(); }
+});
+render();
+})();
+/* Register the service worker so the app works fully offline once installed. */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function(){ navigator.serviceWorker.register("./sw.js"); });
+}
+</script>
+</body>
+</html>
