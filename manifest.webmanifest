@@ -1,1 +1,21 @@
-{"background_color":"#f2f4f8","description":"Offline time and earnings tracker","display":"standalone","icons":[{"sizes":"192x192","src":"./icon-192.png","type":"image/png"},{"sizes":"512x512","src":"./icon-512.png","type":"image/png"}],"name":"Work Clock","scope":"./","short_name":"Work Clock","start_url":"./","theme_color":"#2f6fed"}
+{
+  "id": "./",
+  "name": "Work Clock",
+  "short_name": "Work Clock",
+  "description": "Offline time and earnings tracker. Clock in, clock out, see what you've earned.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e1320",
+  "theme_color": "#2f6fed",
+  "categories": ["productivity", "finance", "business"],
+  "icons": [
+    {"src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "./icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+    {"src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

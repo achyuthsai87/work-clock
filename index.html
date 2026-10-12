@@ -8,10 +8,17 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Work Clock">
 <meta name="theme-color" content="#2f6fed">
+<meta name="description" content="Work Clock: an offline time and earnings tracker. Clock in, clock out, see what you've earned.">
+<meta name="format-detection" content="telephone=no">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Work Clock">
+<meta property="og:description" content="Offline time and earnings tracker.">
+<meta property="og:image" content="./icon-512.png">
+<meta name="color-scheme" content="light dark">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <title>Work Clock</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏱️</text></svg>">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 <style>
   *,*::before,*::after{box-sizing:border-box;}
   :root{
@@ -36,6 +43,11 @@
     }
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html{-webkit-text-size-adjust:100%; text-size-adjust:100%; overscroll-behavior-y:none; background:var(--bg);}
+  /* App-like feel: no accidental text selection / callouts / double-tap zoom on controls */
+  button,.tabbar,.hero,.stat,h1,.sub{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none;}
+  button,a,input,select{touch-action:manipulation;}
+  input,textarea{-webkit-user-select:text; user-select:text;}
   body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
        background:var(--bg); color:var(--ink); padding:calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 108px);}
   .wrap{max-width:520px; margin:0 auto;}
@@ -137,6 +149,7 @@
 </style>
 </head>
 <body>
+<noscript><div style="padding:24px;font-family:sans-serif">Work Clock needs JavaScript enabled.</div></noscript>
 <div class="wrap">
   <section class="tabpane on" id="tab-home">
 <div class="hero">

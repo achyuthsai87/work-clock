@@ -1,14 +1,16 @@
 /* Work Clock service worker: the app works fully offline.
    Pages use network-first, so edits you push to the repo apply on the
    next online open with no version-bump dance. Everything else is cached. */
-const CACHE = "workclock-v12";
+const CACHE = "workclock-v13";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
-  "./apple-touch-icon.png"
+  "./apple-touch-icon.png",
+  "./icon-maskable-192.png",
+  "./icon-maskable-512.png"
 ];
 
 self.addEventListener("install", (e) => {
