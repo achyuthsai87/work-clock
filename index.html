@@ -17,6 +17,28 @@
 <meta name="color-scheme" content="light dark">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="apple-touch-startup-image" media="(device-width:440px) and (device-height:956px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/1320x2868-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:440px) and (device-height:956px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/1320x2868-dark.png">
+<link rel="apple-touch-startup-image" media="(device-width:402px) and (device-height:874px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/1206x2622-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:402px) and (device-height:874px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/1206x2622-dark.png">
+<link rel="apple-touch-startup-image" media="(device-width:430px) and (device-height:932px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/1290x2796-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:430px) and (device-height:932px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/1290x2796-dark.png">
+<link rel="apple-touch-startup-image" media="(device-width:393px) and (device-height:852px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/1179x2556-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:393px) and (device-height:852px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/1179x2556-dark.png">
+<link rel="apple-touch-startup-image" media="(device-width:428px) and (device-height:926px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/1284x2778-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:428px) and (device-height:926px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/1284x2778-dark.png">
+<link rel="apple-touch-startup-image" media="(device-width:390px) and (device-height:844px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/1170x2532-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:390px) and (device-height:844px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/1170x2532-dark.png">
+<link rel="apple-touch-startup-image" media="(device-width:375px) and (device-height:812px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/1125x2436-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:375px) and (device-height:812px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/1125x2436-dark.png">
+<link rel="apple-touch-startup-image" media="(device-width:414px) and (device-height:896px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/1242x2688-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:414px) and (device-height:896px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/1242x2688-dark.png">
+<link rel="apple-touch-startup-image" media="(device-width:414px) and (device-height:896px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/828x1792-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:414px) and (device-height:896px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/828x1792-dark.png">
+<link rel="apple-touch-startup-image" media="(device-width:414px) and (device-height:736px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/1242x2208-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:414px) and (device-height:736px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/1242x2208-dark.png">
+<link rel="apple-touch-startup-image" media="(device-width:375px) and (device-height:667px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait) and (prefers-color-scheme:light)" href="./splash/750x1334-light.png">
+<link rel="apple-touch-startup-image" media="(device-width:375px) and (device-height:667px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait) and (prefers-color-scheme:dark)" href="./splash/750x1334-dark.png">
 <title>Work Clock</title>
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 <style>
@@ -49,7 +71,7 @@
   button,a,input,select{touch-action:manipulation;}
   input,textarea{-webkit-user-select:text; user-select:text;}
   body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
-       background:var(--bg); color:var(--ink); padding:calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 108px);}
+       background:var(--bg); color:var(--ink); padding:calc(env(safe-area-inset-top) + 12px) calc(env(safe-area-inset-right) + 14px) calc(env(safe-area-inset-bottom) + 108px) calc(env(safe-area-inset-left) + 14px); min-height:100vh; min-height:100dvh;}
   .wrap{max-width:520px; margin:0 auto;}
   h1{font-size:22px; margin:4px 0 2px; display:flex; align-items:center; gap:8px;}
   .sub{color:var(--muted); font-size:13px; margin-bottom:14px;}
@@ -82,7 +104,7 @@
   .link{background:none; border:0; color:var(--accent); font-size:14px; font-weight:600; cursor:pointer; padding:8px 0;}
   .modal-bg{position:fixed; inset:0; background:rgba(15,25,45,.45); display:none; align-items:flex-end; justify-content:center; z-index:50;}
   .modal-bg.open{display:flex;}
-  .modal{background:var(--card); width:100%; max-width:520px; border-radius:20px 20px 0 0; padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);}
+  .modal{max-height:92vh; max-height:92dvh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; background:var(--card); width:100%; max-width:520px; border-radius:20px 20px 0 0; padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);}
   .modal h2{margin:0 0 12px; font-size:18px;}
   .field{margin-bottom:12px;}
   .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.4px;}
