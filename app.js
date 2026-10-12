@@ -150,7 +150,7 @@ function drawChart(){
   const cs=getComputedStyle(document.documentElement);
   const colMuted=(cs.getPropertyValue("--muted")||"#6b7686").trim();
   const colInk=(cs.getPropertyValue("--ink")||"#1b2430").trim();
-  const padL=8, padB=26, padT=8, cw=(W-padL)/6, bh=H-padB-padT;
+  const padL=8, padB=26, padT=28, cw=(W-padL)/6, bh=H-padB-padT;
   ctx.font="11px -apple-system, sans-serif"; ctx.textAlign="center";
   keys.forEach((k,i)=>{
     const v=sums[k], h=Math.max(3,(v/max)*bh), x=padL+i*cw+cw/2;
@@ -279,7 +279,7 @@ function drawAnaChart(days, p){
   const colMuted=(cs.getPropertyValue("--muted")||"#6b7686").trim();
   const colInk=(cs.getPropertyValue("--ink")||"#1b2430").trim();
   const maxH=Math.max(0.5,...days.map(d=>d.hours));
-  const padB=22, padT=18, n=days.length, slot=W/n, bw=Math.min(34, slot*0.55);
+  const padB=22, padT=24, n=days.length, slot=W/n, bw=Math.min(34, slot*0.55);
   const best=days.reduce((a,x)=> x.hours>a.hours ? x : a, days[0]);
   ctx.font="10.5px -apple-system, sans-serif"; ctx.textAlign="center";
   days.forEach((d,i)=>{
@@ -609,7 +609,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.12.6";
+const APP_VERSION="2026.10.12.7";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
