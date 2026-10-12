@@ -7,7 +7,7 @@
  */
 const SECRET = "CHANGE-ME-TO-SOMETHING-LONG";   // use 24+ random characters; never share or commit it
 const SHEET_NAME = "Shifts";
-const HEADERS = ["id", "date", "in", "out", "hours", "earned", "start", "end"];
+const HEADERS = ["id", "date", "in", "out", "hours", "earned", "start", "end", "tips"];
 const MAX_BULK = 5000;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -19,6 +19,8 @@ function sheet_() {
     sh.appendRow(HEADERS);
     sh.setFrozenRows(1);
     sh.getRange("A:D").setNumberFormat("@"); // plain text: nothing is ever evaluated as a formula
+  } else if (!sh.getRange(1, 9).getValue()) {
+    sh.getRange(1, 9).setValue("tips");      // older sheets: add the tips column
   }
   return sh;
 }
@@ -43,7 +45,8 @@ function clean_(s) {
   if (!isFinite(start) || !isFinite(end) || start < 9.46e11 || end < start || end - start > 7 * 864e5) return null;
   const txt = v => String(v == null ? "" : v).replace(/[^\w ,:.\-\/]/g, "").slice(0, 40);
   return [String(s.id), txt(s.date), txt(s.in), txt(s.out),
-          Math.round((Number(s.hours) || 0) * 100) / 100, Math.round((Number(s.earned) || 0) * 100) / 100, start, end];
+          Math.round((Number(s.hours) || 0) * 100) / 100, Math.round((Number(s.earned) || 0) * 100) / 100, start, end,
+          Math.round(Math.min(Math.max(Number(s.tips) || 0, 0), 100000) * 100) / 100];
 }
 
 function idMap_(sh) {
@@ -78,7 +81,7 @@ function doPost(e) {
       const n = sh.getLastRow() - 1;
       const rows = n > 0 ? sh.getRange(2, 1, n, HEADERS.length).getValues() : [];
       return out_({ ok: true, shifts: rows.filter(r => r[0] && r[6] && r[7])
-        .map(r => ({ id: String(r[0]), start: Number(r[6]), end: Number(r[7]) })) });
+        .map(r => ({ id: String(r[0]), start: Number(r[6]), end: Number(r[7]), tip: Number(r[8]) || 0 })) });
     }
 
     if (b.action === "upsert" || b.action === "bulk") {

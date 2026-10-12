@@ -14,7 +14,9 @@ function cleanShift(s){
   const id = String(s.id == null ? "" : s.id), start = Number(s.start), end = s.end == null ? null : Number(s.end);
   if(!ID_RE.test(id) || !Number.isFinite(start) || start < MIN_TS || start > MAX_TS) return null;
   if(end !== null && (!Number.isFinite(end) || end < start || end - start > MAX_SHIFT_MS)) return null;
-  return {id, start, end};
+  const o = {id, start, end}, tp = Math.round(Number(s.tip != null ? s.tip : s.tips) * 100) / 100;
+  if(Number.isFinite(tp) && tp > 0 && tp <= 100000) o.tip = tp;
+  return o;
 }
 function cleanCore(d){   // the user's data only (shifts + display prefs)
   const out = {rate: 14, theme: "auto", shifts: []};
@@ -68,6 +70,8 @@ function monthKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d
 function monthLabel(key){ const [y,m]=key.split("-").map(Number); return MONTHS[m-1]+" "+y; }
 function hrs(s){ return (s.end - s.start)/3600000; }
 function money(n){ return "$"+n.toFixed(2); }
+function tipOf(s){ return s.tip||0; }
+function pay(s){ return hrs(s)*db.rate+tipOf(s); }
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function openShift(){ return db.shifts.find(s=>!s.end); }
@@ -92,21 +96,23 @@ function render(){
 
   // stats
   const today=dayKey(Date.now()), mk=monthKey(Date.now());
-  let th=0, mh=0, ah=0;
-  db.shifts.forEach(s=>{ if(!s.end) return; const h=hrs(s); ah+=h;
-    if(dayKey(s.start)===today) th+=h; if(monthKey(s.start)===mk) mh+=h; });
-  $("statToday").innerHTML = th.toFixed(2)+"h<small>"+money(th*db.rate)+"</small>";
-  $("statMonth").innerHTML = mh.toFixed(2)+"h<small>"+money(mh*db.rate)+"</small>";
+  let th=0, mh=0, ah=0, et=0, em=0, ea=0, tt=0;
+  db.shifts.forEach(s=>{ if(!s.end) return; const h=hrs(s), p=pay(s); ah+=h; ea+=p;
+    if(dayKey(s.start)===today){ th+=h; et+=p; tt+=tipOf(s); } if(monthKey(s.start)===mk){ mh+=h; em+=p; } });
+  $("statToday").innerHTML = th.toFixed(2)+"h<small>"+money(et)+"</small>";
+  $("statMonth").innerHTML = mh.toFixed(2)+"h<small>"+money(em)+"</small>";
   $("monthLabel").textContent = monthLabel(mk);
-  $("statAll").innerHTML = money(ah*db.rate)+"<small>"+ah.toFixed(1)+"h total</small>";
+  $("statAll").innerHTML = money(ea)+"<small>"+ah.toFixed(1)+"h total</small>";
 
   // hero
   const hrNow=new Date().getHours();
   $("greet").textContent = hrNow<12?"Good morning":hrNow<17?"Good afternoon":"Good evening";
   const nd=new Date();
   $("heroDate").textContent = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][nd.getDay()]+", "+fmtDate(Date.now());
-  $("heroEarn").textContent = money(th*db.rate);
-  $("heroSub").textContent = th>0 ? th.toFixed(2)+"h worked today" : "No shifts yet today — tap Clock In below";
+  $("heroEarn").textContent = money(et);
+  $("tipToday").textContent = tt>0 ? "Tips today "+money(tt) : "No tips logged today";
+  if(tt<=0){ const o=openShift(); if(o && o.tip) $("tipToday").textContent="Tips today "+money(o.tip); }
+  $("heroSub").textContent = th>0 ? th.toFixed(2)+"h worked today"+(tt>0?" · incl. "+money(tt)+" tips":"") : "No shifts yet today — tap Clock In below";
   renderAnalytics();
 
   // history grouped by day
@@ -123,8 +129,8 @@ function render(){
     }
     const h=hrs(s), row=document.createElement("div"); row.className="row";
     row.innerHTML='<div><div class="d">'+esc(fmtTime(s.start))+" – "+esc(fmtTime(s.end))+'</div>'+
-      '<div class="t">'+h.toFixed(2)+' hours</div></div>'+
-      '<div class="m"><b>'+money(h*db.rate)+'</b>'+
+      '<div class="t">'+h.toFixed(2)+' hours'+(s.tip?' · '+money(s.tip)+' tip':'')+'</div></div>'+
+      '<div class="m"><b>'+money(pay(s))+'</b>'+
       '<span><button class="icon-btn" data-edit="'+esc(s.id)+'">Edit</button>'+
       '<button class="icon-btn danger" data-del="'+esc(s.id)+'">Delete</button></span></div>';
     box.appendChild(row);
@@ -146,7 +152,7 @@ function drawChart(){
   const now=new Date(); const keys=[];
   for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); keys.push(monthKey(d.getTime())); }
   const sums={}; keys.forEach(k=>sums[k]=0);
-  db.shifts.forEach(s=>{ if(!s.end) return; const k=monthKey(s.start); if(k in sums) sums[k]+=hrs(s)*db.rate; });
+  db.shifts.forEach(s=>{ if(!s.end) return; const k=monthKey(s.start); if(k in sums) sums[k]+=pay(s); });
   const max=Math.max(1,...Object.values(sums));
   const cs=getComputedStyle(document.documentElement);
   const colMuted=(cs.getPropertyValue("--muted")||"#6b7686").trim();
@@ -174,7 +180,7 @@ function dayStart(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 // Buckets for the selected period: week -> 7 days, month -> its days, year -> 12 months. off = periods back/forward.
 function buildBuckets(p, off){
   const B=[], now=new Date(); let title="";
-  const add=(a,b,label)=>B.push({a:a.getTime(), b:b.getTime(), label, hours:0, earned:0, n:0});
+  const add=(a,b,label)=>B.push({a:a.getTime(), b:b.getTime(), label, hours:0, earned:0, tips:0, n:0});
   if(p==="week"){
     const m=dayStart(now); m.setDate(m.getDate()-((m.getDay()+6)%7)+off*7);
     const names=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -191,7 +197,7 @@ function buildBuckets(p, off){
     title=String(y);
   }
   db.shifts.forEach(s=>{ if(!s.end) return; const t=s.start;
-    for(const x of B){ if(t>=x.a && t<x.b){ const h=hrs(s); x.hours+=h; x.earned+=h*db.rate; x.n++; break; } } });
+    for(const x of B){ if(t>=x.a && t<x.b){ const h=hrs(s); x.hours+=h; x.earned+=pay(s); x.tips+=tipOf(s); x.n++; break; } } });
   return {B, title};
 }
 function pctTag(cur, prev){
@@ -208,7 +214,7 @@ function renderAnalytics(){
   $("anaNext").disabled = anaOff>=0;
   const sum=(arr,k)=>arr.reduce((a,x)=>a+x[k],0);
   const earned=sum(days,"earned"), hours=sum(days,"hours"), shifts=sum(days,"n");
-  const pEarned=sum(prev.B,"earned"), pHours=sum(prev.B,"hours");
+  const tipsSum=sum(days,"tips"), pEarned=sum(prev.B,"earned"), pHours=sum(prev.B,"hours");
   const worked=days.filter(x=>x.n>0);
   const best=days.reduce((a,x)=> x.earned>a.earned ? x : a, days[0]);
   const longest=db.shifts.filter(x=>x.end && x.start>=days[0].a && x.start<days[days.length-1].b).reduce((m,x)=>Math.max(m,hrs(x)),0);
@@ -216,6 +222,7 @@ function renderAnalytics(){
   const bucketWord = p==="year" ? "month" : "day";
   const tiles=[
     ["Earned", money(earned)+pctTag(earned,pEarned)],
+    ...(tipsSum>0?[["Tips", money(tipsSum)+"<small>"+Math.round(tipsSum/Math.max(earned,.01)*100)+"% of pay</small>"]]:[]),
     ["Hours", hours.toFixed(1)+"h"+pctTag(hours,pHours)],
     ["Shifts", String(shifts)+"<small>"+worked.length+" "+bucketWord+(worked.length===1?"":"s")+"</small>"],
     ["Avg shift", shifts ? (hours/shifts).toFixed(1)+"h" : "—"],
@@ -267,7 +274,7 @@ function labStats(done, dayMap){
     L.pred=Math.max(0, r.a+r.b*x); L.half=2*r.s*Math.sqrt(1+1/r.n+Math.pow(x-r.mx,2)/(r.sxx||1));
     const mw=mean(wk); L.wcv=mw?sdev(wk)/mw:1; }
   // daily series
-  const dk=Object.keys(dayMap); L.days=dk.map(k=>({k,h:dayMap[k].h,e:dayMap[k].e}));
+  const dk=Object.keys(dayMap); L.days=dk.map(k=>({k,h:dayMap[k].h,e:dayMap[k].e,t:dayMap[k].t||0}));
   const dh=L.days.map(d=>d.h); L.dmean=dh.length?mean(dh):0; L.dsd=sdev(dh);
   L.maxZ=0; L.zDay=null; if(L.dsd>0) L.days.forEach(d=>{ const z=(d.h-L.dmean)/L.dsd; if(z>L.maxZ){ L.maxZ=z; L.zDay=d; } });
   return L;
@@ -338,7 +345,7 @@ function renderLab(L, rate){
 let heatData={}, factIdx=0;
 function renderFun(){
   const done=db.shifts.filter(x=>x.end), rate=db.rate;
-  const dayMap={}; done.forEach(s=>{ const k=dayKey(s.start), h=hrs(s); const o=dayMap[k]||(dayMap[k]={h:0,e:0}); o.h+=h; o.e+=h*rate; });
+  const dayMap={}; done.forEach(s=>{ const k=dayKey(s.start), h=hrs(s); const o=dayMap[k]||(dayMap[k]={h:0,e:0,t:0}); o.h+=h; o.e+=pay(s); o.t+=tipOf(s); });
   heatData=dayMap;
 
   // weekly goal ring
@@ -367,7 +374,7 @@ function renderFun(){
   }
 
   // totals, streaks, records
-  const totH=done.reduce((a,x)=>a+hrs(x),0), totE=totH*rate, n=done.length;
+  const totH=done.reduce((a,x)=>a+hrs(x),0), totE=done.reduce((a,x)=>a+pay(x),0), totT=done.reduce((a,x)=>a+tipOf(x),0), n=done.length;
   let bestRun=0, run=0, prev=null;
   Object.keys(dayMap).sort().forEach(k=>{ const t=new Date(k+"T00:00:00").getTime();
     run=(prev!==null && Math.round((t-prev)/86400000)===1) ? run+1 : 1; prev=t; bestRun=Math.max(bestRun,run); });
@@ -391,6 +398,7 @@ function renderFun(){
     if(totE>0){
       facts.push(["☕","You've earned about "+Math.round(totE/5)+" coffees ($5 each)."]);
       facts.push(["🍕","That's around "+Math.round(totE/15)+" pizzas ($15 each)."]);
+      if(totT>0) facts.push(["🤑","Tips are "+Math.round(totT/totE*100)+"% of everything you've earned ("+money(totT)+")."]);
       facts.push(["⏱️","You make about "+money(rate/60)+" every minute you're clocked in."]);
     }
     const wd=Array(7).fill(0), names7=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -414,6 +422,8 @@ function renderFun(){
     ["🌅","Early bird","Clock in 30 min before your usual start",early,early?1:0],
     ["🌙","Night owl","Stay 1h past your usual finish",night,night?1:0],
     ["⏰","On the dot","5 shifts within 10 min of your usual start",L.onDot>=5,Math.min(L.onDot/5,1)],
+    ["🤑","Tipped!","Receive a tip",totT>0,totT>0?1:0],
+    ["💸","$100 in tips","Collect $100 in tips",totT>=100,Math.min(totT/100,1)],
     ["🧪","n = 30","30 shifts: the central limit theorem kicks in",n>=30,Math.min(n/30,1)],
     ["🔔","Bell curve","20+ shifts with std dev under 1.5h",n>=20&&L.sd<=1.5,Math.min(n/20,1)*(L.sd?Math.min(1,1.5/L.sd):1)],
     ["📈","Significant!","A statistically significant weekly trend (p<0.05)",!!(L.reg&&L.reg.sig),L.reg?Math.min(1,Math.abs(L.reg.b)*3):0],
@@ -449,8 +459,8 @@ function renderInsights(){
   done.forEach(x=>{
     const s=new Date(x.start), e=new Date(x.end), k=dayKey(x.start);
     dayMap[k]=(dayMap[k]||0)+H(x);
-    const wk=dayStart(new Date(startOfWeek(x.start))).getTime(); wkMap[wk]=(wkMap[wk]||0)+H(x)*db.rate;
-    const mk=monthKey(x.start); moMap[mk]=(moMap[mk]||0)+H(x)*db.rate;
+    const wk=dayStart(new Date(startOfWeek(x.start))).getTime(); wkMap[wk]=(wkMap[wk]||0)+pay(x);
+    const mk=monthKey(x.start); moMap[mk]=(moMap[mk]||0)+pay(x);
     const di=(s.getDay()+6)%7; wd[di].h+=H(x); wd[di].days.add(k);
     inMin+=s.getHours()*60+s.getMinutes(); outMin+=e.getHours()*60+e.getMinutes();
     if(H(x)>H(longest)) longest=x;
@@ -513,7 +523,7 @@ function syncCfg(){ return db.sync || (db.sync = {url:"", secret:"", enabled:fal
 function shiftPayload(s, rate){
   const h=hrs(s); if(rate==null) rate=db.rate;
   return {id:s.id, date:fmtDate(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
-          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, start:s.start, end:s.end};
+          hours:Math.round(h*100)/100, earned:Math.round((h*rate+(s.tip||0))*100)/100, tips:s.tip||0, start:s.start, end:s.end};
 }
 // Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
 async function syncCall(body){
@@ -562,7 +572,7 @@ async function syncPull(){
   const pendingDel=new Set((db.outbox||[]).filter(e=>e.action==="delete").map(e=>e.id));
   let added=0;
   (Array.isArray(j.shifts) ? j.shifts : []).slice(0,50000).forEach(r=>{
-    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end});
+    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip});
     if(!c || !c.end || have.has(c.id) || pendingDel.has(c.id)) return;
     have.add(c.id); db.shifts.push(c); added++;
   });
@@ -610,6 +620,7 @@ function openModal(shift){
   const t2 = ts => { const x=new Date(ts); return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0"); };
   $("fIn").value = shift ? t2(shift.start) : "";
   $("fOut").value = (shift && shift.end) ? t2(shift.end) : "";
+  $("fTip").value = (shift && shift.tip) ? shift.tip : "";
   $("modalBg").classList.add("open");
 }
 function closeModal(){ $("modalBg").classList.remove("open"); editingId=null; }
@@ -622,11 +633,37 @@ $("modalSave").onclick=()=>{
   let end=new Date(dv+"T"+ov).getTime();
   if(end===start){ alert("Clock-out must be after clock-in."); return; }
   if(end<start) end+=86400000; // overnight shift: clock-out is the next day
-  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; queueSync({action:"upsert", shift:shiftPayload(s)}); }
-  else { const ns={id:uid(), start, end}; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
+  const tp=Math.round(parseFloat($("fTip").value)*100)/100, tipV=(Number.isFinite(tp)&&tp>0)?Math.min(tp,100000):0;
+  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; queueSync({action:"upsert", shift:shiftPayload(s)}); }
+  else { const ns={id:uid(), start, end}; if(tipV) ns.tip=tipV; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
   save(); closeModal(); render();
 };
 $("manualBtn").onclick=()=>openModal(null);
+
+
+// tips: add to the open shift, or the latest finished shift today
+function tipTarget(){
+  const open=openShift(); if(open) return open;
+  const t=dayKey(Date.now());
+  return db.shifts.filter(x=>x.end && dayKey(x.start)===t).sort((a,b)=>b.start-a.start)[0] || null;
+}
+function closeTip(){ $("tipBg").classList.remove("open"); }
+$("tipBtn").onclick=()=>{
+  const t=tipTarget(); if(!t){ alert("Clock in first, or add a shift for today, then you can log tips."); return; }
+  $("tipFor").textContent = t.end ? "For your shift "+fmtTime(t.start)+" – "+fmtTime(t.end) : "For your current shift";
+  $("tipAmt").value=""; $("tipBg").classList.add("open");
+};
+$("tipChips").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return;
+  const cur=parseFloat($("tipAmt").value)||0; $("tipAmt").value=(Math.round((cur+Number(b.dataset.v))*100)/100).toString(); });
+$("tipCancel").onclick=closeTip;
+$("tipBg").addEventListener("click",e=>{ if(e.target===$("tipBg")) closeTip(); });
+$("tipSave").onclick=()=>{
+  const v=Math.round(parseFloat($("tipAmt").value)*100)/100;
+  if(!Number.isFinite(v)||v<=0){ alert("Enter a tip amount."); return; }
+  const t=tipTarget(); if(!t){ closeTip(); return; }
+  t.tip=Math.min(Math.round(((t.tip||0)+v)*100)/100,100000);
+  save(); closeTip(); render(); if(t.end) queueSync({action:"upsert", shift:shiftPayload(t)});
+};
 
 // clock in/out
 $("clockBtn").onclick=()=>{
@@ -700,7 +737,7 @@ function buildXLSXBlob(shifts, rate){
   sd+='<row r="1">'+C("A1",2,"inlineStr",S("Work Clock \u2014 Shift Export"))+'</row>';
   sd+='<row r="2">'+C("A2",1,"inlineStr",S("Generated "+fD(Date.now())+" \u00b7 "+n+" shift"+(n===1?"":"s")+" \u00b7 Pay rate "+M2(rate)+"/hr"))+'</row>';
   sd+='<row r="3"></row>';
-  sd+='<row r="4">'+["Date","Clock In","Clock Out","Hours","Earned"].map((h,i)=>C("ABCDE"[i]+"4",2,"inlineStr",S(h))).join("")+'</row>';
+  sd+='<row r="4">'+["Date","Clock In","Clock Out","Hours","Tips","Earned"].map((h,i)=>C("ABCDEF"[i]+"4",2,"inlineStr",S(h))).join("")+'</row>';
   rows.forEach((s,i)=>{
     const r=R0+i, a=new Date(s.start), b=new Date(s.end);
     const dIn=xlsxDateSerial(a.getFullYear(),a.getMonth(),a.getDate());
@@ -708,18 +745,19 @@ function buildXLSXBlob(shifts, rate){
     const tIn=Math.round((dIn+(a.getHours()*60+a.getMinutes())/1440)*1440)/1440;
     const tOut=Math.round((dOut+(b.getHours()*60+b.getMinutes())/1440)*1440)/1440;
     const h=Math.round(((s.end-s.start)/3600000)*100)/100;
-    const e=Math.round(h*rate*100)/100;
-    sd+='<row r="'+r+'">'+C("A"+r,3,0,V(dIn))+C("B"+r,4,0,V(tIn))+C("C"+r,4,0,V(tOut))+C("D"+r,5,0,V(h))+C("E"+r,6,0,V(e))+'</row>';
+    const tp=s.tip||0, e=Math.round((h*rate+tp)*100)/100;
+    sd+='<row r="'+r+'">'+C("A"+r,3,0,V(dIn))+C("B"+r,4,0,V(tIn))+C("C"+r,4,0,V(tOut))+C("D"+r,5,0,V(h))+C("E"+r,6,0,V(tp))+C("F"+r,6,0,V(e))+'</row>';
   });
   const fDsum=n>0?'<f>SUM(D'+R0+':D'+(R0+n-1)+')</f><v>0</v>':'<v>0</v>';
   const fEsum=n>0?'<f>SUM(E'+R0+':E'+(R0+n-1)+')</f><v>0</v>':'<v>0</v>';
-  sd+='<row r="'+TR+'">'+C("C"+TR,1,"inlineStr",S("Total:"))+'<c r="D'+TR+'" s="7">'+fDsum+'</c><c r="E'+TR+'" s="8">'+fEsum+'</c></row>';
+  const fFsum=n>0?'<f>SUM(F'+R0+':F'+(R0+n-1)+')</f><v>0</v>':'<v>0</v>';
+  sd+='<row r="'+TR+'">'+C("C"+TR,1,"inlineStr",S("Total:"))+'<c r="D'+TR+'" s="7">'+fDsum+'</c><c r="E'+TR+'" s="8">'+fEsum+'</c><c r="F'+TR+'" s="8">'+fFsum+'</c></row>';
 
   const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     +'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-    +'<dimension ref="A1:E'+TR+'"/>'
+    +'<dimension ref="A1:F'+TR+'"/>'
     +'<sheetViews><sheetView workbookViewId="0"/></sheetViews>'
-    +'<cols><col min="1" max="1" width="15" customWidth="1"/><col min="2" max="3" width="13" customWidth="1"/><col min="4" max="4" width="10" customWidth="1"/><col min="5" max="5" width="13" customWidth="1"/></cols>'
+    +'<cols><col min="1" max="1" width="15" customWidth="1"/><col min="2" max="3" width="13" customWidth="1"/><col min="4" max="4" width="10" customWidth="1"/><col min="5" max="6" width="13" customWidth="1"/></cols>'
     +'<sheetData>'+sd+'</sheetData></worksheet>';
 
   const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -770,10 +808,10 @@ $("xlsxBtn").onclick=()=>{
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 };
 $("csvBtn").onclick=()=>{
-  let csv="Date,Clock In,Clock Out,Hours,Earned\n";
+  let csv="Date,Clock In,Clock Out,Hours,Tips,Earned\n";
   db.shifts.filter(s=>s.end).sort((a,b)=>a.start-b.start).forEach(s=>{
     const h=hrs(s);
-    csv+=[fmtDate(s.start),fmtTime(s.start),fmtTime(s.end),h.toFixed(2),(h*db.rate).toFixed(2)].join(",")+"\n";
+    csv+=[fmtDate(s.start),fmtTime(s.start),fmtTime(s.end),h.toFixed(2),tipOf(s).toFixed(2),pay(s).toFixed(2)].join(",")+"\n";
   });
   download("workclock.csv",csv,"text/csv");
 };
@@ -818,7 +856,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.12.9";
+const APP_VERSION="2026.10.12.10";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -948,8 +986,8 @@ document.addEventListener("pointerdown",e=>{
 },{passive:true});
 
 // bottom sheet: drag the handle down to dismiss; it rubber-bands and springs back if you don't go far enough
-(function(){
-  const sheet=document.querySelector(".modal"), bg=$("modalBg"), grab=document.createElement("div");
+function sheetDrag(bg, closeFn){
+  const sheet=bg.querySelector(".modal"), grab=document.createElement("div");
   grab.className="grab"; sheet.prepend(grab);
   let y0=0,t0=0,dy=0,id=null;
   const clear=()=>{ sheet.style.transition=""; sheet.style.transform=""; bg.style.transition=""; bg.style.opacity=""; };
@@ -959,11 +997,13 @@ document.addEventListener("pointerdown",e=>{
     sheet.style.transform="translateY("+(dy>0?dy:dy*.15)+"px)"; bg.style.opacity=String(Math.max(.2,1-Math.max(0,dy)/420)); });
   const up=e=>{ if(e.pointerId!==id) return; id=null; const v=dy/Math.max(1,e.timeStamp-t0);
     if(dy>110||v>.8){ sheet.style.transition="transform .3s cubic-bezier(.4,0,1,1)"; sheet.style.transform="translateY(115%)";
-      setTimeout(()=>{ closeModal(); clear(); },260); }
+      setTimeout(()=>{ closeFn(); clear(); },260); }
     else { sheet.style.transition="transform .6s cubic-bezier(.34,1.56,.64,1)"; sheet.style.transform=""; bg.style.transition="opacity .3s"; bg.style.opacity="";
       setTimeout(clear,650); } };
   grab.addEventListener("pointerup",up); grab.addEventListener("pointercancel",up);
-})();
+}
+sheetDrag($("modalBg"), closeModal);
+sheetDrag($("tipBg"), closeTip);
 
 window.addEventListener("resize",()=>{ drawChart(); if(document.getElementById("tab-analytics").classList.contains("on")) renderAnalytics(); });
 

@@ -62,6 +62,7 @@
     <button id="clockBtn" class="big-btn">Clock In</button>
     <div id="statusLine" class="status-line"></div>
     <button id="cancelShift" class="cancel-shift" style="display:none">Discard this shift</button>
+    <div class="tip-row"><span id="tipToday">No tips logged today</span><button id="tipBtn" class="link">+ Add tip</button></div>
     <div style="text-align:center"><button id="manualBtn" class="link">+ Add a shift manually</button></div>
   </div>
 
@@ -189,12 +190,26 @@
   </nav>
 </div>
 
+<div class="modal-bg" id="tipBg">
+  <div class="modal">
+    <h2>Add tip</h2>
+    <div id="tipFor" style="font-size:13px;color:var(--muted);margin:-6px 0 10px"></div>
+    <div class="field"><label>Amount</label><input type="number" id="tipAmt" inputmode="decimal" min="0" max="100000" step="0.01" placeholder="0.00"></div>
+    <div class="chips" id="tipChips"><button type="button" data-v="1">+$1</button><button type="button" data-v="2">+$2</button><button type="button" data-v="5">+$5</button><button type="button" data-v="10">+$10</button><button type="button" data-v="20">+$20</button></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="tipCancel">Cancel</button>
+      <button class="btn primary" id="tipSave">Add</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalBg">
   <div class="modal">
     <h2 id="modalTitle">Add shift</h2>
     <div class="field"><label>Date</label><input type="date" id="fDate"></div>
     <div class="field"><label>Clock in</label><input type="time" id="fIn"></div>
     <div class="field"><label>Clock out</label><input type="time" id="fOut"><div style="font-size:12px;color:var(--muted);margin-top:5px">Working past midnight? If clock-out is earlier than clock-in, it counts as the next day.</div></div>
+    <div class="field"><label>Tips (optional)</label><input type="number" id="fTip" inputmode="decimal" min="0" max="100000" step="0.01" placeholder="0.00"></div>
     <div class="btn-row">
       <button class="btn ghost" id="modalCancel">Cancel</button>
       <button class="btn primary" id="modalSave">Save</button>
