@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://achyuthsai87.github.io/work-clock/sitemap.xml
