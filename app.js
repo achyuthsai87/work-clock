@@ -166,7 +166,7 @@ function render(){
 
   drawChart();
   applyTheme();
-  $("rateInput").value=db.rate; if(document.activeElement!==$("goalInput")) $("goalInput").value=db.goal||"";
+  $("rateInput").value=db.rate; fillSettingsPickers();
 }
 
 function drawChart(){
@@ -470,7 +470,32 @@ $("hm").addEventListener("click",e=>{ const i=e.target.closest("i"); if(!i) retu
   const t=Number(i.dataset.t), v=heatData[dayKey(t)];
   $("hmInfo").textContent=fmtDate(t)+" · "+(v ? v.h.toFixed(1)+"h · "+money(v.e) : (t>Date.now()?"upcoming":"no shifts")); });
 $("factBtn").addEventListener("click",()=>{ factIdx++; renderFun(); });
-$("paydayInput").value=db.payday||""; $("breakInput").value=db.breakMin||""; $("breakAfterInput").value=db.breakAfter||"";
+// ---------- Settings pickers: tap a row to choose from a popup list instead of typing ----------
+// Rebuilds a <select> only when its choices changed, and never while it is open (that would close the popup).
+function fillPicker(sel, none, values, label, cur){
+  if(document.activeElement===sel) return;
+  const vs=values.slice(); if(cur>0 && !vs.includes(cur)){ vs.push(cur); vs.sort((a,b)=>a-b); }   // keep an older saved value selectable
+  const sig=(none||"")+"|"+vs.map(v=>v+":"+label(v)).join(",");
+  if(sel.dataset.sig!==sig){
+    sel.textContent="";
+    if(none!=null){ const o=document.createElement("option"); o.value=""; o.textContent=none; sel.appendChild(o); }
+    vs.forEach(v=>{ const o=document.createElement("option"); o.value=String(v); o.textContent=label(v); sel.appendChild(o); });
+    sel.dataset.sig=sig;
+  }
+  sel.value = cur>0 ? String(cur) : "";
+}
+const ordinal=n=>{ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
+function fillSettingsPickers(){
+  const rate=Number(db.rate)||0;
+  fillPicker($("breakInput"),"None",[15,30,45,60],m=>m+" min",db.breakMin||0);
+  fillPicker($("breakAfterInput"),null,[3,4,5,6,7,8,9,10],h=>h+"+ hours",db.breakAfter||6);
+  $("breakAfterRow").style.display = db.breakMin>0 ? "" : "none";    // only matters once a break is set
+  fillPicker($("paydayInput"),"Not set",Array.from({length:28},(_,i)=>i+1),ordinal,db.payday||0);
+  // weekly goal: $10 steps, capped at what is possible in a 168-hour week at your pay rate; each choice shows its hours
+  const top = rate>0 ? Math.floor(rate*168/10)*10 : 1000, goals=[]; for(let g=10; g<=top; g+=10) goals.push(g);
+  fillPicker($("goalInput"),"No goal",goals,g=>"$"+g+(rate>0 ? " · "+(Math.round(g/rate*10)/10)+" h" : ""),db.goal||0);
+}
+fillSettingsPickers();
 $("breakInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>0) db.breakMin=Math.min(v,120); else delete db.breakMin; e.target.value=db.breakMin||""; save(); render(); queueSettings(); });
 $("breakAfterInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); if(Number.isFinite(v)&&v>=1) db.breakAfter=Math.min(v,24); else delete db.breakAfter; e.target.value=db.breakAfter||""; save(); render(); queueSettings(); });
 $("paydayInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>=1&&v<=28) db.payday=v; else delete db.payday; e.target.value=db.payday||""; save(); renderPay(); queueSettings(); });
@@ -639,8 +664,7 @@ async function syncPull(applySettings){
       const sj=await syncCall({action:"sget"}), c=cleanSettings(sj.settings);
       if(c){ if(c.rate!=null && c.rate!==db.rate){ stampRates(); db.rate=c.rate; } if(c.goal!=null){ if(c.goal>0) db.goal=c.goal; else delete db.goal; } if(c.payday!=null){ if(c.payday>0) db.payday=c.payday; else delete db.payday; }
         if(c.breakMin!=null){ if(c.breakMin>0) db.breakMin=c.breakMin; else delete db.breakMin; } if(c.breakAfter!=null) db.breakAfter=c.breakAfter;
-        $("breakInput").value=db.breakMin||""; $("breakAfterInput").value=db.breakAfter||"";
-        $("paydayInput").value=db.payday||""; $("goalInput").value=db.goal||""; added+=0; save(); render(); }
+        added+=0; save(); render(); }
     }catch(e){ if(e.message!=="Unknown action") throw e; }
   }
   if(added){ save(); render(); }

@@ -185,10 +185,10 @@
 <div class="card">
     <div style="font-weight:700; margin-bottom:4px">Settings</div>
     <div class="settings-row"><span>Pay rate ($/hour, new shifts)</span><input id="rateInput" type="number" min="0" step="0.25" inputmode="decimal"></div>
-    <div class="settings-row"><span>Unpaid break (minutes)</span><input id="breakInput" type="number" min="0" max="120" step="5" inputmode="numeric" placeholder="off"></div>
-    <div class="settings-row"><span>&hellip;taken on shifts of (hours)</span><input id="breakAfterInput" type="number" min="1" max="24" step="0.5" inputmode="decimal" placeholder="6"></div>
-    <div class="settings-row"><span>Payday (day of month)</span><input id="paydayInput" type="number" min="1" max="28" step="1" inputmode="numeric" placeholder="off"></div>
-    <div class="settings-row"><span>Weekly goal ($)</span><input id="goalInput" type="number" min="0" step="10" inputmode="decimal" placeholder="none"></div>
+    <div class="settings-row"><span>Unpaid break</span><select id="breakInput" aria-label="Unpaid break"></select></div>
+    <div class="settings-row" id="breakAfterRow" style="display:none"><span>Only on shifts of</span><select id="breakAfterInput" aria-label="Only on shifts of"></select></div>
+    <div class="settings-row"><span>Payday (each month)</span><select id="paydayInput" aria-label="Payday"></select></div>
+    <div class="settings-row"><span>Weekly goal</span><select id="goalInput" aria-label="Weekly goal"></select></div>
     <div class="settings-row"><span>Appearance</span><span class="seg" id="themeSeg"><button data-t="auto">Auto</button><button data-t="light">Light</button><button data-t="dark">Dark</button></span></div>
     <div class="settings-row"><span>Export</span><span><button class="icon-btn" id="csvBtn">CSV</button><button class="icon-btn" id="xlsxBtn">Excel</button><button class="icon-btn" id="jsonBtn">Backup</button></span></div>
     <div class="settings-row"><span>Restore backup</span><span><button class="icon-btn" id="importBtn">Import</button><input type="file" id="importFile" accept="application/json" style="display:none"></span></div>
