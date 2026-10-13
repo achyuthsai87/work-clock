@@ -18,6 +18,12 @@ function cleanShift(s){
   if(Number.isFinite(tp) && tp > 0 && tp <= 100000) o.tip = tp;
   return o;
 }
+function cleanPayment(p){
+  if(!p || typeof p !== "object") return null;
+  const id = String(p.id == null ? "" : p.id), ts = Number(p.ts), amt = Math.round(Number(p.amount) * 100) / 100;
+  if(!ID_RE.test(id) || !Number.isFinite(ts) || ts < MIN_TS || ts > MAX_TS || !Number.isFinite(amt) || amt <= 0 || amt > 10000000) return null;
+  return {id, ts, amount: amt, note: String(p.note == null ? "" : p.note).replace(/[\u0000-\u001f\u007f<>]/g, "").slice(0, 60)};
+}
 function cleanCore(d){   // the user's data only (shifts + display prefs)
   const out = {rate: 14, theme: "auto", shifts: []};
   if(!d || typeof d !== "object") return out;
@@ -27,6 +33,8 @@ function cleanCore(d){   // the user's data only (shifts + display prefs)
   if(["week","month","year"].includes(d.anaPeriod)) out.anaPeriod = d.anaPeriod;
   const seen = new Set();
   (Array.isArray(d.shifts) ? d.shifts : []).slice(0, 50000).forEach(x => { const c = cleanShift(x); if(c && !seen.has(c.id)){ seen.add(c.id); out.shifts.push(c); } });
+  const ps = new Set(); out.payments = [];
+  (Array.isArray(d.payments) ? d.payments : []).slice(0, 20000).forEach(x => { const c = cleanPayment(x); if(c && !ps.has(c.id)){ ps.add(c.id); out.payments.push(c); } });
   return out;
 }
 function cleanEvent(e, rate){
@@ -115,6 +123,7 @@ function render(){
   $("tipToday").textContent = tt>0 ? "Tips today "+money(tt) : "No tips logged today";
   $("heroSub").textContent = th>0 ? th.toFixed(2)+"h worked today"+(tt>0?" · + "+money(tt)+" tips":"") : "No shifts yet today — tap Clock In below";
   renderAnalytics();
+  renderPay();
 
   // history grouped by day
   const done=db.shifts.filter(s=>s.end).sort((a,b)=>b.start-a.start);
@@ -816,7 +825,7 @@ $("csvBtn").onclick=()=>{
   });
   download("workclock.csv",csv,"text/csv");
 };
-$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, shifts:db.shifts},null,2),"application/json");  // never includes sync URL/secret
+$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, shifts:db.shifts, payments:db.payments||[]},null,2),"application/json");  // never includes sync URL/secret
 $("importBtn").onclick=()=>$("importFile").click();
 $("importFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -825,13 +834,13 @@ $("importFile").addEventListener("change",e=>{
   r.onload=()=>{ try{ const d=JSON.parse(r.result);
       if(!d || !Array.isArray(d.shifts)||typeof d.rate!=="number") throw 0;
       const clean=cleanCore(d), skipped=d.shifts.length-clean.shifts.length;
-      if(confirm("Replace current shifts with this backup ("+clean.shifts.length+" shifts"+(skipped>0?", "+skipped+" invalid skipped":"")+")?")){
+      if(confirm("Replace current data with this backup ("+clean.shifts.length+" shifts, "+clean.payments.length+" payments"+(skipped>0?", "+skipped+" invalid skipped":"")+")?")){
         // only shifts + display prefs come from a file; sync, secret and lock settings always stay as they are
         db=Object.assign(clean,{sync:db.sync, outbox:db.outbox, lastSync:db.lastSync, lock:db.lock}); save(); render(); }
     }catch(_){ alert("That file doesn't look like a Work Clock backup."); } };
   r.readAsText(f); e.target.value="";
 });
-$("wipeBtn").onclick=()=>{ if(confirm("Delete ALL shifts and reset? This can't be undone.")){
+$("wipeBtn").onclick=()=>{ if(confirm("Delete ALL shifts and payments and reset? This can't be undone.")){
   const keep={rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
   db=Object.assign({shifts:[], outbox:[]}, keep); save(); render(); updateSyncStatus(); }};
 
@@ -857,7 +866,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.13.2";
+const APP_VERSION="2026.10.13.3";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1005,8 +1014,72 @@ function sheetDrag(bg, closeFn){
 }
 sheetDrag($("modalBg"), closeModal);
 sheetDrag($("tipBg"), closeTip);
+sheetDrag($("payBg"), closePay);
 
 window.addEventListener("resize",()=>{ drawChart(); if(document.getElementById("tab-analytics").classList.contains("on")) renderAnalytics(); });
+
+// ---------- Pay: what the owner has actually paid you vs what you've earned ----------
+const pays=()=>db.payments||(db.payments=[]);
+function renderPay(){
+  const done=db.shifts.filter(s=>s.end), P=pays();
+  const earned=done.reduce((a,s)=>a+pay(s),0), recv=P.reduce((a,p)=>a+p.amount,0), owed=Math.round((earned-recv)*100)/100;
+  $("payEarned").textContent=money(earned); $("payRecv").textContent=money(recv);
+  const big=$("payOwed"); big.textContent=money(Math.abs(owed)); big.className="pay-big "+(owed>0.004?"owe":"ok");
+  $("payOwedSub").textContent = !done.length && !P.length ? "Log what you're paid and it shows here." :
+    owed>0.004 ? "Still owed to you" : owed<-0.004 ? "Paid ahead of what you've worked" : "All paid up \u2713";
+  $("payBar").style.width=(earned>0?Math.min(100,recv/earned*100):(recv>0?100:0))+"%";
+  // this month
+  const mk=monthKey(Date.now()); let me=0, mr=0;
+  done.forEach(s=>{ if(monthKey(s.start)===mk) me+=pay(s); }); P.forEach(p=>{ if(monthKey(p.ts)===mk) mr+=p.amount; });
+  $("payMonthLabel").textContent=monthLabel(mk);
+  $("payMEarn").textContent=money(me); $("payMRecv").textContent=money(mr);
+  const sh=me-mr; $("payMBal").textContent=money(Math.max(0,sh)); $("payMBal").parentNode.firstChild.textContent = sh<-0.004?"Ahead by":"Short by";
+  if(sh<-0.004) $("payMBal").textContent=money(-sh);
+  $("payMBal").className="val "+(sh>0.004?"bad":"good");
+  // month by month, with a running balance (late payments for last month's work are handled naturally)
+  const M={}; const slot=k=>M[k]||(M[k]={e:0,r:0});
+  done.forEach(s=>{ slot(monthKey(s.start)).e+=pay(s); }); P.forEach(p=>{ slot(monthKey(p.ts)).r+=p.amount; });
+  const keys=Object.keys(M).sort(); let run=0; const rows=keys.map(k=>{ run+=M[k].e-M[k].r; return {k, e:M[k].e, r:M[k].r, bal:Math.round(run*100)/100}; }).reverse();
+  const box=$("payMonths"); box.textContent="";
+  if(!rows.length){ const d=document.createElement("div"); d.className="empty"; d.textContent="Nothing yet."; box.appendChild(d); }
+  rows.forEach(x=>{
+    const r=document.createElement("div"), a=document.createElement("div"), b=document.createElement("div"), t=document.createElement("b"), s=document.createElement("small"), c=document.createElement("span");
+    r.className="prow"; t.textContent=monthLabel(x.k); s.textContent="earned "+money(x.e)+" \u00b7 received "+money(x.r);
+    a.appendChild(t); a.appendChild(document.createElement("br")); a.appendChild(s);
+    c.className="chip2 "+(x.bal>0.004?"bad":"good"); c.textContent = x.bal>0.004 ? "Total owed "+money(x.bal) : x.bal<-0.004 ? "Ahead "+money(-x.bal) : "Paid \u2713";
+    b.appendChild(c); r.appendChild(a); r.appendChild(b); box.appendChild(r); });
+  // payments list
+  const lb=$("payList"); lb.textContent="";
+  const sorted=P.slice().sort((a,b)=>b.ts-a.ts);
+  if(!sorted.length){ const d=document.createElement("div"); d.className="empty"; d.textContent="No payments logged yet."; lb.appendChild(d); }
+  sorted.forEach(p=>{
+    const r=document.createElement("div"), a=document.createElement("div"), b=document.createElement("div"), m=document.createElement("b"), n=document.createElement("small"), e=document.createElement("button"), d=document.createElement("button");
+    r.className="prow"; m.textContent=money(p.amount); n.textContent=fmtDate(p.ts)+(p.note?" \u00b7 "+p.note:"");
+    a.appendChild(m); a.appendChild(document.createElement("br")); a.appendChild(n);
+    e.className="icon-btn"; e.textContent="Edit"; e.onclick=()=>openPay(p); d.className="icon-btn danger"; d.textContent="Delete";
+    d.onclick=()=>{ if(confirm("Delete this payment?")){ db.payments=pays().filter(x=>x.id!==p.id); save(); render(); } };
+    b.appendChild(e); b.appendChild(d); r.appendChild(a); r.appendChild(b); lb.appendChild(r); });
+}
+let payEditing=null;
+function openPay(p){
+  payEditing=p?p.id:null; $("payTitle").textContent=p?"Edit payment":"Log payment";
+  $("payAmt").value=p?p.amount:""; $("payDate").value=dayKey(p?p.ts:Date.now()); $("payNote").value=p?p.note:"";
+  $("payBg").classList.add("open");
+}
+function closePay(){ $("payBg").classList.remove("open"); payEditing=null; }
+$("payAdd").onclick=()=>openPay(null);
+$("payCancel").onclick=closePay;
+$("payBg").addEventListener("click",e=>{ if(e.target===$("payBg")) closePay(); });
+$("payFill").onclick=()=>{ const earned=db.shifts.filter(s=>s.end).reduce((a,s)=>a+pay(s),0), recv=pays().reduce((a,p)=>a+p.amount,0), o=Math.round((earned-recv)*100)/100; if(o>0) $("payAmt").value=o; };
+$("paySave").onclick=()=>{
+  const amt=Math.round(parseFloat($("payAmt").value)*100)/100, dv=$("payDate").value;
+  if(!Number.isFinite(amt)||amt<=0||amt>10000000){ alert("Enter the amount you received."); return; }
+  if(!dv){ alert("Pick the date you were paid."); return; }
+  const ts=new Date(dv+"T12:00:00").getTime(), note=$("payNote").value;
+  const c=cleanPayment({id:payEditing||uid(), ts, amount:amt, note}); if(!c){ alert("That payment doesn't look right."); return; }
+  if(payEditing){ const i=pays().findIndex(x=>x.id===payEditing); if(i>=0) db.payments[i]=c; else pays().push(c); } else pays().push(c);
+  save(); closePay(); render();
+};
 
 // tab bar
 document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{
@@ -1015,6 +1088,7 @@ document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("on",p.id==="tab-"+t));
   window.scrollTo(0,0);
   if(t==="analytics"){ renderAnalytics(); drawChart(); }
+  if(t==="pay") renderPay();
 });
 render();
 })();

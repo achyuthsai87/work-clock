@@ -328,3 +328,20 @@ html[data-theme="dark"] .btn.primary{color:#0c1020;}
 .tipbox-h{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px}
 .tipbox .stat{background:var(--chip);box-shadow:none}
 .tipbox-t{margin-top:10px;text-align:center;font-size:13px;color:var(--muted)}.tipbox-t b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* pay tab */
+.pay-h{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
+.pay-big{font-size:40px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.pay-big.owe{color:var(--red)} .pay-big.ok{color:var(--green)}
+.pay-sub{font-size:14px;color:var(--muted);margin-bottom:12px}
+.pbar{height:8px;border-radius:99px;background:var(--chip);overflow:hidden;margin-bottom:12px}
+.pbar i{display:block;height:100%;width:0;border-radius:99px;background:var(--green);transition:width .6s cubic-bezier(.2,1,.3,1)}
+.pay2{grid-template-columns:1fr 1fr}
+.pay-note{font-size:12px;color:var(--muted);margin:10px 2px 0}
+.pay-btn{margin-top:14px}
+.stat .val.bad{color:var(--red)} .stat .val.good{color:var(--green)}
+.prow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--chip)}
+.prow:first-of-type{border-top:0}
+.prow small{color:var(--muted);font-size:12px}
+.chip2{display:inline-block;padding:5px 10px;border-radius:99px;font-size:12px;font-weight:700;background:var(--chip);white-space:nowrap}
+.chip2.bad{color:var(--red)} .chip2.good{color:var(--green)}
