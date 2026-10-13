@@ -962,7 +962,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.13.12";
+const APP_VERSION="2026.10.13.13";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1159,6 +1159,17 @@ function renderPay(){
   renderPayExtras(done, P, recv);
 }
 function renderPayExtras(done, P, recv){
+  // next payday: what you're owed now, plus a projection at your recent pace (last 28 days)
+  const nx=$("payNext"); nx.style.display="none";
+  if(db.payday){
+    const now=new Date(), nd=new Date(now.getFullYear(), now.getMonth(), db.payday); if(nd.getTime()<=now.getTime()) nd.setMonth(nd.getMonth()+1);
+    const owedNow=Math.max(0, done.reduce((a,s)=>a+pay(s),0)-recv), since=Date.now()-28*86400000;
+    const pace=done.filter(s=>s.start>=since).reduce((a,s)=>a+pay(s),0)/28, days=Math.max(0,Math.ceil((nd.getTime()-Date.now())/86400000));
+    const proj=owedNow+pace*days;
+    if(owedNow>0.004 || pace>0){
+      $("payNextTxt").textContent=fmtDate(nd.getTime())+" ("+days+" day"+(days===1?"":"s")+"): "+money(owedNow)+" owed so far"+(pace>0?", about "+money(proj)+" by then at your recent pace.":".");
+      nx.style.display="block"; }
+  }
   // overdue: wages for work done before the most recent payday, minus everything received so far
   const due=$("payDue"); due.style.display="none";
   if(db.payday){
