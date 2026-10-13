@@ -7,7 +7,7 @@
  */
 const SECRET = "CHANGE-ME-TO-SOMETHING-LONG";   // use 24+ random characters; never share or commit it
 const SHEET_NAME = "Shifts";
-const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end", "Note"];
+const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end", "Note", "Rate"];
 const COL = { START: 10, END: 11, TIP: 8 };   // 1-based columns the app reads back
 const MAX_BULK = 5000;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -22,7 +22,7 @@ function style_(sh) {
     sh.getRange("G:G").setNumberFormat("0.00");
     sh.getRange("H:I").setNumberFormat("$#,##0.00");
     sh.hideColumns(1); sh.hideColumns(10, 2);             // id, start, end stay in the sheet but out of sight
-    sh.setColumnWidth(2, 110); sh.setColumnWidth(12, 200); sh.setColumnWidths(5, 2, 90); sh.setColumnWidths(7, 3, 95);
+    sh.setColumnWidth(2, 110); sh.setColumnWidth(12, 200); sh.getRange("M:M").setNumberFormat("$#,##0.00"); sh.setColumnWidths(5, 2, 90); sh.setColumnWidths(7, 3, 95);
   } catch (_) {}
 }
 
@@ -100,12 +100,12 @@ function sheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(SHEET_NAME);
   // An older layout? Keep it as a backup tab and start a fresh one (the app re-uploads everything).
-  const BASE = HEADERS.length - 1;          // first 11 columns are the stable layout; "Note" was added later, in place
+  const BASE = 11;                          // the first 11 columns are the stable layout; Note and Rate were added later, in place
   if (sh && sh.getLastRow() > 0) {
     const hdr = sh.getRange(1, 1, 1, HEADERS.length).getValues()[0];
-    if (hdr.slice(0, BASE).join("|") === HEADERS.slice(0, BASE).join("|") && !hdr[BASE]) {
-      sh.getRange(1, BASE + 1).setValue(HEADERS[BASE]);
-      try { sh.getRange("L:L").setNumberFormat("@"); } catch (_) {}
+    if (hdr.slice(0, BASE).join("|") === HEADERS.slice(0, BASE).join("|")) {
+      for (let i = BASE; i < HEADERS.length; i++) if (!hdr[i]) sh.getRange(1, i + 1).setValue(HEADERS[i]);   // add newer columns in place
+      try { sh.getRange("L:L").setNumberFormat("@"); sh.getRange("M:M").setNumberFormat("$#,##0.00"); } catch (_) {}
     }
   }
   if (sh && sh.getLastRow() > 0 && sh.getRange(1, 1, 1, BASE).getValues()[0].join("|") !== HEADERS.slice(0, BASE).join("|")) {
@@ -142,7 +142,8 @@ function clean_(s) {
   const note = String(s.note == null ? "" : s.note).replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 80);
   const tips = Math.round(Math.min(Math.max(Number(s.tips) || 0, 0), 100000) * 100) / 100;
   return [String(s.id), txt(s.date), txt(s.day), txt(s.month), txt(s.in), txt(s.out),
-          Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end, note];
+          Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end, note,
+          (s.rate === "" || s.rate == null || !isFinite(Number(s.rate)) || Number(s.rate) < 0 || Number(s.rate) > 100000) ? "" : Number(s.rate)];
 }
 
 // Payments the owner made to you.
@@ -186,7 +187,7 @@ function doPost(e) {
       const n = sh.getLastRow() - 1;
       const rows = n > 0 ? sh.getRange(2, 1, n, HEADERS.length).getValues() : [];
       return out_({ ok: true, shifts: rows.filter(r => r[0] && r[9] && r[10])
-        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0, note: String(r[11] || "") })) });
+        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0, note: String(r[11] || ""), rate: r[12] === "" || r[12] == null ? null : Number(r[12]) })) });
     }
 
     if (b.action === "sget") {

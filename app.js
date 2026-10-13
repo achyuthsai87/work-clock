@@ -16,6 +16,7 @@ function cleanShift(s){
   if(end !== null && (!Number.isFinite(end) || end < start || end - start > MAX_SHIFT_MS)) return null;
   const o = {id, start, end}, tp = Math.round(Number(s.tip != null ? s.tip : s.tips) * 100) / 100;
   if(Number.isFinite(tp) && tp > 0 && tp <= 100000) o.tip = tp;
+  const sr = s.rate == null || s.rate === "" ? NaN : Number(s.rate); if(Number.isFinite(sr) && sr >= 0 && sr <= 100000) o.rate = sr;
   const nt = String(s.note == null ? "" : s.note).replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 80); if(nt) o.note = nt;
   return o;
 }
@@ -47,6 +48,7 @@ function cleanEvent(e, rate){
   if(e.action === "sset"){ const c = cleanSettings(e.settings); if(c) return {action:"sset", settings:c}; return null; }
   if(e.action === "pdelete" && ID_RE.test(String(e.id))) return {action:"pdelete", id:String(e.id)};
   if(e.action === "pupsert" && e.payment){ const c = cleanPayment(e.payment); if(c) return {action:"pupsert", payment:payPayload(c)}; }
+  if(e.action === "bulk" && Array.isArray(e.shifts)){ const list = e.shifts.slice(0, 5000).map(x => cleanShift(x)).filter(c => c && c.end).map(c => shiftPayload(c, rate)); return list.length ? {action:"bulk", shifts:list} : null; }
   if(e.action === "upsert" && e.shift){ const c = cleanShift(e.shift); if(c && c.end) return {action:"upsert", shift:shiftPayload(c, rate)}; }
   return null;
 }
@@ -86,7 +88,8 @@ function monthLabel(key){ const [y,m]=key.split("-").map(Number); return MONTHS[
 function hrs(s){ const h=(s.end - s.start)/3600000; return (db.breakMin>0 && h>=(db.breakAfter||6)) ? Math.max(0,h-db.breakMin/60) : h; }   // optional unpaid break
 function money(n){ return "$"+n.toFixed(2); }
 function tipOf(s){ return s.tip||0; }
-function pay(s){ return hrs(s)*db.rate; }   // wages only; tips are tracked separately
+const rateOf=s=>s.rate!=null?s.rate:db.rate;   // each shift keeps the rate it was worked at
+function pay(s){ return hrs(s)*rateOf(s); }   // wages only; tips are tracked separately
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function openShift(){ return db.shifts.find(s=>!s.end); }
@@ -146,16 +149,17 @@ function render(){
     }
     const h=hrs(s), row=document.createElement("div"); row.className="row";
     row.innerHTML='<div><div class="d">'+esc(fmtTime(s.start))+" – "+esc(fmtTime(s.end))+'</div>'+
-      '<div class="t">'+h.toFixed(2)+' hours'+(s.tip?' · '+money(s.tip)+' tip':'')+'</div></div>'+
+      '<div class="t">'+h.toFixed(2)+' hours'+(s.tip?' · '+money(s.tip)+' tip':'')+(s.rate!=null&&s.rate!==db.rate?' · '+money(s.rate)+'/hr':'')+'</div></div>'+
       '<div class="m"><b>'+money(pay(s))+'</b>'+
       '<span><button class="icon-btn" data-edit="'+esc(s.id)+'">Edit</button>'+
       '<button class="icon-btn danger" data-del="'+esc(s.id)+'">Delete</button></span></div>';
     if(s.note){ const nd=document.createElement("div"); nd.className="shnote"; nd.textContent="\uD83D\uDCDD "+s.note; row.appendChild(nd); }
     box.appendChild(row);
   });
-  box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ if(confirm("Delete this shift?")){
-    const id=b.dataset.del;
-    db.shifts=db.shifts.filter(s=>s.id!==id); save(); render(); queueSync({action:"delete", id:id}); }});
+  box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    const id=b.dataset.del, gone=db.shifts.find(s=>s.id===id); if(!gone) return;
+    db.shifts=db.shifts.filter(s=>s.id!==id); save(); render(); queueSync({action:"delete", id:id});
+    showUndo("Shift deleted.", ()=>{ db.shifts.push(gone); save(); render(); if(gone.end) queueSync({action:"upsert", shift:shiftPayload(gone)}); }); });
   box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal(db.shifts.find(s=>s.id===b.dataset.edit)));
 
   drawChart();
@@ -543,10 +547,13 @@ $("anaNext").onclick=()=>{ if(anaOff<0){ anaOff++; renderAnalytics(); } };
 // ---------- Google Sheets sync (via Apps Script web app) ----------
 function syncCfg(){ return db.sync || (db.sync = {url:"", secret:"", enabled:false}); }
 function shiftPayload(s, rate){
-  const h=hrs(s); if(rate==null) rate=db.rate;
+  const h=hrs(s); rate = s.rate!=null ? s.rate : (rate==null ? db.rate : rate);
   return {id:s.id, date:fmtDate(s.start), day:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(s.start).getDay()], month:monthKey(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
-          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, note:s.note||"", start:s.start, end:s.end};
+          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, note:s.note||"", rate:rate, start:s.start, end:s.end};
 }
+// Before the pay rate changes, lock every older shift to the rate it was worked at, so a raise only affects new shifts.
+function stampRates(){ db.shifts.forEach(s=>{ if(s.rate==null) s.rate=db.rate; }); }
+function queueRestamp(){ const l=db.shifts.filter(s=>s.end).map(s=>shiftPayload(s)); if(l.length) queueSync({action:"bulk", shifts:l}); }
 function settingsPayload(){ return {rate:db.rate, goal:db.goal||0, payday:db.payday||0, breakMin:db.breakMin||0, breakAfter:db.breakAfter||6}; }
 function cleanSettings(x){
   if(!x || typeof x !== "object") return null;
@@ -616,7 +623,7 @@ async function syncPull(applySettings){
   const pendingDel=new Set((db.outbox||[]).filter(e=>e.action==="delete").map(e=>e.id));
   let added=0;
   (Array.isArray(j.shifts) ? j.shifts : []).slice(0,50000).forEach(r=>{
-    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip, note:r.note});
+    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip, note:r.note, rate:r.rate});
     if(!c || !c.end || have.has(c.id) || pendingDel.has(c.id)) return;
     have.add(c.id); db.shifts.push(c); added++;
   });
@@ -628,7 +635,7 @@ async function syncPull(applySettings){
   if(applySettings && !(db.outbox||[]).some(e=>e.action==="sset")){
     try{
       const sj=await syncCall({action:"sget"}), c=cleanSettings(sj.settings);
-      if(c){ if(c.rate!=null) db.rate=c.rate; if(c.goal!=null){ if(c.goal>0) db.goal=c.goal; else delete db.goal; } if(c.payday!=null){ if(c.payday>0) db.payday=c.payday; else delete db.payday; }
+      if(c){ if(c.rate!=null && c.rate!==db.rate){ stampRates(); db.rate=c.rate; } if(c.goal!=null){ if(c.goal>0) db.goal=c.goal; else delete db.goal; } if(c.payday!=null){ if(c.payday>0) db.payday=c.payday; else delete db.payday; }
         if(c.breakMin!=null){ if(c.breakMin>0) db.breakMin=c.breakMin; else delete db.breakMin; } if(c.breakAfter!=null) db.breakAfter=c.breakAfter;
         $("breakInput").value=db.breakMin||""; $("breakAfterInput").value=db.breakAfter||"";
         $("paydayInput").value=db.payday||""; $("goalInput").value=db.goal||""; added+=0; save(); render(); }
@@ -681,7 +688,7 @@ function openModal(shift){
   const t2 = ts => { const x=new Date(ts); return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0"); };
   $("fIn").value = shift ? t2(shift.start) : "";
   $("fOut").value = (shift && shift.end) ? t2(shift.end) : "";
-  $("fTip").value = (shift && shift.tip) ? shift.tip : ""; $("fNote").value = (shift && shift.note) ? shift.note : "";
+  $("fTip").value = (shift && shift.tip) ? shift.tip : ""; $("fNote").value = (shift && shift.note) ? shift.note : ""; $("fRate").value = shift ? rateOf(shift) : db.rate;
   $("modalBg").classList.add("open");
 }
 function closeModal(){ $("modalBg").classList.remove("open"); editingId=null; }
@@ -695,9 +702,10 @@ $("modalSave").onclick=()=>{
   if(end===start){ alert("Clock-out must be after clock-in."); return; }
   if(end<start) end+=86400000; // overnight shift: clock-out is the next day
   const tp=Math.round(parseFloat($("fTip").value)*100)/100, tipV=(Number.isFinite(tp)&&tp>0)?Math.min(tp,100000):0;
+  const rv=parseFloat($("fRate").value), rateV=(Number.isFinite(rv)&&rv>=0)?Math.min(rv,100000):db.rate;
   const noteV=$("fNote").value.replace(/[\u0000-\u001f\u007f<>]/g,"").trim().slice(0,80);
-  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; if(noteV) s.note=noteV; else delete s.note; queueSync({action:"upsert", shift:shiftPayload(s)}); }
-  else { const ns={id:uid(), start, end}; if(tipV) ns.tip=tipV; if(noteV) ns.note=noteV; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
+  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; if(noteV) s.note=noteV; else delete s.note; s.rate=rateV; queueSync({action:"upsert", shift:shiftPayload(s)}); }
+  else { const ns={id:uid(), start, end}; if(tipV) ns.tip=tipV; if(noteV) ns.note=noteV; ns.rate=rateV; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
   save(); closeModal(); render();
 };
 $("manualBtn").onclick=()=>openModal(null);
@@ -728,6 +736,9 @@ $("tipSave").onclick=()=>{
 };
 
 // clock in/out
+let undoFn=null, undoTimer=null;
+function showUndo(msg, fn){ undoFn=fn; $("undoTxt").textContent=msg; $("undoBar").hidden=false; clearTimeout(undoTimer); undoTimer=setTimeout(()=>{ $("undoBar").hidden=true; undoFn=null; },8000); }
+$("undoBtn").onclick=()=>{ const f=undoFn; undoFn=null; $("undoBar").hidden=true; clearTimeout(undoTimer); if(f) f(); };
 let toastTimer=null, toastShift=null, toastTap=0;
 function hideToast(){ $("toast").hidden=true; clearTimeout(toastTimer); }
 $("toastBtn").onclick=()=>{ const s=db.shifts.find(x=>x.id===toastShift); if(!s) return hideToast(); hideToast();
@@ -747,7 +758,7 @@ $("clockBtn").onclick=()=>{
   const open=openShift();
   if(open){ open.end=Date.now(); save(); render(); queueSync({action:"upsert", shift:shiftPayload(open)});
     toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); }
-  else { db.shifts.push({id:uid(), start:Date.now(), end:null}); save(); render(); }
+  else { db.shifts.push({id:uid(), start:Date.now(), end:null, rate:db.rate}); save(); render(); }
 };
 $("cancelShift").onclick=()=>{ if(confirm("Discard the current open shift?")){
   db.shifts=db.shifts.filter(s=>s.end); save(); render(); }};
@@ -760,7 +771,7 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>
   if((db.theme||"auto")==="auto"){ applyTheme(); drawChart(); }
 });
 $("rateInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value);
-  if(v>=0){ db.rate=v; save(); render(); queueSettings(); } });
+  if(v>=0 && v!==db.rate){ stampRates(); db.rate=v; save(); render(); queueSettings(); queueRestamp(); } });
 function download(name, text, type){
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click();
@@ -813,7 +824,7 @@ function buildXLSXBlob(shifts, rate){
   const fD=ts=>{const d=new Date(ts);return MON[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear();};
   let sd='';
   sd+='<row r="1">'+C("A1",2,"inlineStr",S("Work Clock \u2014 Shift Export"))+'</row>';
-  sd+='<row r="2">'+C("A2",1,"inlineStr",S("Generated "+fD(Date.now())+" \u00b7 "+n+" shift"+(n===1?"":"s")+" \u00b7 Pay rate "+M2(rate)+"/hr"))+'</row>';
+  sd+='<row r="2">'+C("A2",1,"inlineStr",S("Generated "+fD(Date.now())+" \u00b7 "+n+" shift"+(n===1?"":"s")+" \u00b7 Current rate "+M2(rate)+"/hr"))+'</row>';
   sd+='<row r="3"></row>';
   sd+='<row r="4">'+["Date","Clock In","Clock Out","Hours","Tips","Earned"].map((h,i)=>C("ABCDEF"[i]+"4",2,"inlineStr",S(h))).join("")+'</row>';
   rows.forEach((s,i)=>{
@@ -823,7 +834,7 @@ function buildXLSXBlob(shifts, rate){
     const tIn=Math.round((dIn+(a.getHours()*60+a.getMinutes())/1440)*1440)/1440;
     const tOut=Math.round((dOut+(b.getHours()*60+b.getMinutes())/1440)*1440)/1440;
     const h=Math.round(hrs(s)*100)/100;
-    const tp=s.tip||0, e=Math.round(h*rate*100)/100;
+    const tp=s.tip||0, e=Math.round(h*(s.rate!=null?s.rate:rate)*100)/100;
     sd+='<row r="'+r+'">'+C("A"+r,3,0,V(dIn))+C("B"+r,4,0,V(tIn))+C("C"+r,4,0,V(tOut))+C("D"+r,5,0,V(h))+C("E"+r,6,0,V(tp))+C("F"+r,6,0,V(e))+'</row>';
   });
   const fDsum=n>0?'<f>SUM(D'+R0+':D'+(R0+n-1)+')</f><v>0</v>':'<v>0</v>';
@@ -934,7 +945,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.13.9";
+const APP_VERSION="2026.10.13.10";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1125,7 +1136,8 @@ function renderPay(){
     r.className="prow"; m.textContent=money(p.amount); n.textContent=fmtDate(p.ts)+(p.note?" \u00b7 "+p.note:"");
     a.appendChild(m); a.appendChild(document.createElement("br")); a.appendChild(n);
     e.className="icon-btn"; e.textContent="Edit"; e.onclick=()=>openPay(p); d.className="icon-btn danger"; d.textContent="Delete";
-    d.onclick=()=>{ if(confirm("Delete this payment?")){ db.payments=pays().filter(x=>x.id!==p.id); save(); render(); queueSync({action:"pdelete", id:p.id}); } };
+    d.onclick=()=>{ db.payments=pays().filter(x=>x.id!==p.id); save(); render(); queueSync({action:"pdelete", id:p.id});
+      showUndo("Payment deleted.", ()=>{ pays().push(p); save(); render(); queueSync({action:"pupsert", payment:payPayload(p)}); }); };
     b.appendChild(e); b.appendChild(d); r.appendChild(a); r.appendChild(b); lb.appendChild(r); });
   renderPayExtras(done, P, recv);
 }
@@ -1172,8 +1184,8 @@ function buildStatement(fromTs, toTs){
   return {inR, hours, wages, earnedTo, paidTo, owed:Math.round((earnedTo-paidTo)*100)/100, payIn, fromTs, toTs};
 }
 function statementText(S){
-  const L=["Pay statement "+fmtDate(S.fromTs)+" to "+fmtDate(S.toTs), "Rate: "+money(db.rate)+"/hr", ""];
-  S.inR.forEach(s=>L.push(fmtDate(s.start)+"  "+fmtTime(s.start)+" - "+fmtTime(s.end)+"  "+hrs(s).toFixed(2)+"h  "+money(pay(s))));
+  const L=["Pay statement "+fmtDate(S.fromTs)+" to "+fmtDate(S.toTs), ""];
+  S.inR.forEach(s=>L.push(fmtDate(s.start)+"  "+fmtTime(s.start)+" - "+fmtTime(s.end)+"  "+hrs(s).toFixed(2)+"h @ "+money(rateOf(s))+"  "+money(pay(s))));
   L.push("", "Hours: "+S.hours.toFixed(2), "Wages: "+money(S.wages));
   if(S.payIn.length){ L.push("", "Payments received:"); S.payIn.forEach(p=>L.push(fmtDate(p.ts)+"  "+money(p.amount)+(p.note?"  "+p.note:""))); }
   L.push("", "Wages earned through "+fmtDate(S.toTs)+": "+money(S.earnedTo), "Paid through "+fmtDate(S.toTs)+": "+money(S.paidTo), S.owed>0.004?"Balance owed: "+money(S.owed):S.owed<-0.004?"Paid ahead: "+money(-S.owed):"Balance: paid in full");
@@ -1185,10 +1197,10 @@ function showStatement(S){
   const pg=$("stmtPage"); pg.textContent="";
   const el=(tag,txt,cls)=>{ const e=document.createElement(tag); if(txt!=null) e.textContent=txt; if(cls) e.className=cls; return e; };
   pg.appendChild(el("h1","Pay statement"));
-  pg.appendChild(el("div",fmtDate(S.fromTs)+" \u2013 "+fmtDate(S.toTs)+" \u00b7 Rate "+money(db.rate)+"/hr","muted"));
-  const tb=el("table"), hd=el("tr"); ["Date","In","Out","Hours","Wages"].forEach(h=>hd.appendChild(el("th",h))); tb.appendChild(hd);
-  S.inR.forEach(s=>{ const r=el("tr"); [fmtDate(s.start),fmtTime(s.start),fmtTime(s.end),hrs(s).toFixed(2),money(pay(s))].forEach(v=>r.appendChild(el("td",v))); tb.appendChild(r); });
-  if(!S.inR.length){ const r=el("tr"), c=el("td","No shifts in this period"); c.colSpan=5; r.appendChild(c); tb.appendChild(r); }
+  pg.appendChild(el("div",fmtDate(S.fromTs)+" \u2013 "+fmtDate(S.toTs)+"","muted"));
+  const tb=el("table"), hd=el("tr"); ["Date","In","Out","Hours","Rate","Wages"].forEach(h=>hd.appendChild(el("th",h))); tb.appendChild(hd);
+  S.inR.forEach(s=>{ const r=el("tr"); [fmtDate(s.start),fmtTime(s.start),fmtTime(s.end),hrs(s).toFixed(2),money(rateOf(s))+"/hr",money(pay(s))].forEach(v=>r.appendChild(el("td",v))); tb.appendChild(r); });
+  if(!S.inR.length){ const r=el("tr"), c=el("td","No shifts in this period"); c.colSpan=6; r.appendChild(c); tb.appendChild(r); }
   pg.appendChild(tb);
   const sum=(l,v,b)=>{ const r=el("div",null,"srow"+(b?" b":"")); r.appendChild(el("span",l)); r.appendChild(el("span",v)); pg.appendChild(r); };
   sum("Hours",S.hours.toFixed(2)); sum("Wages",money(S.wages));

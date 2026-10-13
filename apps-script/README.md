@@ -18,3 +18,7 @@ Updating the script later: Deploy > **Manage deployments** > edit > Version: New
 ## Settings and notes
 
 A **Settings** tab keeps your pay rate, weekly goal, payday and unpaid-break settings, and the Shifts tab has a **Note** column. Tap **Restore** (or **Save & connect** on a fresh install) and the app returns to the last version saved in the sheet: shifts, tips, payments, notes and these numbers. Re-paste `Code.gs` and redeploy to get this.
+
+## Rates
+
+The Shifts tab has a **Rate** column: the hourly rate each shift was worked at. A raise only changes new shifts; older ones keep their rate, and a restore brings those rates back. Re-paste `Code.gs` and redeploy to get this.
