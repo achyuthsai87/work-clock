@@ -361,3 +361,10 @@ html[data-theme="dark"] .btn.primary{color:#0c1020;}
 .stmt-page .srow.b{font-weight:800;font-size:16px;border-bottom:0;border-top:2px solid #111;margin-top:6px}
 @media print{ body.stmt-open>*:not(#stmt){display:none!important} .stmt{position:static;overflow:visible} .stmt-bar{display:none} }
 .stmt-bar .btn.ghost{background:#e4e8f0;color:#111}
+
+.row{flex-wrap:wrap}
+.shnote{flex-basis:100%;font-size:12px;color:var(--muted);margin-top:6px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 96px);z-index:45;display:flex;align-items:center;gap:12px;
+  width:min(440px,calc(100% - 28px));padding:12px 16px;border-radius:18px;background:var(--glass-strong);border:1px solid var(--line);
+  -webkit-backdrop-filter:blur(30px);backdrop-filter:blur(30px);box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:14px}
+.toast[hidden]{display:none} .toast .link{margin:0 0 0 auto;white-space:nowrap}

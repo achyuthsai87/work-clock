@@ -7,7 +7,7 @@
  */
 const SECRET = "CHANGE-ME-TO-SOMETHING-LONG";   // use 24+ random characters; never share or commit it
 const SHEET_NAME = "Shifts";
-const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end"];
+const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end", "Note"];
 const COL = { START: 10, END: 11, TIP: 8 };   // 1-based columns the app reads back
 const MAX_BULK = 5000;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -18,11 +18,11 @@ function style_(sh) {
     const h = sh.getRange(1, 1, 1, HEADERS.length);
     h.setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
     sh.setFrozenRows(1);
-    sh.getRange("A:F").setNumberFormat("@");            // plain text: nothing is ever evaluated as a formula
+    sh.getRange("A:F").setNumberFormat("@"); sh.getRange("L:L").setNumberFormat("@");            // plain text: nothing is ever evaluated as a formula
     sh.getRange("G:G").setNumberFormat("0.00");
     sh.getRange("H:I").setNumberFormat("$#,##0.00");
     sh.hideColumns(1); sh.hideColumns(10, 2);             // id, start, end stay in the sheet but out of sight
-    sh.setColumnWidth(2, 110); sh.setColumnWidths(5, 2, 90); sh.setColumnWidths(7, 3, 95);
+    sh.setColumnWidth(2, 110); sh.setColumnWidth(12, 200); sh.setColumnWidths(5, 2, 90); sh.setColumnWidths(7, 3, 95);
   } catch (_) {}
 }
 
@@ -83,17 +83,39 @@ function summary_(ss) {
   } catch (_) {}
 }
 
+// Your numbers (pay rate, weekly goal, payday) so a restore brings everything back.
+function settingsSheet_(ss) {
+  let s = ss.getSheetByName("Settings");
+  if (!s) {
+    s = ss.insertSheet("Settings");
+    s.getRange(1, 1, 1, 2).setValues([["Setting", "Value"]]);
+    s.getRange(2, 1, 5, 2).setValues([["rate", 14], ["goal", 0], ["payday", 0], ["breakMin", 0], ["breakAfter", 6]]);
+    try { s.getRange("A1:B1").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff"); s.setFrozenRows(1); s.setColumnWidth(1, 120);
+      s.getRange("C1").setValue("0 = not set (goal, payday, break). The app keeps these in sync.").setFontColor("#888888"); } catch (_) {}
+  }
+  return s;
+}
+
 function sheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(SHEET_NAME);
   // An older layout? Keep it as a backup tab and start a fresh one (the app re-uploads everything).
-  if (sh && sh.getLastRow() > 0 && sh.getRange(1, 1, 1, HEADERS.length).getValues()[0].join("|") !== HEADERS.join("|")) {
+  const BASE = HEADERS.length - 1;          // first 11 columns are the stable layout; "Note" was added later, in place
+  if (sh && sh.getLastRow() > 0) {
+    const hdr = sh.getRange(1, 1, 1, HEADERS.length).getValues()[0];
+    if (hdr.slice(0, BASE).join("|") === HEADERS.slice(0, BASE).join("|") && !hdr[BASE]) {
+      sh.getRange(1, BASE + 1).setValue(HEADERS[BASE]);
+      try { sh.getRange("L:L").setNumberFormat("@"); } catch (_) {}
+    }
+  }
+  if (sh && sh.getLastRow() > 0 && sh.getRange(1, 1, 1, BASE).getValues()[0].join("|") !== HEADERS.slice(0, BASE).join("|")) {
     sh.setName(SHEET_NAME + " (old " + Utilities.formatDate(new Date(), "UTC", "yyyy-MM-dd HHmm") + ")");
     sh = null;
   }
   if (!sh) sh = ss.insertSheet(SHEET_NAME);
   if (sh.getLastRow() === 0) { sh.appendRow(HEADERS); style_(sh); }
   paySheet_(ss);
+  settingsSheet_(ss);
   summary_(ss);
   return sh;
 }
@@ -117,9 +139,10 @@ function clean_(s) {
   const start = Number(s.start), end = Number(s.end);
   if (!isFinite(start) || !isFinite(end) || start < 9.46e11 || end < start || end - start > 7 * 864e5) return null;
   const txt = v => String(v == null ? "" : v).replace(/[^\w ,:.\-\/]/g, "").slice(0, 40);
+  const note = String(s.note == null ? "" : s.note).replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 80);
   const tips = Math.round(Math.min(Math.max(Number(s.tips) || 0, 0), 100000) * 100) / 100;
   return [String(s.id), txt(s.date), txt(s.day), txt(s.month), txt(s.in), txt(s.out),
-          Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end];
+          Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end, note];
 }
 
 // Payments the owner made to you.
@@ -163,7 +186,25 @@ function doPost(e) {
       const n = sh.getLastRow() - 1;
       const rows = n > 0 ? sh.getRange(2, 1, n, HEADERS.length).getValues() : [];
       return out_({ ok: true, shifts: rows.filter(r => r[0] && r[9] && r[10])
-        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0 })) });
+        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0, note: String(r[11] || "") })) });
+    }
+
+    if (b.action === "sget") {
+      const s = settingsSheet_(SpreadsheetApp.getActiveSpreadsheet()), out = {};
+      s.getRange(2, 1, Math.max(1, Math.min(5, s.getLastRow() - 1)), 2).getValues().forEach(r => { out[String(r[0])] = Number(r[1]); });
+      return out_({ ok: true, settings: out });
+    }
+
+    if (b.action === "sset") {
+      const x = b.settings || {}, s = settingsSheet_(SpreadsheetApp.getActiveSpreadsheet());
+      const rate = Number(x.rate), goal = Number(x.goal), payday = Math.round(Number(x.payday));
+      if (isFinite(rate) && rate >= 0 && rate <= 100000) s.getRange(2, 2).setValue(rate);
+      if (isFinite(goal) && goal >= 0 && goal <= 1000000) s.getRange(3, 2).setValue(goal);
+      if (isFinite(payday) && payday >= 0 && payday <= 28) s.getRange(4, 2).setValue(payday);
+      const bm = Math.round(Number(x.breakMin)), ba = Number(x.breakAfter);
+      if (isFinite(bm) && bm >= 0 && bm <= 120) s.getRange(5, 1, 1, 2).setValues([["breakMin", bm]]);
+      if (isFinite(ba) && ba >= 1 && ba <= 24) s.getRange(6, 1, 1, 2).setValues([["breakAfter", ba]]);
+      return out_({ ok: true });
     }
 
     if (b.action === "plist") {

@@ -184,6 +184,8 @@
 <div class="card">
     <div style="font-weight:700; margin-bottom:4px">Settings</div>
     <div class="settings-row"><span>Pay rate ($/hour)</span><input id="rateInput" type="number" min="0" step="0.25" inputmode="decimal"></div>
+    <div class="settings-row"><span>Unpaid break (minutes)</span><input id="breakInput" type="number" min="0" max="120" step="5" inputmode="numeric" placeholder="off"></div>
+    <div class="settings-row"><span>&hellip;taken on shifts of (hours)</span><input id="breakAfterInput" type="number" min="1" max="24" step="0.5" inputmode="decimal" placeholder="6"></div>
     <div class="settings-row"><span>Payday (day of month)</span><input id="paydayInput" type="number" min="1" max="28" step="1" inputmode="numeric" placeholder="off"></div>
     <div class="settings-row"><span>Weekly goal ($)</span><input id="goalInput" type="number" min="0" step="10" inputmode="decimal" placeholder="none"></div>
     <div class="settings-row"><span>Appearance</span><span class="seg" id="themeSeg"><button data-t="auto">Auto</button><button data-t="light">Light</button><button data-t="dark">Dark</button></span></div>
@@ -228,9 +230,23 @@
   </nav>
 </div>
 
+<div class="modal-bg" id="endBg">
+  <div class="modal">
+    <h2>When did you finish?</h2>
+    <div class="field"><label>Clock-out time</label><input type="time" id="endTime"></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="endCancel">Cancel</button>
+      <button class="btn primary" id="endSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden><span id="toastTxt"></span><button id="toastBtn" class="link">Change time</button></div>
+
 <div class="modal-bg" id="stmtBg">
   <div class="modal">
     <h2>Pay statement</h2>
+    <div class="chips" id="stmtQuick"><button type="button" data-q="month">This month</button><button type="button" data-q="last">Last month</button><button type="button" data-q="payday" id="stmtPd">Since payday</button><button type="button" data-q="all">All time</button></div>
     <div class="field"><label>From</label><input type="date" id="stmtFrom"></div>
     <div class="field"><label>To</label><input type="date" id="stmtTo"></div>
     <div class="btn-row">
@@ -279,6 +295,7 @@
     <div class="field"><label>Clock in</label><input type="time" id="fIn"></div>
     <div class="field"><label>Clock out</label><input type="time" id="fOut"><div style="font-size:12px;color:var(--muted);margin-top:5px">Working past midnight? If clock-out is earlier than clock-in, it counts as the next day.</div></div>
     <div class="field"><label>Tips (optional)</label><input type="number" id="fTip" inputmode="decimal" min="0" max="100000" step="0.01" placeholder="0.00"></div>
+    <div class="field"><label>Note (private, optional)</label><input type="text" id="fNote" maxlength="80" placeholder="e.g. closed alone"></div>
     <div class="btn-row">
       <button class="btn ghost" id="modalCancel">Cancel</button>
       <button class="btn primary" id="modalSave">Save</button>

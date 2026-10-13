@@ -16,6 +16,7 @@ function cleanShift(s){
   if(end !== null && (!Number.isFinite(end) || end < start || end - start > MAX_SHIFT_MS)) return null;
   const o = {id, start, end}, tp = Math.round(Number(s.tip != null ? s.tip : s.tips) * 100) / 100;
   if(Number.isFinite(tp) && tp > 0 && tp <= 100000) o.tip = tp;
+  const nt = String(s.note == null ? "" : s.note).replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 80); if(nt) o.note = nt;
   return o;
 }
 function cleanPayment(p){
@@ -31,6 +32,8 @@ function cleanCore(d){   // the user's data only (shifts + display prefs)
   const g = Number(d.goal); if(Number.isFinite(g) && g > 0 && g <= 1000000) out.goal = g;
   if(["auto","light","dark"].includes(d.theme)) out.theme = d.theme;
   if(["week","month","year"].includes(d.anaPeriod)) out.anaPeriod = d.anaPeriod;
+  const bm = Math.round(Number(d.breakMin)); if(Number.isFinite(bm) && bm > 0 && bm <= 120) out.breakMin = bm;
+  const ba = Number(d.breakAfter); if(Number.isFinite(ba) && ba >= 1 && ba <= 24) out.breakAfter = ba;
   const pd = Math.round(Number(d.payday)); if(Number.isFinite(pd) && pd >= 1 && pd <= 28) out.payday = pd;
   const seen = new Set();
   (Array.isArray(d.shifts) ? d.shifts : []).slice(0, 50000).forEach(x => { const c = cleanShift(x); if(c && !seen.has(c.id)){ seen.add(c.id); out.shifts.push(c); } });
@@ -41,6 +44,7 @@ function cleanCore(d){   // the user's data only (shifts + display prefs)
 function cleanEvent(e, rate){
   if(!e || typeof e !== "object") return null;
   if(e.action === "delete" && ID_RE.test(String(e.id))) return {action:"delete", id:String(e.id)};
+  if(e.action === "sset"){ const c = cleanSettings(e.settings); if(c) return {action:"sset", settings:c}; return null; }
   if(e.action === "pdelete" && ID_RE.test(String(e.id))) return {action:"pdelete", id:String(e.id)};
   if(e.action === "pupsert" && e.payment){ const c = cleanPayment(e.payment); if(c) return {action:"pupsert", payment:payPayload(c)}; }
   if(e.action === "upsert" && e.shift){ const c = cleanShift(e.shift); if(c && c.end) return {action:"upsert", shift:shiftPayload(c, rate)}; }
@@ -79,7 +83,7 @@ function fmtDate(ts){ const d=new Date(ts); return MONTHS[d.getMonth()]+" "+d.ge
 function dayKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function monthKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
 function monthLabel(key){ const [y,m]=key.split("-").map(Number); return MONTHS[m-1]+" "+y; }
-function hrs(s){ return (s.end - s.start)/3600000; }
+function hrs(s){ const h=(s.end - s.start)/3600000; return (db.breakMin>0 && h>=(db.breakAfter||6)) ? Math.max(0,h-db.breakMin/60) : h; }   // optional unpaid break
 function money(n){ return "$"+n.toFixed(2); }
 function tipOf(s){ return s.tip||0; }
 function pay(s){ return hrs(s)*db.rate; }   // wages only; tips are tracked separately
@@ -146,6 +150,7 @@ function render(){
       '<div class="m"><b>'+money(pay(s))+'</b>'+
       '<span><button class="icon-btn" data-edit="'+esc(s.id)+'">Edit</button>'+
       '<button class="icon-btn danger" data-del="'+esc(s.id)+'">Delete</button></span></div>';
+    if(s.note){ const nd=document.createElement("div"); nd.className="shnote"; nd.textContent="\uD83D\uDCDD "+s.note; row.appendChild(nd); }
     box.appendChild(row);
   });
   box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ if(confirm("Delete this shift?")){
@@ -459,9 +464,11 @@ $("hm").addEventListener("click",e=>{ const i=e.target.closest("i"); if(!i) retu
   const t=Number(i.dataset.t), v=heatData[dayKey(t)];
   $("hmInfo").textContent=fmtDate(t)+" · "+(v ? v.h.toFixed(1)+"h · "+money(v.e) : (t>Date.now()?"upcoming":"no shifts")); });
 $("factBtn").addEventListener("click",()=>{ factIdx++; renderFun(); });
-$("paydayInput").value=db.payday||"";
-$("paydayInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>=1&&v<=28) db.payday=v; else delete db.payday; e.target.value=db.payday||""; save(); renderPay(); });
-$("goalInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); db.goal=(Number.isFinite(v)&&v>0)?Math.min(v,1000000):0; if(!db.goal) delete db.goal; save(); renderAnalytics(); });
+$("paydayInput").value=db.payday||""; $("breakInput").value=db.breakMin||""; $("breakAfterInput").value=db.breakAfter||"";
+$("breakInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>0) db.breakMin=Math.min(v,120); else delete db.breakMin; e.target.value=db.breakMin||""; save(); render(); queueSettings(); });
+$("breakAfterInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); if(Number.isFinite(v)&&v>=1) db.breakAfter=Math.min(v,24); else delete db.breakAfter; e.target.value=db.breakAfter||""; save(); render(); queueSettings(); });
+$("paydayInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>=1&&v<=28) db.payday=v; else delete db.payday; e.target.value=db.payday||""; save(); renderPay(); queueSettings(); });
+$("goalInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); db.goal=(Number.isFinite(v)&&v>0)?Math.min(v,1000000):0; if(!db.goal) delete db.goal; save(); renderAnalytics(); queueSettings(); });
 $("goalSet").addEventListener("click",()=>{ document.querySelector('.tabbar [data-tab="settings"]').click(); setTimeout(()=>$("goalInput").focus(),350); });
 
 function renderInsights(){
@@ -538,7 +545,24 @@ function syncCfg(){ return db.sync || (db.sync = {url:"", secret:"", enabled:fal
 function shiftPayload(s, rate){
   const h=hrs(s); if(rate==null) rate=db.rate;
   return {id:s.id, date:fmtDate(s.start), day:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(s.start).getDay()], month:monthKey(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
-          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, start:s.start, end:s.end};
+          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, note:s.note||"", start:s.start, end:s.end};
+}
+function settingsPayload(){ return {rate:db.rate, goal:db.goal||0, payday:db.payday||0, breakMin:db.breakMin||0, breakAfter:db.breakAfter||6}; }
+function cleanSettings(x){
+  if(!x || typeof x !== "object") return null;
+  const o = {}, r = Number(x.rate), g = Number(x.goal), p = Math.round(Number(x.payday));
+  if(Number.isFinite(r) && r >= 0 && r <= 100000) o.rate = r;
+  if(Number.isFinite(g) && g >= 0 && g <= 1000000) o.goal = g;
+  if(Number.isFinite(p) && p >= 0 && p <= 28) o.payday = p;
+  const bm = Math.round(Number(x.breakMin)), ba = Number(x.breakAfter);
+  if(Number.isFinite(bm) && bm >= 0 && bm <= 120) o.breakMin = bm;
+  if(Number.isFinite(ba) && ba >= 1 && ba <= 24) o.breakAfter = ba;
+  return Object.keys(o).length ? o : null;
+}
+function queueSettings(){   // only the newest settings matter, so replace any waiting copy
+  const c=syncCfg(); if(!c.enabled || !c.url) return;
+  db.outbox=(db.outbox||[]).filter(e=>e.action!=="sset");
+  queueSync({action:"sset", settings:settingsPayload()});
 }
 function payPayload(p){ return {id:p.id, date:fmtDate(p.ts), month:monthKey(p.ts), amount:p.amount, note:p.note, ts:p.ts}; }
 // Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
@@ -576,7 +600,7 @@ async function flushOutbox(){
     while(db.outbox.length){
       const ev=db.outbox[0];
       try{ await syncCall(ev); }
-      catch(e){ if(e.message==="Unknown action" && /^p/.test(ev.action)){ db.outbox.shift(); warn="Update the script (Code.gs) to sync payments"; save(); continue; } throw e; }
+      catch(e){ if(e.message==="Unknown action" && /^[ps]/.test(ev.action)){ db.outbox.shift(); warn="Update the script (Code.gs) to sync payments and settings"; save(); continue; } throw e; }
       db.outbox.shift();
       db.lastSync=Date.now(); c.err=""; save();
     }
@@ -586,13 +610,13 @@ async function flushOutbox(){
   updateSyncStatus();
 }
 // Merge shifts that exist in the sheet but not on this device (restore after reinstall).
-async function syncPull(){
+async function syncPull(applySettings){
   const j=await syncCall({action:"list"});
   const have=new Set(db.shifts.map(x=>x.id));
   const pendingDel=new Set((db.outbox||[]).filter(e=>e.action==="delete").map(e=>e.id));
   let added=0;
   (Array.isArray(j.shifts) ? j.shifts : []).slice(0,50000).forEach(r=>{
-    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip});
+    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip, note:r.note});
     if(!c || !c.end || have.has(c.id) || pendingDel.has(c.id)) return;
     have.add(c.id); db.shifts.push(c); added++;
   });
@@ -601,12 +625,22 @@ async function syncPull(){
     const pendingPDel=new Set((db.outbox||[]).filter(e=>e.action==="pdelete").map(e=>e.id));
     (Array.isArray(pj.payments)?pj.payments:[]).slice(0,20000).forEach(r=>{ const c=cleanPayment(r); if(!c||haveP.has(c.id)||pendingPDel.has(c.id)) return; haveP.add(c.id); pays().push(c); added++; });
   }catch(e){ if(e.message!=="Unknown action") throw e; }
+  if(applySettings && !(db.outbox||[]).some(e=>e.action==="sset")){
+    try{
+      const sj=await syncCall({action:"sget"}), c=cleanSettings(sj.settings);
+      if(c){ if(c.rate!=null) db.rate=c.rate; if(c.goal!=null){ if(c.goal>0) db.goal=c.goal; else delete db.goal; } if(c.payday!=null){ if(c.payday>0) db.payday=c.payday; else delete db.payday; }
+        if(c.breakMin!=null){ if(c.breakMin>0) db.breakMin=c.breakMin; else delete db.breakMin; } if(c.breakAfter!=null) db.breakAfter=c.breakAfter;
+        $("breakInput").value=db.breakMin||""; $("breakAfterInput").value=db.breakAfter||"";
+        $("paydayInput").value=db.payday||""; $("goalInput").value=db.goal||""; added+=0; save(); render(); }
+    }catch(e){ if(e.message!=="Unknown action") throw e; }
+  }
   if(added){ save(); render(); }
   return added;
 }
 async function syncUploadAll(){
   const list=db.shifts.filter(x=>x.end).map(shiftPayload);
   await syncCall({action:"bulk", shifts:list});
+  try{ await syncCall({action:"sset", settings:settingsPayload()}); }catch(e){ if(e.message!=="Unknown action") throw e; }
   const pl=pays().map(payPayload);
   if(pl.length){ try{ await syncCall({action:"pbulk", payments:pl}); }catch(e){ if(e.message==="Unknown action") throw new Error("Shifts uploaded. Update the script (Code.gs) to sync payments too."); throw e; } }
   return list.length;
@@ -647,7 +681,7 @@ function openModal(shift){
   const t2 = ts => { const x=new Date(ts); return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0"); };
   $("fIn").value = shift ? t2(shift.start) : "";
   $("fOut").value = (shift && shift.end) ? t2(shift.end) : "";
-  $("fTip").value = (shift && shift.tip) ? shift.tip : "";
+  $("fTip").value = (shift && shift.tip) ? shift.tip : ""; $("fNote").value = (shift && shift.note) ? shift.note : "";
   $("modalBg").classList.add("open");
 }
 function closeModal(){ $("modalBg").classList.remove("open"); editingId=null; }
@@ -661,8 +695,9 @@ $("modalSave").onclick=()=>{
   if(end===start){ alert("Clock-out must be after clock-in."); return; }
   if(end<start) end+=86400000; // overnight shift: clock-out is the next day
   const tp=Math.round(parseFloat($("fTip").value)*100)/100, tipV=(Number.isFinite(tp)&&tp>0)?Math.min(tp,100000):0;
-  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; queueSync({action:"upsert", shift:shiftPayload(s)}); }
-  else { const ns={id:uid(), start, end}; if(tipV) ns.tip=tipV; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
+  const noteV=$("fNote").value.replace(/[\u0000-\u001f\u007f<>]/g,"").trim().slice(0,80);
+  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; if(noteV) s.note=noteV; else delete s.note; queueSync({action:"upsert", shift:shiftPayload(s)}); }
+  else { const ns={id:uid(), start, end}; if(tipV) ns.tip=tipV; if(noteV) ns.note=noteV; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
   save(); closeModal(); render();
 };
 $("manualBtn").onclick=()=>openModal(null);
@@ -693,9 +728,25 @@ $("tipSave").onclick=()=>{
 };
 
 // clock in/out
+let toastTimer=null, toastShift=null, toastTap=0;
+function hideToast(){ $("toast").hidden=true; clearTimeout(toastTimer); }
+$("toastBtn").onclick=()=>{ const s=db.shifts.find(x=>x.id===toastShift); if(!s) return hideToast(); hideToast();
+  const d=new Date(s.end); $("endTime").value=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); $("endBg").classList.add("open"); };
+$("endCancel").onclick=()=>$("endBg").classList.remove("open");
+$("endBg").addEventListener("click",e=>{ if(e.target===$("endBg")) $("endBg").classList.remove("open"); });
+$("endSave").onclick=()=>{
+  const s=db.shifts.find(x=>x.id===toastShift), v=$("endTime").value; if(!s||!v){ $("endBg").classList.remove("open"); return; }
+  const base=new Date(toastTap), [hh,mm]=v.split(":").map(Number); base.setHours(hh,mm,0,0);
+  const cand=base.getTime();
+  if(cand<=s.start){ alert("That's before you clocked in."); return; }
+  if(cand>toastTap+60000){ alert("You can only move the finish earlier than when you tapped Clock Out."); return; }
+  s.end=cand; save(); render(); $("endBg").classList.remove("open"); queueSync({action:"upsert", shift:shiftPayload(s)});
+};
+sheetDrag($("endBg"), ()=>$("endBg").classList.remove("open"));
 $("clockBtn").onclick=()=>{
   const open=openShift();
-  if(open){ open.end=Date.now(); save(); render(); queueSync({action:"upsert", shift:shiftPayload(open)}); }
+  if(open){ open.end=Date.now(); save(); render(); queueSync({action:"upsert", shift:shiftPayload(open)});
+    toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); }
   else { db.shifts.push({id:uid(), start:Date.now(), end:null}); save(); render(); }
 };
 $("cancelShift").onclick=()=>{ if(confirm("Discard the current open shift?")){
@@ -709,7 +760,7 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>
   if((db.theme||"auto")==="auto"){ applyTheme(); drawChart(); }
 });
 $("rateInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value);
-  if(v>=0){ db.rate=v; save(); render(); } });
+  if(v>=0){ db.rate=v; save(); render(); queueSettings(); } });
 function download(name, text, type){
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click();
@@ -771,7 +822,7 @@ function buildXLSXBlob(shifts, rate){
     const dOut=xlsxDateSerial(b.getFullYear(),b.getMonth(),b.getDate());
     const tIn=Math.round((dIn+(a.getHours()*60+a.getMinutes())/1440)*1440)/1440;
     const tOut=Math.round((dOut+(b.getHours()*60+b.getMinutes())/1440)*1440)/1440;
-    const h=Math.round(((s.end-s.start)/3600000)*100)/100;
+    const h=Math.round(hrs(s)*100)/100;
     const tp=s.tip||0, e=Math.round(h*rate*100)/100;
     sd+='<row r="'+r+'">'+C("A"+r,3,0,V(dIn))+C("B"+r,4,0,V(tIn))+C("C"+r,4,0,V(tOut))+C("D"+r,5,0,V(h))+C("E"+r,6,0,V(tp))+C("F"+r,6,0,V(e))+'</row>';
   });
@@ -842,7 +893,7 @@ $("csvBtn").onclick=()=>{
   });
   download("workclock.csv",csv,"text/csv");
 };
-$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, shifts:db.shifts, payments:db.payments||[]},null,2),"application/json");  // never includes sync URL/secret
+$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, shifts:db.shifts, payments:db.payments||[]},null,2),"application/json");  // never includes sync URL/secret
 $("importBtn").onclick=()=>$("importFile").click();
 $("importFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -858,7 +909,7 @@ $("importFile").addEventListener("change",e=>{
   r.readAsText(f); e.target.value="";
 });
 $("wipeBtn").onclick=()=>{ if(confirm("Delete ALL shifts and payments and reset? This can't be undone.")){
-  const keep={rate:db.rate, goal:db.goal, payday:db.payday, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
+  const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
   db=Object.assign({shifts:[], outbox:[]}, keep); save(); render(); updateSyncStatus(); }};
 
 // google sheets sync settings
@@ -872,18 +923,18 @@ $("syncForm").addEventListener("submit",e=>{ e.preventDefault(); readSyncFields(
   if(!/^https:\/\/script\.google\.com\/.+\/exec/.test(c.url)){ c.err="URL should look like https://script.google.com/macros/s/…/exec"; save(); updateSyncStatus(); return; }
   if(!c.secret || c.secret.length<16){ c.err="Use a secret of at least 16 characters (same as in your script)"; save(); updateSyncStatus(); return; }
   c.enabled=true; save(); updateSyncToggle();
-  syncRun("Connecting", async()=>{ await syncCall({action:"ping"}); const n=await syncPull(); await flushOutbox();
+  syncRun("Connecting", async()=>{ await syncCall({action:"ping"}); const n=await syncPull(true); await flushOutbox();
     return n ? "Connected · restored "+n+" shift"+(n===1?"":"s") : "Connected ✓"; }); });
 $("syncToggle").onclick=()=>{ const c=syncCfg(); c.enabled=!c.enabled; save(); updateSyncToggle(); updateSyncStatus(); if(c.enabled) flushOutbox(); };
 $("syncNowBtn").onclick=()=>syncRun("Syncing", async()=>{ await flushOutbox(); if(syncCfg().err) throw new Error(syncCfg().err); const n=await syncPull(); return n?"Restored "+n+" shift"+(n===1?"":"s"):"Up to date ✓"; });
 $("syncUpBtn").onclick=()=>syncRun("Uploading", async()=>{ const n=await syncUploadAll(); return "Uploaded "+n+" shift"+(n===1?"":"s")+" ✓"; });
-$("syncDownBtn").onclick=()=>syncRun("Restoring", async()=>{ const n=await syncPull(); return n?"Restored "+n+" shift"+(n===1?"":"s")+" ✓":"Nothing new in the sheet"; });
+$("syncDownBtn").onclick=()=>syncRun("Restoring", async()=>{ const n=await syncPull(true); return n?"Restored "+n+" item"+(n===1?"":"s")+" ✓":"Restored from the sheet ✓"; });
 // pull on open + whenever the app comes back to the foreground (iOS keeps PWAs alive)
 async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.onLine) return;
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.13.8";
+const APP_VERSION="2026.10.13.9";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1148,7 +1199,14 @@ function showStatement(S){
   $("stmt").hidden=false; document.body.classList.add("stmt-open");
 }
 function closeStmt(){ $("stmt").hidden=true; document.body.classList.remove("stmt-open"); }
-$("stmtBtn").onclick=()=>{ const n=new Date(); $("stmtFrom").value=dayKey(new Date(n.getFullYear(),n.getMonth(),1).getTime()); $("stmtTo").value=dayKey(Date.now()); $("stmtBg").classList.add("open"); };
+$("stmtBtn").onclick=()=>{ $("stmtPd").style.display=db.payday?"":"none"; const n=new Date(); $("stmtFrom").value=dayKey(new Date(n.getFullYear(),n.getMonth(),1).getTime()); $("stmtTo").value=dayKey(Date.now()); $("stmtBg").classList.add("open"); };
+$("stmtQuick").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return;
+  const n=new Date(), y=n.getFullYear(), m=n.getMonth(), K=d=>dayKey(d.getTime()); let a,z=new Date(n);
+  if(b.dataset.q==="month") a=new Date(y,m,1);
+  else if(b.dataset.q==="last"){ a=new Date(y,m-1,1); z=new Date(y,m,0); }
+  else if(b.dataset.q==="payday"){ const pd=new Date(y,m,db.payday||1); if(pd.getTime()>n.getTime()) pd.setMonth(pd.getMonth()-1); a=pd; }
+  else { const f=db.shifts.reduce((mn,s)=>Math.min(mn,s.start),Date.now()); a=new Date(f); }
+  $("stmtFrom").value=K(a); $("stmtTo").value=K(z); });
 $("stmtCancel").onclick=()=>$("stmtBg").classList.remove("open");
 $("stmtBg").addEventListener("click",e=>{ if(e.target===$("stmtBg")) $("stmtBg").classList.remove("open"); });
 $("stmtGo").onclick=()=>{

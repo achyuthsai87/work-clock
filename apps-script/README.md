@@ -14,3 +14,7 @@ Updating the script later: Deploy > **Manage deployments** > edit > Version: New
 - **Shifts** tab: Date, Day, Month, Clock in, Clock out, Hours, Tips, Earned (wages only), newest first, with currency formats. The `id`, `start` and `end` columns are hidden; the app needs them, so don't delete them.
 - **Summary** tab (made automatically): hours, tips, earnings (wages, tips kept separate) and shift count per month, plus all-time totals and average pay per hour. It updates itself.
 - If you used an older version of the script, its tab is kept as "Shifts (old …)" and a fresh one is created. In the app, tap **Upload all** afterwards.
+
+## Settings and notes
+
+A **Settings** tab keeps your pay rate, weekly goal, payday and unpaid-break settings, and the Shifts tab has a **Note** column. Tap **Restore** (or **Save & connect** on a fresh install) and the app returns to the last version saved in the sheet: shifts, tips, payments, notes and these numbers. Re-paste `Code.gs` and redeploy to get this.
