@@ -17,14 +17,16 @@ function cleanShift(s){
   const o = {id, start, end}, tp = Math.round(Number(s.tip != null ? s.tip : s.tips) * 100) / 100;
   if(Number.isFinite(tp) && tp > 0 && tp <= 100000) o.tip = tp;
   const sr = s.rate == null || s.rate === "" ? NaN : Number(s.rate); if(Number.isFinite(sr) && sr >= 0 && sr <= 100000) o.rate = sr;
-  const nt = String(s.note == null ? "" : s.note).replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 80); if(nt) o.note = nt;
+  const nt = cleanText(s.note, 80); if(nt) o.note = nt;
   return o;
 }
+// Free text (notes): no control characters or angle brackets, and nothing a spreadsheet could read as a formula.
+function cleanText(v, max){ return String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/^[\s=+\-@]+/, "").trim().slice(0, max); }
 function cleanPayment(p){
   if(!p || typeof p !== "object") return null;
   const id = String(p.id == null ? "" : p.id), ts = Number(p.ts), amt = Math.round(Number(p.amount) * 100) / 100;
   if(!ID_RE.test(id) || !Number.isFinite(ts) || ts < MIN_TS || ts > MAX_TS || !Number.isFinite(amt) || amt <= 0 || amt > 10000000) return null;
-  return {id, ts, amount: amt, note: String(p.note == null ? "" : p.note).replace(/[\u0000-\u001f\u007f<>]/g, "").slice(0, 60)};
+  return {id, ts, amount: amt, note: cleanText(p.note, 60)};
 }
 function cleanCore(d){   // the user's data only (shifts + display prefs)
   const out = {rate: 14, theme: "auto", shifts: []};
@@ -703,7 +705,7 @@ $("modalSave").onclick=()=>{
   if(end<start) end+=86400000; // overnight shift: clock-out is the next day
   const tp=Math.round(parseFloat($("fTip").value)*100)/100, tipV=(Number.isFinite(tp)&&tp>0)?Math.min(tp,100000):0;
   const rv=parseFloat($("fRate").value), rateV=(Number.isFinite(rv)&&rv>=0)?Math.min(rv,100000):db.rate;
-  const noteV=$("fNote").value.replace(/[\u0000-\u001f\u007f<>]/g,"").trim().slice(0,80);
+  const noteV=cleanText($("fNote").value,80);
   if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; if(noteV) s.note=noteV; else delete s.note; s.rate=rateV; queueSync({action:"upsert", shift:shiftPayload(s)}); }
   else { const ns={id:uid(), start, end}; if(tipV) ns.tip=tipV; if(noteV) ns.note=noteV; ns.rate=rateV; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
   save(); closeModal(); render();
@@ -960,7 +962,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.13.11";
+const APP_VERSION="2026.10.13.12";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

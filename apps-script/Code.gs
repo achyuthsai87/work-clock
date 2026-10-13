@@ -138,8 +138,8 @@ function clean_(s) {
   if (!s || typeof s !== "object" || !ID_RE.test(String(s.id))) return null;
   const start = Number(s.start), end = Number(s.end);
   if (!isFinite(start) || !isFinite(end) || start < 9.46e11 || end < start || end - start > 7 * 864e5) return null;
-  const txt = v => String(v == null ? "" : v).replace(/[^\w ,:.\-\/]/g, "").slice(0, 40);
-  const note = String(s.note == null ? "" : s.note).replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 80);
+  const txt = v => String(v == null ? "" : v).replace(/[^\w ,:.\-\/]/g, "").replace(/^[\-]+/, "").slice(0, 40);
+  const note = String(s.note == null ? "" : s.note).replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/^[\s=+\-@]+/, "").trim().slice(0, 80);
   const tips = Math.round(Math.min(Math.max(Number(s.tips) || 0, 0), 100000) * 100) / 100;
   return [String(s.id), txt(s.date), txt(s.day), txt(s.month), txt(s.in), txt(s.out),
           Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end, note,
@@ -151,7 +151,7 @@ function cleanPay_(p) {
   if (!p || typeof p !== "object" || !ID_RE.test(String(p.id))) return null;
   const ts = Number(p.ts), amt = Math.round(Number(p.amount) * 100) / 100;
   if (!isFinite(ts) || ts < 9.46e11 || !isFinite(amt) || amt <= 0 || amt > 1e7) return null;
-  const txt = (v, n) => String(v == null ? "" : v).replace(/[^\w ,:.\-\/]/g, "").slice(0, n);
+  const txt = (v, n) => String(v == null ? "" : v).replace(/[^\w ,:.\-\/]/g, "").replace(/^[\-]+/, "").slice(0, n);
   return [String(p.id), txt(p.date, 40), txt(p.month, 10), amt, txt(p.note, 60), ts];
 }
 

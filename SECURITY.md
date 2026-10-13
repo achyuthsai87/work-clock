@@ -8,6 +8,10 @@ browser's `localStorage` on your phone, plus your own Google Sheet if sync is on
   `onerror=` handlers are blocked. Network access is limited to this site and `script.google.com`.
 - **All data is validated** (storage, imported backups, sheet replies): bad IDs, impossible times and
   oversized values are dropped, so crafted data can't inject HTML or script.
+- **New data is held to the same rules**: payments, notes, per-shift rates, and the pay-rate/goal/payday/break
+  settings are range-checked everywhere they enter (storage, backups, the sheet, the sync queue). Notes are plain
+  text only: no control characters or `<>`, and a leading `= + - @` is stripped so a sheet can't read a note as a formula.
+- **The pay statement and everything on screen** is built with text nodes, never raw HTML from your data.
 - **Backups never include** the sync URL or secret, and **importing a backup never changes** sync/lock settings.
 - **Sync URL must be a real `script.google.com/.../exec` URL**; secret must be 16+ characters.
 - **Anti-framing**: the app refuses to run inside another site's frame (clickjacking).
@@ -15,7 +19,8 @@ browser's `localStorage` on your phone, plus your own Google Sheet if sync is on
 - **Optional app lock** (Settings → Privacy & security): Face ID / device passcode, covers the app in the
   app switcher. It stops casual snooping on an unlocked phone; it is not a substitute for your phone passcode.
 - **Apps Script backend**: refuses the placeholder/weak secret, constant-time secret check, delays wrong guesses,
-  validates every field, caps request sizes, writes plain text only (no spreadsheet formulas), leaks no errors.
+  validates every field (shifts, payments, settings), caps request sizes, writes plain text only (no spreadsheet formulas, notes
+  stripped of leading `= + - @`), never overwrites data with out-of-range values, leaks no errors.
 
 ## What YOU should do (the biggest remaining risk is your GitHub account)
 Anyone who can push to this repo can change the code your phone runs. Protect it:
