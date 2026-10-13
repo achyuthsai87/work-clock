@@ -7,7 +7,7 @@
  */
 const SECRET = "CHANGE-ME-TO-SOMETHING-LONG";   // use 24+ random characters; never share or commit it
 const SHEET_NAME = "Shifts";
-const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end", "Clock-in location", "Clock-out location"];
+const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end"];
 const COL = { START: 10, END: 11, TIP: 8 };   // 1-based columns the app reads back
 const MAX_BULK = 5000;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -18,11 +18,11 @@ function style_(sh) {
     const h = sh.getRange(1, 1, 1, HEADERS.length);
     h.setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
     sh.setFrozenRows(1);
-    sh.getRange("A:F").setNumberFormat("@"); sh.getRange("L:M").setNumberFormat("@");            // plain text: nothing is ever evaluated as a formula
+    sh.getRange("A:F").setNumberFormat("@");            // plain text: nothing is ever evaluated as a formula
     sh.getRange("G:G").setNumberFormat("0.00");
     sh.getRange("H:I").setNumberFormat("$#,##0.00");
     sh.hideColumns(1); sh.hideColumns(10, 2);             // id, start, end stay in the sheet but out of sight
-    sh.setColumnWidth(2, 110); sh.setColumnWidths(12, 2, 170); sh.setColumnWidths(5, 2, 90); sh.setColumnWidths(7, 3, 95);
+    sh.setColumnWidth(2, 110); sh.setColumnWidths(5, 2, 90); sh.setColumnWidths(7, 3, 95);
   } catch (_) {}
 }
 
@@ -87,15 +87,7 @@ function sheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(SHEET_NAME);
   // An older layout? Keep it as a backup tab and start a fresh one (the app re-uploads everything).
-  const BASE = HEADERS.length - 2;          // the first 11 columns are the stable layout; location columns were added later
-  if (sh && sh.getLastRow() > 0) {
-    const hdr = sh.getRange(1, 1, 1, HEADERS.length).getValues()[0];
-    if (hdr.slice(0, BASE).join("|") === HEADERS.slice(0, BASE).join("|") && hdr.slice(BASE).join("|") !== HEADERS.slice(BASE).join("|")) {
-      sh.getRange(1, BASE + 1, 1, 2).setValues([HEADERS.slice(BASE)]);   // add the location columns in place
-      sh.getRange("L:M").setNumberFormat("@");
-    }
-  }
-  if (sh && sh.getLastRow() > 0 && sh.getRange(1, 1, 1, BASE).getValues()[0].join("|") !== HEADERS.slice(0, BASE).join("|")) {
+  if (sh && sh.getLastRow() > 0 && sh.getRange(1, 1, 1, HEADERS.length).getValues()[0].join("|") !== HEADERS.join("|")) {
     sh.setName(SHEET_NAME + " (old " + Utilities.formatDate(new Date(), "UTC", "yyyy-MM-dd HHmm") + ")");
     sh = null;
   }
@@ -125,11 +117,9 @@ function clean_(s) {
   const start = Number(s.start), end = Number(s.end);
   if (!isFinite(start) || !isFinite(end) || start < 9.46e11 || end < start || end - start > 7 * 864e5) return null;
   const txt = v => String(v == null ? "" : v).replace(/[^\w ,:.\-\/]/g, "").slice(0, 40);
-  const locOk = v => /^-?\d{1,2}(\.\d{1,7})?,-?\d{1,3}(\.\d{1,7})? \u00b1\d{1,6}m$/.test(String(v || "")) ? String(v) : "";
   const tips = Math.round(Math.min(Math.max(Number(s.tips) || 0, 0), 100000) * 100) / 100;
   return [String(s.id), txt(s.date), txt(s.day), txt(s.month), txt(s.in), txt(s.out),
-          Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end,
-          locOk(s.locIn), locOk(s.locOut)];
+          Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end];
 }
 
 // Payments the owner made to you.
@@ -173,7 +163,7 @@ function doPost(e) {
       const n = sh.getLastRow() - 1;
       const rows = n > 0 ? sh.getRange(2, 1, n, HEADERS.length).getValues() : [];
       return out_({ ok: true, shifts: rows.filter(r => r[0] && r[9] && r[10])
-        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0, locIn: String(r[11] || ""), locOut: String(r[12] || "") })) });
+        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0 })) });
     }
 
     if (b.action === "plist") {
@@ -207,13 +197,8 @@ function doPost(e) {
       const map = idMap_(sh), fresh = [];
       rows.forEach(r => {
         const at = map[r[0]];
-        if (at) {
-          // a place stamp, once recorded, is never overwritten or cleared by the app
-          const old = sh.getRange(at, 12, 1, 2).getValues()[0];
-          if (old[0]) r[11] = old[0];
-          if (old[1]) r[12] = old[1];
-          sh.getRange(at, 1, 1, HEADERS.length).setValues([r]);
-        } else fresh.push(r);
+        if (at) sh.getRange(at, 1, 1, HEADERS.length).setValues([r]);
+        else fresh.push(r);
       });
       if (fresh.length) sh.getRange(sh.getLastRow() + 1, 1, fresh.length, HEADERS.length).setValues(fresh);
       try { sh.getRange(2, 1, sh.getLastRow() - 1, HEADERS.length).sort({ column: 10, ascending: false }); } catch (_) {}   // newest first

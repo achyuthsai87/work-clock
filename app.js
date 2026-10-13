@@ -9,15 +9,6 @@ const KEY = "workclock.v1";
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const SYNC_URL_RE = /^https:\/\/script\.google\.com\/(?:macros|a\/macros\/[A-Za-z0-9.-]+)\/s\/[A-Za-z0-9_-]{8,200}\/exec$/;
 const MIN_TS = 946684800000, MAX_TS = 4102444800000, MAX_SHIFT_MS = 7*86400000;   // 2000..2100, 7 days
-// A place stamp: {lat, lon, acc}. Accepts an object or the "lat,lon ±accm" text used in the sheet.
-function cleanLoc(l){
-  if(typeof l === "string"){ const m = /^(-?\d{1,2}(?:\.\d{1,7})?),(-?\d{1,3}(?:\.\d{1,7})?) ±(\d{1,6})m$/.exec(l.trim()); if(!m) return null; l = {lat:m[1], lon:m[2], acc:m[3]}; }
-  if(!l || typeof l !== "object") return null;
-  const lat = Number(l.lat), lon = Number(l.lon), acc = Number(l.acc);
-  if(!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
-  return {lat: Math.round(lat*1e5)/1e5, lon: Math.round(lon*1e5)/1e5, acc: Number.isFinite(acc) && acc >= 0 && acc <= 999999 ? Math.round(acc) : 0};
-}
-const locText = l => l.lat.toFixed(5)+","+l.lon.toFixed(5)+" ±"+l.acc+"m";
 function cleanShift(s){
   if(!s || typeof s !== "object") return null;
   const id = String(s.id == null ? "" : s.id), start = Number(s.start), end = s.end == null ? null : Number(s.end);
@@ -25,8 +16,6 @@ function cleanShift(s){
   if(end !== null && (!Number.isFinite(end) || end < start || end - start > MAX_SHIFT_MS)) return null;
   const o = {id, start, end}, tp = Math.round(Number(s.tip != null ? s.tip : s.tips) * 100) / 100;
   if(Number.isFinite(tp) && tp > 0 && tp <= 100000) o.tip = tp;
-  const li = cleanLoc(s.locIn), lo = cleanLoc(s.locOut); if(li) o.locIn = li; if(lo) o.locOut = lo;
-  if(s.edited === true) o.edited = true;
   return o;
 }
 function cleanPayment(p){
@@ -98,8 +87,7 @@ function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;"
 
 function openShift(){ return db.shifts.find(s=>!s.end); }
 
-let timer=null, locWarnUntil=0;
-const locWarn=()=>Date.now()<locWarnUntil?'<div class="long">Location unavailable, so that time has no place stamp. Allow location for Work Clock in your phone settings.</div>':'';
+let timer=null;
 function render(){
   const btn=$("clockBtn"), line=$("statusLine"), cancel=$("cancelShift");
   const open=openShift();
@@ -109,12 +97,12 @@ function render(){
     const tick=()=>{ const el=(Date.now()-open.start)/1000;
       const h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
       line.innerHTML='<span class="dot"></span>Clocked in at <b>'+esc(fmtTime(open.start))+"</b> · <b>"+
-        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"</b> elapsed"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':'')+locWarn(); };
+        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"</b> elapsed"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':''); };
     tick(); clearInterval(timer); timer=setInterval(tick,1000);
   } else {
     btn.textContent="Clock In"; btn.classList.remove("out"); cancel.style.display="none";
     clearInterval(timer);
-    line.innerHTML = (db.shifts.length ? "Not clocked in." : "Tap <b>Clock In</b> when your shift starts.")+locWarn();
+    line.innerHTML = db.shifts.length ? "Not clocked in." : "Tap <b>Clock In</b> when your shift starts.";
   }
 
   // stats
@@ -158,14 +146,6 @@ function render(){
       '<div class="m"><b>'+money(pay(s))+'</b>'+
       '<span><button class="icon-btn" data-edit="'+esc(s.id)+'">Edit</button>'+
       '<button class="icon-btn danger" data-del="'+esc(s.id)+'">Delete</button></span></div>';
-    if(s.locIn||s.locOut||s.edited){
-      const lc=document.createElement("div"); lc.className="locline";
-      const add=(lab,l)=>{ if(!l) return; const a=document.createElement("a"); a.href="https://www.google.com/maps?q="+l.lat+","+l.lon; a.target="_blank"; a.rel="noopener noreferrer";
-        a.textContent="\uD83D\uDCCD "+lab+" "+l.lat.toFixed(4)+", "+l.lon.toFixed(4); lc.appendChild(a); };
-      add("In",s.locIn); add("Out",s.locOut);
-      if(s.edited){ const e=document.createElement("span"); e.className="edtag"; e.textContent="times edited"; lc.appendChild(e); }
-      row.appendChild(lc);
-    }
     box.appendChild(row);
   });
   box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{ if(confirm("Delete this shift?")){
@@ -558,7 +538,7 @@ function syncCfg(){ return db.sync || (db.sync = {url:"", secret:"", enabled:fal
 function shiftPayload(s, rate){
   const h=hrs(s); if(rate==null) rate=db.rate;
   return {id:s.id, date:fmtDate(s.start), day:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(s.start).getDay()], month:monthKey(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
-          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, locIn:s.locIn?locText(s.locIn):"", locOut:s.locOut?locText(s.locOut):"", start:s.start, end:s.end};
+          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, start:s.start, end:s.end};
 }
 function payPayload(p){ return {id:p.id, date:fmtDate(p.ts), month:monthKey(p.ts), amount:p.amount, note:p.note, ts:p.ts}; }
 // Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
@@ -612,7 +592,7 @@ async function syncPull(){
   const pendingDel=new Set((db.outbox||[]).filter(e=>e.action==="delete").map(e=>e.id));
   let added=0;
   (Array.isArray(j.shifts) ? j.shifts : []).slice(0,50000).forEach(r=>{
-    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip, locIn:r.locIn, locOut:r.locOut});
+    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip});
     if(!c || !c.end || have.has(c.id) || pendingDel.has(c.id)) return;
     have.add(c.id); db.shifts.push(c); added++;
   });
@@ -668,8 +648,6 @@ function openModal(shift){
   $("fIn").value = shift ? t2(shift.start) : "";
   $("fOut").value = (shift && shift.end) ? t2(shift.end) : "";
   $("fTip").value = (shift && shift.tip) ? shift.tip : "";
-  const lb=$("fLoc"); lb.textContent=""; lb.hidden=!(shift && (shift.locIn||shift.locOut));
-  if(!lb.hidden){ lb.appendChild(document.createTextNode("\uD83D\uDCCD Locked place stamp (can't be edited): "+(shift.locIn?"in "+shift.locIn.lat.toFixed(4)+", "+shift.locIn.lon.toFixed(4):"")+(shift.locIn&&shift.locOut?" \u00b7 ":"")+(shift.locOut?"out "+shift.locOut.lat.toFixed(4)+", "+shift.locOut.lon.toFixed(4):""))); }
   $("modalBg").classList.add("open");
 }
 function closeModal(){ $("modalBg").classList.remove("open"); editingId=null; }
@@ -683,8 +661,7 @@ $("modalSave").onclick=()=>{
   if(end===start){ alert("Clock-out must be after clock-in."); return; }
   if(end<start) end+=86400000; // overnight shift: clock-out is the next day
   const tp=Math.round(parseFloat($("fTip").value)*100)/100, tipV=(Number.isFinite(tp)&&tp>0)?Math.min(tp,100000):0;
-  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); if((s.locIn||s.locOut) && (s.start!==start || s.end!==end)) s.edited=true;
-    s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; queueSync({action:"upsert", shift:shiftPayload(s)}); }
+  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; queueSync({action:"upsert", shift:shiftPayload(s)}); }
   else { const ns={id:uid(), start, end}; if(tipV) ns.tip=tipV; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
   save(); closeModal(); render();
 };
@@ -716,26 +693,10 @@ $("tipSave").onclick=()=>{
 };
 
 // clock in/out
-// Where you clocked in/out. The time is taken at the tap; the place is stamped on and can't be edited afterwards.
-function getFix(){
-  return new Promise(res=>{
-    if(!navigator.geolocation){ res(null); return; }
-    let done=false; const fin=v=>{ if(!done){ done=true; res(v); } };
-    setTimeout(()=>fin(null), 9000);
-    try{ navigator.geolocation.getCurrentPosition(p=>fin(cleanLoc({lat:p.coords.latitude, lon:p.coords.longitude, acc:p.coords.accuracy})), ()=>fin(null), {enableHighAccuracy:true, timeout:8000, maximumAge:0}); }
-    catch(_){ fin(null); }
-  });
-}
-let clockBusy=false;
-$("clockBtn").onclick=async()=>{
-  if(clockBusy) return; clockBusy=true;
-  const t=Date.now(), open=openShift(), btn=$("clockBtn"), label=btn.textContent;
-  btn.textContent="Getting location…"; btn.disabled=true;
-  const fix=await getFix();
-  btn.disabled=false; clockBusy=false; if(!fix) locWarnUntil=Date.now()+20000;
-  if(open){ open.end=t; if(fix) open.locOut=fix; save(); render(); queueSync({action:"upsert", shift:shiftPayload(open)}); }
-  else { const ns={id:uid(), start:t, end:null}; if(fix) ns.locIn=fix; db.shifts.push(ns); save(); render(); }
-
+$("clockBtn").onclick=()=>{
+  const open=openShift();
+  if(open){ open.end=Date.now(); save(); render(); queueSync({action:"upsert", shift:shiftPayload(open)}); }
+  else { db.shifts.push({id:uid(), start:Date.now(), end:null}); save(); render(); }
 };
 $("cancelShift").onclick=()=>{ if(confirm("Discard the current open shift?")){
   db.shifts=db.shifts.filter(s=>s.end); save(); render(); }};
