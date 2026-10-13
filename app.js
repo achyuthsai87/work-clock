@@ -71,7 +71,7 @@ function monthLabel(key){ const [y,m]=key.split("-").map(Number); return MONTHS[
 function hrs(s){ return (s.end - s.start)/3600000; }
 function money(n){ return "$"+n.toFixed(2); }
 function tipOf(s){ return s.tip||0; }
-function pay(s){ return hrs(s)*db.rate+tipOf(s); }
+function pay(s){ return hrs(s)*db.rate; }   // wages only; tips are tracked separately
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function openShift(){ return db.shifts.find(s=>!s.end); }
@@ -96,9 +96,11 @@ function render(){
 
   // stats
   const today=dayKey(Date.now()), mk=monthKey(Date.now());
-  let th=0, mh=0, ah=0, et=0, em=0, ea=0, tt=0;
+  let th=0, mh=0, ah=0, et=0, em=0, ea=0, tt=0, tw=0, tm=0, ta=0; const wk0=startOfWeek(Date.now());
   db.shifts.forEach(s=>{ if(!s.end) return; const h=hrs(s), p=pay(s); ah+=h; ea+=p;
-    if(dayKey(s.start)===today){ th+=h; et+=p; tt+=tipOf(s); } if(monthKey(s.start)===mk){ mh+=h; em+=p; } });
+    if(dayKey(s.start)===today){ th+=h; et+=p; } if(monthKey(s.start)===mk){ mh+=h; em+=p; } });
+  db.shifts.forEach(s=>{ const tp=tipOf(s); if(!tp) return; ta+=tp; if(s.start>=wk0) tw+=tp; if(dayKey(s.start)===today) tt+=tp; if(monthKey(s.start)===mk) tm+=tp; });
+  $("tipDay").textContent=money(tt); $("tipWeek").textContent=money(tw); $("tipMonth").textContent=money(tm); $("tipAll").textContent=money(ta);
   $("statToday").innerHTML = th.toFixed(2)+"h<small>"+money(et)+"</small>";
   $("statMonth").innerHTML = mh.toFixed(2)+"h<small>"+money(em)+"</small>";
   $("monthLabel").textContent = monthLabel(mk);
@@ -111,8 +113,7 @@ function render(){
   $("heroDate").textContent = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][nd.getDay()]+", "+fmtDate(Date.now());
   $("heroEarn").textContent = money(et);
   $("tipToday").textContent = tt>0 ? "Tips today "+money(tt) : "No tips logged today";
-  if(tt<=0){ const o=openShift(); if(o && o.tip) $("tipToday").textContent="Tips today "+money(o.tip); }
-  $("heroSub").textContent = th>0 ? th.toFixed(2)+"h worked today"+(tt>0?" · incl. "+money(tt)+" tips":"") : "No shifts yet today — tap Clock In below";
+  $("heroSub").textContent = th>0 ? th.toFixed(2)+"h worked today"+(tt>0?" · + "+money(tt)+" tips":"") : "No shifts yet today — tap Clock In below";
   renderAnalytics();
 
   // history grouped by day
@@ -214,7 +215,7 @@ function renderAnalytics(){
   $("anaNext").disabled = anaOff>=0;
   const sum=(arr,k)=>arr.reduce((a,x)=>a+x[k],0);
   const earned=sum(days,"earned"), hours=sum(days,"hours"), shifts=sum(days,"n");
-  const tipsSum=sum(days,"tips"), pEarned=sum(prev.B,"earned"), pHours=sum(prev.B,"hours");
+  const tipsSum=sum(days,"tips"), pTips=sum(prev.B,"tips"), pEarned=sum(prev.B,"earned"), pHours=sum(prev.B,"hours");
   const worked=days.filter(x=>x.n>0);
   const best=days.reduce((a,x)=> x.earned>a.earned ? x : a, days[0]);
   const longest=db.shifts.filter(x=>x.end && x.start>=days[0].a && x.start<days[days.length-1].b).reduce((m,x)=>Math.max(m,hrs(x)),0);
@@ -222,7 +223,7 @@ function renderAnalytics(){
   const bucketWord = p==="year" ? "month" : "day";
   const tiles=[
     ["Earned", money(earned)+pctTag(earned,pEarned)],
-    ...(tipsSum>0?[["Tips", money(tipsSum)+"<small>"+Math.round(tipsSum/Math.max(earned,.01)*100)+"% of pay</small>"]]:[]),
+    ["Tips", money(tipsSum)+pctTag(tipsSum,pTips)+(tipsSum>0&&shifts>0?"<small>"+money(tipsSum/shifts)+" / shift</small>":"")],
     ["Hours", hours.toFixed(1)+"h"+pctTag(hours,pHours)],
     ["Shifts", String(shifts)+"<small>"+worked.length+" "+bucketWord+(worked.length===1?"":"s")+"</small>"],
     ["Avg shift", shifts ? (hours/shifts).toFixed(1)+"h" : "—"],
@@ -398,7 +399,7 @@ function renderFun(){
     if(totE>0){
       facts.push(["☕","You've earned about "+Math.round(totE/5)+" coffees ($5 each)."]);
       facts.push(["🍕","That's around "+Math.round(totE/15)+" pizzas ($15 each)."]);
-      if(totT>0) facts.push(["🤑","Tips are "+Math.round(totT/totE*100)+"% of everything you've earned ("+money(totT)+")."]);
+      if(totT>0) facts.push(["🤑","On top of your "+money(totE)+" in pay, you've collected "+money(totT)+" in tips."]);
       facts.push(["⏱️","You make about "+money(rate/60)+" every minute you're clocked in."]);
     }
     const wd=Array(7).fill(0), names7=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -523,7 +524,7 @@ function syncCfg(){ return db.sync || (db.sync = {url:"", secret:"", enabled:fal
 function shiftPayload(s, rate){
   const h=hrs(s); if(rate==null) rate=db.rate;
   return {id:s.id, date:fmtDate(s.start), day:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(s.start).getDay()], month:monthKey(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
-          hours:Math.round(h*100)/100, earned:Math.round((h*rate+(s.tip||0))*100)/100, tips:s.tip||0, start:s.start, end:s.end};
+          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, start:s.start, end:s.end};
 }
 // Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
 async function syncCall(body){
@@ -745,7 +746,7 @@ function buildXLSXBlob(shifts, rate){
     const tIn=Math.round((dIn+(a.getHours()*60+a.getMinutes())/1440)*1440)/1440;
     const tOut=Math.round((dOut+(b.getHours()*60+b.getMinutes())/1440)*1440)/1440;
     const h=Math.round(((s.end-s.start)/3600000)*100)/100;
-    const tp=s.tip||0, e=Math.round((h*rate+tp)*100)/100;
+    const tp=s.tip||0, e=Math.round(h*rate*100)/100;
     sd+='<row r="'+r+'">'+C("A"+r,3,0,V(dIn))+C("B"+r,4,0,V(tIn))+C("C"+r,4,0,V(tOut))+C("D"+r,5,0,V(h))+C("E"+r,6,0,V(tp))+C("F"+r,6,0,V(e))+'</row>';
   });
   const fDsum=n>0?'<f>SUM(D'+R0+':D'+(R0+n-1)+')</f><v>0</v>':'<v>0</v>';
@@ -856,7 +857,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.13.1";
+const APP_VERSION="2026.10.13.2";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

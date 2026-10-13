@@ -7,7 +7,7 @@
  */
 const SECRET = "CHANGE-ME-TO-SOMETHING-LONG";   // use 24+ random characters; never share or commit it
 const SHEET_NAME = "Shifts";
-const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned (incl. tips)", "start", "end"];
+const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end"];
 const COL = { START: 10, END: 11, TIP: 8 };   // 1-based columns the app reads back
 const MAX_BULK = 5000;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -31,7 +31,7 @@ function summary_(ss) {
   try {
     if (ss.getSheetByName("Summary")) return;
     const s = ss.insertSheet("Summary");
-    s.getRange("A1:E1").setValues([["Month", "Hours", "Tips", "Earned (incl. tips)", "Shifts"]]);
+    s.getRange("A1:E1").setValues([["Month", "Hours", "Tips", "Earned", "Shifts"]]);
     s.getRange("A2").setFormula('=IFERROR(SORT(UNIQUE(FILTER(Shifts!D2:D,Shifts!D2:D<>"")),1,FALSE),"")');
     s.getRange("B2").setFormula('=ARRAYFORMULA(IF(A2:A="","",SUMIF(Shifts!D:D,A2:A,Shifts!G:G)))');
     s.getRange("C2").setFormula('=ARRAYFORMULA(IF(A2:A="","",SUMIF(Shifts!D:D,A2:A,Shifts!H:H)))');

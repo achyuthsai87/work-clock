@@ -324,3 +324,7 @@ html[data-theme="dark"] .btn.primary{color:#0c1020;}
 .tip-row .link{margin:0;padding:4px 2px}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 14px}
 .chips button{flex:1 1 auto;min-width:52px;padding:10px 0;border:0;border-radius:12px;background:var(--chip);color:var(--ink);font:inherit;font-weight:600}
+
+.tipbox-h{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px}
+.tipbox .stat{background:var(--chip);box-shadow:none}
+.tipbox-t{margin-top:10px;text-align:center;font-size:13px;color:var(--muted)}.tipbox-t b{color:var(--ink);font-variant-numeric:tabular-nums}

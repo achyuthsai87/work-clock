@@ -11,6 +11,6 @@ Updating the script later: Deploy > **Manage deployments** > edit > Version: New
 
 ## What the sheet looks like
 
-- **Shifts** tab: Date, Day, Month, Clock in, Clock out, Hours, Tips, Earned (incl. tips), newest first, with currency formats. The `id`, `start` and `end` columns are hidden; the app needs them, so don't delete them.
-- **Summary** tab (made automatically): hours, tips, earnings and shift count per month, plus all-time totals and average pay per hour. It updates itself.
+- **Shifts** tab: Date, Day, Month, Clock in, Clock out, Hours, Tips, Earned (wages only), newest first, with currency formats. The `id`, `start` and `end` columns are hidden; the app needs them, so don't delete them.
+- **Summary** tab (made automatically): hours, tips, earnings (wages, tips kept separate) and shift count per month, plus all-time totals and average pay per hour. It updates itself.
 - If you used an older version of the script, its tab is kept as "Shifts (old …)" and a fresh one is created. In the app, tap **Upload all** afterwards.
