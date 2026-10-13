@@ -7,21 +7,61 @@
  */
 const SECRET = "CHANGE-ME-TO-SOMETHING-LONG";   // use 24+ random characters; never share or commit it
 const SHEET_NAME = "Shifts";
-const HEADERS = ["id", "date", "in", "out", "hours", "earned", "start", "end", "tips"];
+const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned (incl. tips)", "start", "end"];
+const COL = { START: 10, END: 11, TIP: 8 };   // 1-based columns the app reads back
 const MAX_BULK = 5000;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+// Looks only: header colours, number formats, hidden technical columns. Never blocks syncing if it fails.
+function style_(sh) {
+  try {
+    const h = sh.getRange(1, 1, 1, HEADERS.length);
+    h.setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
+    sh.setFrozenRows(1);
+    sh.getRange("A:F").setNumberFormat("@");            // plain text: nothing is ever evaluated as a formula
+    sh.getRange("G:G").setNumberFormat("0.00");
+    sh.getRange("H:I").setNumberFormat("$#,##0.00");
+    sh.hideColumns(1); sh.hideColumns(10, 2);             // id, start, end stay in the sheet but out of sight
+    sh.setColumnWidth(2, 110); sh.setColumnWidths(5, 2, 90); sh.setColumnWidths(7, 3, 95);
+  } catch (_) {}
+}
+
+// A live "Summary" tab: monthly hours / tips / earnings plus all-time totals. Formulas only, written once.
+function summary_(ss) {
+  try {
+    if (ss.getSheetByName("Summary")) return;
+    const s = ss.insertSheet("Summary");
+    s.getRange("A1:E1").setValues([["Month", "Hours", "Tips", "Earned (incl. tips)", "Shifts"]]);
+    s.getRange("A2").setFormula('=IFERROR(SORT(UNIQUE(FILTER(Shifts!D2:D,Shifts!D2:D<>"")),1,FALSE),"")');
+    s.getRange("B2").setFormula('=ARRAYFORMULA(IF(A2:A="","",SUMIF(Shifts!D:D,A2:A,Shifts!G:G)))');
+    s.getRange("C2").setFormula('=ARRAYFORMULA(IF(A2:A="","",SUMIF(Shifts!D:D,A2:A,Shifts!H:H)))');
+    s.getRange("D2").setFormula('=ARRAYFORMULA(IF(A2:A="","",SUMIF(Shifts!D:D,A2:A,Shifts!I:I)))');
+    s.getRange("E2").setFormula('=ARRAYFORMULA(IF(A2:A="","",COUNTIF(Shifts!D:D,A2:A)))');
+    s.getRange("G1:H1").setValues([["All time", ""]]);
+    s.getRange("G2:G6").setValues([["Hours"], ["Tips"], ["Earned"], ["Shifts"], ["Average per hour"]]);
+    s.getRange("H2").setFormula("=SUM(Shifts!G2:G)");
+    s.getRange("H3").setFormula("=SUM(Shifts!H2:H)");
+    s.getRange("H4").setFormula("=SUM(Shifts!I2:I)");
+    s.getRange("H5").setFormula("=COUNTA(Shifts!A2:A)");
+    s.getRange("H6").setFormula("=IFERROR(H4/H2,0)");
+    s.getRange("B2:B").setNumberFormat("0.00"); s.getRange("C2:D").setNumberFormat("$#,##0.00");
+    s.getRange("H2").setNumberFormat("0.00"); s.getRange("H3:H4").setNumberFormat("$#,##0.00"); s.getRange("H6").setNumberFormat("$#,##0.00");
+    s.getRange("A1:E1").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
+    s.getRange("G1:H1").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
+    s.setFrozenRows(1); s.setColumnWidths(1, 5, 120); s.setColumnWidth(7, 130);
+  } catch (_) {}
+}
 
 function sheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(SHEET_NAME);
-  if (!sh) sh = ss.insertSheet(SHEET_NAME);
-  if (sh.getLastRow() === 0) {
-    sh.appendRow(HEADERS);
-    sh.setFrozenRows(1);
-    sh.getRange("A:D").setNumberFormat("@"); // plain text: nothing is ever evaluated as a formula
-  } else if (!sh.getRange(1, 9).getValue()) {
-    sh.getRange(1, 9).setValue("tips");      // older sheets: add the tips column
+  // An older layout? Keep it as a backup tab and start a fresh one (the app re-uploads everything).
+  if (sh && sh.getLastRow() > 0 && sh.getRange(1, 1, 1, HEADERS.length).getValues()[0].join("|") !== HEADERS.join("|")) {
+    sh.setName(SHEET_NAME + " (old " + Utilities.formatDate(new Date(), "UTC", "yyyy-MM-dd HHmm") + ")");
+    sh = null;
   }
+  if (!sh) sh = ss.insertSheet(SHEET_NAME);
+  if (sh.getLastRow() === 0) { sh.appendRow(HEADERS); style_(sh); summary_(ss); }
   return sh;
 }
 
@@ -44,9 +84,9 @@ function clean_(s) {
   const start = Number(s.start), end = Number(s.end);
   if (!isFinite(start) || !isFinite(end) || start < 9.46e11 || end < start || end - start > 7 * 864e5) return null;
   const txt = v => String(v == null ? "" : v).replace(/[^\w ,:.\-\/]/g, "").slice(0, 40);
-  return [String(s.id), txt(s.date), txt(s.in), txt(s.out),
-          Math.round((Number(s.hours) || 0) * 100) / 100, Math.round((Number(s.earned) || 0) * 100) / 100, start, end,
-          Math.round(Math.min(Math.max(Number(s.tips) || 0, 0), 100000) * 100) / 100];
+  const tips = Math.round(Math.min(Math.max(Number(s.tips) || 0, 0), 100000) * 100) / 100;
+  return [String(s.id), txt(s.date), txt(s.day), txt(s.month), txt(s.in), txt(s.out),
+          Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end];
 }
 
 function idMap_(sh) {
@@ -80,8 +120,8 @@ function doPost(e) {
     if (b.action === "list") {
       const n = sh.getLastRow() - 1;
       const rows = n > 0 ? sh.getRange(2, 1, n, HEADERS.length).getValues() : [];
-      return out_({ ok: true, shifts: rows.filter(r => r[0] && r[6] && r[7])
-        .map(r => ({ id: String(r[0]), start: Number(r[6]), end: Number(r[7]), tip: Number(r[8]) || 0 })) });
+      return out_({ ok: true, shifts: rows.filter(r => r[0] && r[9] && r[10])
+        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0 })) });
     }
 
     if (b.action === "upsert" || b.action === "bulk") {
@@ -95,6 +135,7 @@ function doPost(e) {
         else fresh.push(r);
       });
       if (fresh.length) sh.getRange(sh.getLastRow() + 1, 1, fresh.length, HEADERS.length).setValues(fresh);
+      try { sh.getRange(2, 1, sh.getLastRow() - 1, HEADERS.length).sort({ column: 10, ascending: false }); } catch (_) {}   // newest first
       return out_({ ok: true, count: rows.length });
     }
 

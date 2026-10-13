@@ -522,7 +522,7 @@ $("anaNext").onclick=()=>{ if(anaOff<0){ anaOff++; renderAnalytics(); } };
 function syncCfg(){ return db.sync || (db.sync = {url:"", secret:"", enabled:false}); }
 function shiftPayload(s, rate){
   const h=hrs(s); if(rate==null) rate=db.rate;
-  return {id:s.id, date:fmtDate(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
+  return {id:s.id, date:fmtDate(s.start), day:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(s.start).getDay()], month:monthKey(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
           hours:Math.round(h*100)/100, earned:Math.round((h*rate+(s.tip||0))*100)/100, tips:s.tip||0, start:s.start, end:s.end};
 }
 // Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
@@ -856,7 +856,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.12.10";
+const APP_VERSION="2026.10.13.1";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
