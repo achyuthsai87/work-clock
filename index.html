@@ -166,7 +166,10 @@
     </div>
     <div class="pay-note">Earned is hours &times; rate. Tips are yours and aren't counted as owed.</div>
     <button id="payAdd" class="big-btn pay-btn">+ Log a payment</button>
+    <div style="text-align:center"><button id="stmtBtn" class="link">Pay statement for the owner</button></div>
   </div>
+  <div class="card warn" id="payDue" style="display:none"><div class="pay-h">Overdue</div><div id="payDueTxt"></div></div>
+  <div class="card" id="taxCard" style="display:none"><div class="pay-h">Set aside for tax</div><div id="taxTxt"></div></div>
   <div class="card">
     <div class="pay-h" id="payMonthLabel">This month</div>
     <div class="stats">
@@ -183,6 +186,8 @@
 <div class="card">
     <div style="font-weight:700; margin-bottom:4px">Settings</div>
     <div class="settings-row"><span>Pay rate ($/hour)</span><input id="rateInput" type="number" min="0" step="0.25" inputmode="decimal"></div>
+    <div class="settings-row"><span>Payday (day of month)</span><input id="paydayInput" type="number" min="1" max="28" step="1" inputmode="numeric" placeholder="off"></div>
+    <div class="settings-row"><span>Set aside for tax (%)</span><input id="taxInput" type="number" min="0" max="60" step="1" inputmode="decimal" placeholder="off"></div>
     <div class="settings-row"><span>Weekly goal ($)</span><input id="goalInput" type="number" min="0" step="10" inputmode="decimal" placeholder="none"></div>
     <div class="settings-row"><span>Appearance</span><span class="seg" id="themeSeg"><button data-t="auto">Auto</button><button data-t="light">Light</button><button data-t="dark">Dark</button></span></div>
     <div class="settings-row"><span>Export</span><span><button class="icon-btn" id="csvBtn">CSV</button><button class="icon-btn" id="xlsxBtn">Excel</button><button class="icon-btn" id="jsonBtn">Backup</button></span></div>
@@ -224,6 +229,23 @@
     <button data-tab="pay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15v-4"/><path d="M21 12v5h-4a2.5 2.5 0 0 1 0-5z"/></svg><span>Pay</span></button>
     <button data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
   </nav>
+</div>
+
+<div class="modal-bg" id="stmtBg">
+  <div class="modal">
+    <h2>Pay statement</h2>
+    <div class="field"><label>From</label><input type="date" id="stmtFrom"></div>
+    <div class="field"><label>To</label><input type="date" id="stmtTo"></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="stmtCancel">Cancel</button>
+      <button class="btn primary" id="stmtGo">Create</button>
+    </div>
+  </div>
+</div>
+
+<div id="stmt" class="stmt" hidden>
+  <div class="stmt-bar"><button class="btn ghost" id="stmtClose">Close</button><button class="btn ghost" id="stmtCopy">Copy text</button><button class="btn primary" id="stmtPrint">Print / PDF</button></div>
+  <div class="stmt-page" id="stmtPage"></div>
 </div>
 
 <div class="modal-bg" id="payBg">

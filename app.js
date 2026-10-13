@@ -31,6 +31,8 @@ function cleanCore(d){   // the user's data only (shifts + display prefs)
   const g = Number(d.goal); if(Number.isFinite(g) && g > 0 && g <= 1000000) out.goal = g;
   if(["auto","light","dark"].includes(d.theme)) out.theme = d.theme;
   if(["week","month","year"].includes(d.anaPeriod)) out.anaPeriod = d.anaPeriod;
+  const pd = Math.round(Number(d.payday)); if(Number.isFinite(pd) && pd >= 1 && pd <= 28) out.payday = pd;
+  const tx = Number(d.taxPct); if(Number.isFinite(tx) && tx > 0 && tx <= 60) out.taxPct = tx;
   const seen = new Set();
   (Array.isArray(d.shifts) ? d.shifts : []).slice(0, 50000).forEach(x => { const c = cleanShift(x); if(c && !seen.has(c.id)){ seen.add(c.id); out.shifts.push(c); } });
   const ps = new Set(); out.payments = [];
@@ -40,6 +42,8 @@ function cleanCore(d){   // the user's data only (shifts + display prefs)
 function cleanEvent(e, rate){
   if(!e || typeof e !== "object") return null;
   if(e.action === "delete" && ID_RE.test(String(e.id))) return {action:"delete", id:String(e.id)};
+  if(e.action === "pdelete" && ID_RE.test(String(e.id))) return {action:"pdelete", id:String(e.id)};
+  if(e.action === "pupsert" && e.payment){ const c = cleanPayment(e.payment); if(c) return {action:"pupsert", payment:payPayload(c)}; }
   if(e.action === "upsert" && e.shift){ const c = cleanShift(e.shift); if(c && c.end) return {action:"upsert", shift:shiftPayload(c, rate)}; }
   return null;
 }
@@ -94,7 +98,7 @@ function render(){
     const tick=()=>{ const el=(Date.now()-open.start)/1000;
       const h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
       line.innerHTML='<span class="dot"></span>Clocked in at <b>'+esc(fmtTime(open.start))+"</b> · <b>"+
-        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"</b> elapsed"; };
+        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"</b> elapsed"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':''); };
     tick(); clearInterval(timer); timer=setInterval(tick,1000);
   } else {
     btn.textContent="Clock In"; btn.classList.remove("out"); cancel.style.display="none";
@@ -456,6 +460,9 @@ $("hm").addEventListener("click",e=>{ const i=e.target.closest("i"); if(!i) retu
   const t=Number(i.dataset.t), v=heatData[dayKey(t)];
   $("hmInfo").textContent=fmtDate(t)+" · "+(v ? v.h.toFixed(1)+"h · "+money(v.e) : (t>Date.now()?"upcoming":"no shifts")); });
 $("factBtn").addEventListener("click",()=>{ factIdx++; renderFun(); });
+$("paydayInput").value=db.payday||""; $("taxInput").value=db.taxPct||"";
+$("paydayInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>=1&&v<=28) db.payday=v; else delete db.payday; e.target.value=db.payday||""; save(); renderPay(); });
+$("taxInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); if(Number.isFinite(v)&&v>0) db.taxPct=Math.min(v,60); else delete db.taxPct; e.target.value=db.taxPct||""; save(); renderPay(); });
 $("goalInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); db.goal=(Number.isFinite(v)&&v>0)?Math.min(v,1000000):0; if(!db.goal) delete db.goal; save(); renderAnalytics(); });
 $("goalSet").addEventListener("click",()=>{ document.querySelector('.tabbar [data-tab="settings"]').click(); setTimeout(()=>$("goalInput").focus(),350); });
 
@@ -535,6 +542,7 @@ function shiftPayload(s, rate){
   return {id:s.id, date:fmtDate(s.start), day:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(s.start).getDay()], month:monthKey(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
           hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, start:s.start, end:s.end};
 }
+function payPayload(p){ return {id:p.id, date:fmtDate(p.ts), month:monthKey(p.ts), amount:p.amount, note:p.note, ts:p.ts}; }
 // Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
 async function syncCall(body){
   const c=syncCfg();
@@ -566,11 +574,15 @@ async function flushOutbox(){
   if(!c.enabled || !c.url || !db.outbox.length || !navigator.onLine){ updateSyncStatus(); return; }
   flushing=true;
   try{
+    let warn="";
     while(db.outbox.length){
-      await syncCall(db.outbox[0]);
+      const ev=db.outbox[0];
+      try{ await syncCall(ev); }
+      catch(e){ if(e.message==="Unknown action" && /^p/.test(ev.action)){ db.outbox.shift(); warn="Update the script (Code.gs) to sync payments"; save(); continue; } throw e; }
       db.outbox.shift();
       db.lastSync=Date.now(); c.err=""; save();
     }
+    if(warn){ c.err=warn; save(); }
   }catch(e){ if(!e.offline) c.err=e.message; save(); }   // remaining events stay queued
   flushing=false;
   updateSyncStatus();
@@ -586,12 +598,19 @@ async function syncPull(){
     if(!c || !c.end || have.has(c.id) || pendingDel.has(c.id)) return;
     have.add(c.id); db.shifts.push(c); added++;
   });
+  try{
+    const pj=await syncCall({action:"plist"}), haveP=new Set(pays().map(x=>x.id));
+    const pendingPDel=new Set((db.outbox||[]).filter(e=>e.action==="pdelete").map(e=>e.id));
+    (Array.isArray(pj.payments)?pj.payments:[]).slice(0,20000).forEach(r=>{ const c=cleanPayment(r); if(!c||haveP.has(c.id)||pendingPDel.has(c.id)) return; haveP.add(c.id); pays().push(c); added++; });
+  }catch(e){ if(e.message!=="Unknown action") throw e; }
   if(added){ save(); render(); }
   return added;
 }
 async function syncUploadAll(){
   const list=db.shifts.filter(x=>x.end).map(shiftPayload);
   await syncCall({action:"bulk", shifts:list});
+  const pl=pays().map(payPayload);
+  if(pl.length){ try{ await syncCall({action:"pbulk", payments:pl}); }catch(e){ if(e.message==="Unknown action") throw new Error("Shifts uploaded. Update the script (Code.gs) to sync payments too."); throw e; } }
   return list.length;
 }
 async function syncRun(label, fn){
@@ -825,7 +844,7 @@ $("csvBtn").onclick=()=>{
   });
   download("workclock.csv",csv,"text/csv");
 };
-$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, shifts:db.shifts, payments:db.payments||[]},null,2),"application/json");  // never includes sync URL/secret
+$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, taxPct:db.taxPct, shifts:db.shifts, payments:db.payments||[]},null,2),"application/json");  // never includes sync URL/secret
 $("importBtn").onclick=()=>$("importFile").click();
 $("importFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -841,7 +860,7 @@ $("importFile").addEventListener("change",e=>{
   r.readAsText(f); e.target.value="";
 });
 $("wipeBtn").onclick=()=>{ if(confirm("Delete ALL shifts and payments and reset? This can't be undone.")){
-  const keep={rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
+  const keep={rate:db.rate, goal:db.goal, payday:db.payday, taxPct:db.taxPct, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
   db=Object.assign({shifts:[], outbox:[]}, keep); save(); render(); updateSyncStatus(); }};
 
 // google sheets sync settings
@@ -1057,8 +1076,28 @@ function renderPay(){
     r.className="prow"; m.textContent=money(p.amount); n.textContent=fmtDate(p.ts)+(p.note?" \u00b7 "+p.note:"");
     a.appendChild(m); a.appendChild(document.createElement("br")); a.appendChild(n);
     e.className="icon-btn"; e.textContent="Edit"; e.onclick=()=>openPay(p); d.className="icon-btn danger"; d.textContent="Delete";
-    d.onclick=()=>{ if(confirm("Delete this payment?")){ db.payments=pays().filter(x=>x.id!==p.id); save(); render(); } };
+    d.onclick=()=>{ if(confirm("Delete this payment?")){ db.payments=pays().filter(x=>x.id!==p.id); save(); render(); queueSync({action:"pdelete", id:p.id}); } };
     b.appendChild(e); b.appendChild(d); r.appendChild(a); r.appendChild(b); lb.appendChild(r); });
+  renderPayExtras(done, P, recv);
+}
+function renderPayExtras(done, P, recv){
+  // overdue: wages for work done before the most recent payday, minus everything received so far
+  const due=$("payDue"); due.style.display="none";
+  if(db.payday){
+    const now=new Date(), pd=new Date(now.getFullYear(), now.getMonth(), db.payday);
+    if(pd.getTime()>now.getTime()) pd.setMonth(pd.getMonth()-1);
+    const cut=pd.getTime(), wages=done.filter(s=>s.start<cut).reduce((a,s)=>a+pay(s),0), over=Math.round((wages-recv)*100)/100;
+    if(over>0.004){ const days=Math.floor((Date.now()-cut)/86400000);
+      $("payDueTxt").textContent=money(over)+" was due on "+fmtDate(cut)+(days>0?" ("+days+" day"+(days===1?"":"s")+" ago).":" (today)."); due.style.display="block"; }
+  }
+  // tax set-aside on this month's wages + tips
+  const tc=$("taxCard"); tc.style.display="none";
+  if(db.taxPct){
+    const mk=monthKey(Date.now()); let w=0,t=0, aw=0, at=0;
+    db.shifts.forEach(s=>{ const tp=tipOf(s); at+=tp; if(s.end) aw+=pay(s); if(monthKey(s.start)===mk){ t+=tp; if(s.end) w+=pay(s); } });
+    $("taxTxt").textContent="Keep "+money((w+t)*db.taxPct/100)+" aside from "+monthLabel(mk)+" ("+db.taxPct+"% of "+money(w+t)+" wages + tips). All time: "+money((aw+at)*db.taxPct/100)+".";
+    tc.style.display="block";
+  }
 }
 let payEditing=null;
 function openPay(p){
@@ -1078,8 +1117,60 @@ $("paySave").onclick=()=>{
   const ts=new Date(dv+"T12:00:00").getTime(), note=$("payNote").value;
   const c=cleanPayment({id:payEditing||uid(), ts, amount:amt, note}); if(!c){ alert("That payment doesn't look right."); return; }
   if(payEditing){ const i=pays().findIndex(x=>x.id===payEditing); if(i>=0) db.payments[i]=c; else pays().push(c); } else pays().push(c);
-  save(); closePay(); render();
+  save(); closePay(); render(); queueSync({action:"pupsert", payment:payPayload(c)});
 };
+
+// ---------- Pay statement (for the owner): shifts, wages, tips, payments and the balance ----------
+function buildStatement(fromTs, toTs){
+  const done=db.shifts.filter(s=>s.end).sort((a,b)=>a.start-b.start);
+  const inR=done.filter(s=>s.start>=fromTs && s.start<=toTs);
+  const hours=inR.reduce((a,s)=>a+hrs(s),0), wages=inR.reduce((a,s)=>a+pay(s),0), tips=inR.reduce((a,s)=>a+tipOf(s),0);
+  const earnedTo=done.filter(s=>s.start<=toTs).reduce((a,s)=>a+pay(s),0);
+  const paidTo=pays().filter(p=>p.ts<=toTs).reduce((a,p)=>a+p.amount,0);
+  const payIn=pays().filter(p=>p.ts>=fromTs && p.ts<=toTs).sort((a,b)=>a.ts-b.ts);
+  return {inR, hours, wages, tips, earnedTo, paidTo, owed:Math.round((earnedTo-paidTo)*100)/100, payIn, fromTs, toTs};
+}
+function statementText(S){
+  const L=["Pay statement "+fmtDate(S.fromTs)+" to "+fmtDate(S.toTs), "Rate: "+money(db.rate)+"/hr", ""];
+  S.inR.forEach(s=>L.push(fmtDate(s.start)+"  "+fmtTime(s.start)+" - "+fmtTime(s.end)+"  "+hrs(s).toFixed(2)+"h  "+money(pay(s))));
+  L.push("", "Hours: "+S.hours.toFixed(2), "Wages: "+money(S.wages));
+  if(S.tips>0) L.push("Tips (kept by me): "+money(S.tips));
+  if(S.payIn.length){ L.push("", "Payments received:"); S.payIn.forEach(p=>L.push(fmtDate(p.ts)+"  "+money(p.amount)+(p.note?"  "+p.note:""))); }
+  L.push("", "Wages earned through "+fmtDate(S.toTs)+": "+money(S.earnedTo), "Paid through "+fmtDate(S.toTs)+": "+money(S.paidTo), S.owed>0.004?"Balance owed: "+money(S.owed):S.owed<-0.004?"Paid ahead: "+money(-S.owed):"Balance: paid in full");
+  return L.join("\n");
+}
+let stmtText="";
+function showStatement(S){
+  stmtText=statementText(S);
+  const pg=$("stmtPage"); pg.textContent="";
+  const el=(tag,txt,cls)=>{ const e=document.createElement(tag); if(txt!=null) e.textContent=txt; if(cls) e.className=cls; return e; };
+  pg.appendChild(el("h1","Pay statement"));
+  pg.appendChild(el("div",fmtDate(S.fromTs)+" \u2013 "+fmtDate(S.toTs)+" \u00b7 Rate "+money(db.rate)+"/hr","muted"));
+  const tb=el("table"), hd=el("tr"); ["Date","In","Out","Hours","Wages"].forEach(h=>hd.appendChild(el("th",h))); tb.appendChild(hd);
+  S.inR.forEach(s=>{ const r=el("tr"); [fmtDate(s.start),fmtTime(s.start),fmtTime(s.end),hrs(s).toFixed(2),money(pay(s))].forEach(v=>r.appendChild(el("td",v))); tb.appendChild(r); });
+  if(!S.inR.length){ const r=el("tr"), c=el("td","No shifts in this period"); c.colSpan=5; r.appendChild(c); tb.appendChild(r); }
+  pg.appendChild(tb);
+  const sum=(l,v,b)=>{ const r=el("div",null,"srow"+(b?" b":"")); r.appendChild(el("span",l)); r.appendChild(el("span",v)); pg.appendChild(r); };
+  sum("Hours",S.hours.toFixed(2)); sum("Wages",money(S.wages)); if(S.tips>0) sum("Tips (kept by me, not owed)",money(S.tips));
+  if(S.payIn.length){ pg.appendChild(el("h2","Payments received")); S.payIn.forEach(p=>sum(fmtDate(p.ts)+(p.note?" \u00b7 "+p.note:""),money(p.amount))); }
+  pg.appendChild(el("h2","Balance as of "+fmtDate(S.toTs)));
+  sum("Wages earned (all shifts through this date)",money(S.earnedTo)); sum("Paid (all payments through this date)",money(S.paidTo));
+  sum(S.owed>0.004?"Balance owed":S.owed<-0.004?"Paid ahead":"Balance", S.owed>0.004?money(S.owed):S.owed<-0.004?money(-S.owed):"Paid in full \u2713", true);
+  $("stmt").hidden=false; document.body.classList.add("stmt-open");
+}
+function closeStmt(){ $("stmt").hidden=true; document.body.classList.remove("stmt-open"); }
+$("stmtBtn").onclick=()=>{ const n=new Date(); $("stmtFrom").value=dayKey(new Date(n.getFullYear(),n.getMonth(),1).getTime()); $("stmtTo").value=dayKey(Date.now()); $("stmtBg").classList.add("open"); };
+$("stmtCancel").onclick=()=>$("stmtBg").classList.remove("open");
+$("stmtBg").addEventListener("click",e=>{ if(e.target===$("stmtBg")) $("stmtBg").classList.remove("open"); });
+$("stmtGo").onclick=()=>{
+  const f=$("stmtFrom").value, t=$("stmtTo").value; if(!f||!t){ alert("Pick both dates."); return; }
+  const a=new Date(f+"T00:00:00").getTime(), b=new Date(t+"T23:59:59").getTime(); if(!(b>=a)){ alert("The end date is before the start date."); return; }
+  $("stmtBg").classList.remove("open"); showStatement(buildStatement(a,b));
+};
+$("stmtClose").onclick=closeStmt;
+$("stmtPrint").onclick=()=>window.print();
+$("stmtCopy").onclick=async()=>{ try{ await navigator.clipboard.writeText(stmtText); $("stmtCopy").textContent="Copied \u2713"; setTimeout(()=>$("stmtCopy").textContent="Copy text",1500); }catch(_){ alert("Couldn't copy. Use Print / PDF instead."); } };
+sheetDrag($("stmtBg"), ()=>$("stmtBg").classList.remove("open"));
 
 // tab bar
 document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{

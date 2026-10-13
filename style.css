@@ -345,3 +345,19 @@ html[data-theme="dark"] .btn.primary{color:#0c1020;}
 .prow small{color:var(--muted);font-size:12px}
 .chip2{display:inline-block;padding:5px 10px;border-radius:99px;font-size:12px;font-weight:700;background:var(--chip);white-space:nowrap}
 .chip2.bad{color:var(--red)} .chip2.good{color:var(--green)}
+
+.long{margin-top:6px;color:var(--red);font-weight:600;font-size:13px}
+.card.warn{border:1px solid var(--red)} .card.warn .pay-h{color:var(--red)}
+.stmt{position:fixed;inset:0;z-index:90;background:#fff;color:#111;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.stmt[hidden]{display:none}
+.stmt-bar{position:sticky;top:0;display:flex;gap:8px;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;background:#f2f4f8;border-bottom:1px solid #dde2ea}
+.stmt-bar .btn{flex:1;padding:10px 6px}
+.stmt-page{max-width:640px;margin:0 auto;padding:18px 18px 60px;font-size:14px}
+.stmt-page h1{font-size:24px;margin:0 0 4px} .stmt-page h2{font-size:15px;margin:20px 0 6px}
+.stmt-page .muted{color:#667;margin-bottom:14px}
+.stmt-page table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.stmt-page th,.stmt-page td{text-align:left;padding:6px 4px;border-bottom:1px solid #e3e7ee;font-size:13px}
+.stmt-page .srow{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #eef0f4}
+.stmt-page .srow.b{font-weight:800;font-size:16px;border-bottom:0;border-top:2px solid #111;margin-top:6px}
+@media print{ body.stmt-open>*:not(#stmt){display:none!important} .stmt{position:static;overflow:visible} .stmt-bar{display:none} }
+.stmt-bar .btn.ghost{background:#e4e8f0;color:#111}

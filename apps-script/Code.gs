@@ -26,29 +26,60 @@ function style_(sh) {
   } catch (_) {}
 }
 
-// A live "Summary" tab: monthly hours / tips / earnings plus all-time totals. Formulas only, written once.
+const PAY_SHEET = "Payments";
+const PAY_HEADERS = ["id", "Date", "Month", "Amount", "Note", "ts"];
+
+function payStyle_(p) {
+  try {
+    p.getRange(1, 1, 1, PAY_HEADERS.length).setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
+    p.setFrozenRows(1);
+    p.getRange("A:C").setNumberFormat("@"); p.getRange("E:E").setNumberFormat("@");
+    p.getRange("D:D").setNumberFormat("$#,##0.00");
+    p.hideColumns(1); p.hideColumns(6);
+    p.setColumnWidth(2, 110); p.setColumnWidth(5, 200);
+  } catch (_) {}
+}
+
+function paySheet_(ss) {
+  let p = ss.getSheetByName(PAY_SHEET);
+  if (!p) p = ss.insertSheet(PAY_SHEET);
+  if (p.getLastRow() === 0) { p.appendRow(PAY_HEADERS); payStyle_(p); }
+  return p;
+}
+
+// A live "Summary" tab: per month hours / tips / earned / received / balance, plus all-time totals. Formulas only.
+// Rebuilt automatically when the layout version below changes.
 function summary_(ss) {
   try {
-    if (ss.getSheetByName("Summary")) return;
-    const s = ss.insertSheet("Summary");
-    s.getRange("A1:E1").setValues([["Month", "Hours", "Tips", "Earned", "Shifts"]]);
-    s.getRange("A2").setFormula('=IFERROR(SORT(UNIQUE(FILTER(Shifts!D2:D,Shifts!D2:D<>"")),1,FALSE),"")');
-    s.getRange("B2").setFormula('=ARRAYFORMULA(IF(A2:A="","",SUMIF(Shifts!D:D,A2:A,Shifts!G:G)))');
-    s.getRange("C2").setFormula('=ARRAYFORMULA(IF(A2:A="","",SUMIF(Shifts!D:D,A2:A,Shifts!H:H)))');
-    s.getRange("D2").setFormula('=ARRAYFORMULA(IF(A2:A="","",SUMIF(Shifts!D:D,A2:A,Shifts!I:I)))');
-    s.getRange("E2").setFormula('=ARRAYFORMULA(IF(A2:A="","",COUNTIF(Shifts!D:D,A2:A)))');
-    s.getRange("G1:H1").setValues([["All time", ""]]);
-    s.getRange("G2:G6").setValues([["Hours"], ["Tips"], ["Earned"], ["Shifts"], ["Average per hour"]]);
-    s.getRange("H2").setFormula("=SUM(Shifts!G2:G)");
-    s.getRange("H3").setFormula("=SUM(Shifts!H2:H)");
-    s.getRange("H4").setFormula("=SUM(Shifts!I2:I)");
-    s.getRange("H5").setFormula("=COUNTA(Shifts!A2:A)");
-    s.getRange("H6").setFormula("=IFERROR(H4/H2,0)");
-    s.getRange("B2:B").setNumberFormat("0.00"); s.getRange("C2:D").setNumberFormat("$#,##0.00");
-    s.getRange("H2").setNumberFormat("0.00"); s.getRange("H3:H4").setNumberFormat("$#,##0.00"); s.getRange("H6").setNumberFormat("$#,##0.00");
-    s.getRange("A1:E1").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
-    s.getRange("G1:H1").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
-    s.setFrozenRows(1); s.setColumnWidths(1, 5, 120); s.setColumnWidth(7, 130);
+    let s = ss.getSheetByName("Summary");
+    if (s && s.getRange("K1").getValue() === "v2") return;
+    if (!s) s = ss.insertSheet("Summary"); else s.clear();
+    s.getRange("A1:G1").setValues([["Month", "Hours", "Tips", "Earned", "Received", "Balance", "Shifts"]]);
+    const MON = 'UNIQUE({Shifts!D2:D;Payments!C2:C})';
+    s.getRange("A2").setFormula('=IFERROR(SORT(FILTER(' + MON + ',' + MON + '<>""),1,FALSE),"")');
+    const sumif = (col, sheetName, rngCol) => '=ARRAYFORMULA(IF(A2:A="","",SUMIF(' + sheetName + '!' + col + ',A2:A,' + sheetName + '!' + rngCol + ')))';
+    s.getRange("B2").setFormula(sumif("D:D", "Shifts", "G:G"));
+    s.getRange("C2").setFormula(sumif("D:D", "Shifts", "H:H"));
+    s.getRange("D2").setFormula(sumif("D:D", "Shifts", "I:I"));
+    s.getRange("E2").setFormula(sumif("C:C", "Payments", "D:D"));
+    s.getRange("F2").setFormula('=ARRAYFORMULA(IF(A2:A="","",D2:D-E2:E))');
+    s.getRange("G2").setFormula('=ARRAYFORMULA(IF(A2:A="","",COUNTIF(Shifts!D:D,A2:A)))');
+    s.getRange("I1:J1").setValues([["All time", ""]]);
+    s.getRange("I2:I8").setValues([["Hours"], ["Tips"], ["Earned"], ["Received"], ["Still owed"], ["Shifts"], ["Average per hour"]]);
+    s.getRange("J2").setFormula("=SUM(Shifts!G2:G)");
+    s.getRange("J3").setFormula("=SUM(Shifts!H2:H)");
+    s.getRange("J4").setFormula("=SUM(Shifts!I2:I)");
+    s.getRange("J5").setFormula("=SUM(Payments!D2:D)");
+    s.getRange("J6").setFormula("=J4-J5");
+    s.getRange("J7").setFormula("=COUNTA(Shifts!A2:A)");
+    s.getRange("J8").setFormula("=IFERROR(J4/J2,0)");
+    s.getRange("B2:B").setNumberFormat("0.00"); s.getRange("C2:F").setNumberFormat("$#,##0.00");
+    s.getRange("J2").setNumberFormat("0.00"); s.getRange("J3:J6").setNumberFormat("$#,##0.00"); s.getRange("J8").setNumberFormat("$#,##0.00");
+    s.getRange("A1:G1").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
+    s.getRange("I1:J1").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
+    s.getRange("I6:J6").setFontWeight("bold");
+    s.setFrozenRows(1); s.setColumnWidths(1, 7, 105); s.setColumnWidth(9, 130); s.setColumnWidth(10, 100);
+    s.getRange("K1").setValue("v2").setFontColor("#ffffff");
   } catch (_) {}
 }
 
@@ -61,7 +92,9 @@ function sheet_() {
     sh = null;
   }
   if (!sh) sh = ss.insertSheet(SHEET_NAME);
-  if (sh.getLastRow() === 0) { sh.appendRow(HEADERS); style_(sh); summary_(ss); }
+  if (sh.getLastRow() === 0) { sh.appendRow(HEADERS); style_(sh); }
+  paySheet_(ss);
+  summary_(ss);
   return sh;
 }
 
@@ -87,6 +120,15 @@ function clean_(s) {
   const tips = Math.round(Math.min(Math.max(Number(s.tips) || 0, 0), 100000) * 100) / 100;
   return [String(s.id), txt(s.date), txt(s.day), txt(s.month), txt(s.in), txt(s.out),
           Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end];
+}
+
+// Payments the owner made to you.
+function cleanPay_(p) {
+  if (!p || typeof p !== "object" || !ID_RE.test(String(p.id))) return null;
+  const ts = Number(p.ts), amt = Math.round(Number(p.amount) * 100) / 100;
+  if (!isFinite(ts) || ts < 9.46e11 || !isFinite(amt) || amt <= 0 || amt > 1e7) return null;
+  const txt = (v, n) => String(v == null ? "" : v).replace(/[^\w ,:.\-\/]/g, "").slice(0, n);
+  return [String(p.id), txt(p.date, 40), txt(p.month, 10), amt, txt(p.note, 60), ts];
 }
 
 function idMap_(sh) {
@@ -122,6 +164,30 @@ function doPost(e) {
       const rows = n > 0 ? sh.getRange(2, 1, n, HEADERS.length).getValues() : [];
       return out_({ ok: true, shifts: rows.filter(r => r[0] && r[9] && r[10])
         .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0 })) });
+    }
+
+    if (b.action === "plist") {
+      const p = paySheet_(SpreadsheetApp.getActiveSpreadsheet()), n = p.getLastRow() - 1;
+      const rows = n > 0 ? p.getRange(2, 1, n, PAY_HEADERS.length).getValues() : [];
+      return out_({ ok: true, payments: rows.filter(r => r[0] && r[5])
+        .map(r => ({ id: String(r[0]), ts: Number(r[5]), amount: Number(r[3]) || 0, note: String(r[4] || "") })) });
+    }
+
+    if (b.action === "pupsert" || b.action === "pbulk") {
+      const raw = b.action === "pbulk" ? b.payments : [b.payment];
+      if (!Array.isArray(raw) || raw.length > MAX_BULK) return out_({ ok: false, error: "Bad request" });
+      const p = paySheet_(SpreadsheetApp.getActiveSpreadsheet()), rows = raw.map(cleanPay_).filter(Boolean);
+      const map = idMap_(p), fresh = [];
+      rows.forEach(r => { const at = map[r[0]]; if (at) p.getRange(at, 1, 1, PAY_HEADERS.length).setValues([r]); else fresh.push(r); });
+      if (fresh.length) p.getRange(p.getLastRow() + 1, 1, fresh.length, PAY_HEADERS.length).setValues(fresh);
+      return out_({ ok: true, count: rows.length });
+    }
+
+    if (b.action === "pdelete") {
+      if (!ID_RE.test(String(b.id))) return out_({ ok: false, error: "Bad request" });
+      const p = paySheet_(SpreadsheetApp.getActiveSpreadsheet()), r = idMap_(p)[String(b.id)];
+      if (r) p.deleteRow(r);
+      return out_({ ok: true });
     }
 
     if (b.action === "upsert" || b.action === "bulk") {
