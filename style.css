@@ -216,6 +216,9 @@ html[data-theme="dark"] .btn.primary{color:#0c1020;}
 .field input,.settings-row input{background:var(--input-bg); border:1px solid var(--field-bd); border-radius:14px; box-shadow:none;
   -webkit-backdrop-filter:none; backdrop-filter:none;}
 .field input:focus,.settings-row input:focus,.settings-row select:focus{outline:2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset:1px;}
+.settings-row{padding:12px 2px;}
+.settings-row + .settings-row{border-top:1px solid color-mix(in srgb, var(--field-bd) 55%, transparent);}
+.settings-row small{display:block; margin-top:2px; font-size:12px; color:var(--muted);}
 .settings-row select{min-width:112px; max-width:58%; font-size:16px; padding:8px 30px 8px 12px; font-family:inherit; color:var(--ink);
   text-align:right; text-align-last:right; -webkit-appearance:none; appearance:none; cursor:pointer;
   background-color:var(--input-bg); border:1px solid var(--field-bd); border-radius:14px; box-shadow:none;
