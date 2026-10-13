@@ -771,7 +771,22 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>
   if((db.theme||"auto")==="auto"){ applyTheme(); drawChart(); }
 });
 $("rateInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value);
-  if(v>=0 && v!==db.rate){ stampRates(); db.rate=v; save(); render(); queueSettings(); queueRestamp(); } });
+  if(!(v>=0) || v===db.rate){ e.target.value=db.rate; return; }
+  pendingRate=Math.min(v,100000); $("rateMsg").textContent=money(db.rate)+"/hr \u2192 "+money(pendingRate)+"/hr";
+  const t=dayKey(Date.now()); $("rateFrom").value=t; $("rateFrom").max=t; $("rateBg").classList.add("open"); });
+let pendingRate=null;
+function closeRate(){ $("rateBg").classList.remove("open"); pendingRate=null; $("rateInput").value=db.rate; }
+$("rateCancel").onclick=closeRate;
+$("rateBg").addEventListener("click",e=>{ if(e.target===$("rateBg")) closeRate(); });
+$("rateSave").onclick=()=>{
+  if(pendingRate==null) return closeRate();
+  const f=$("rateFrom").value; if(!f){ alert("Pick the day the new rate starts."); return; }
+  const from=new Date(f+"T00:00:00").getTime(); if(from>Date.now()){ alert("The start day can't be in the future."); return; }
+  stampRates();                                              // lock everything to the old rate first
+  db.shifts.forEach(s=>{ if(s.start>=from) s.rate=pendingRate; });   // then move shifts from that day onward
+  db.rate=pendingRate; pendingRate=null; save(); $("rateBg").classList.remove("open"); render(); queueSettings(); queueRestamp();
+};
+sheetDrag($("rateBg"), closeRate);
 function download(name, text, type){
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click();
@@ -945,7 +960,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.13.10";
+const APP_VERSION="2026.10.13.11";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

@@ -230,6 +230,18 @@
   </nav>
 </div>
 
+<div class="modal-bg" id="rateBg">
+  <div class="modal">
+    <h2>New pay rate</h2>
+    <div id="rateMsg" style="font-size:14px;color:var(--muted);margin:-6px 0 12px"></div>
+    <div class="field"><label>Starting from</label><input type="date" id="rateFrom"><div style="font-size:12px;color:var(--muted);margin-top:5px">Shifts from this day on switch to the new rate, including ones you already clocked. Earlier shifts keep their old rate.</div></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="rateCancel">Cancel</button>
+      <button class="btn primary" id="rateSave">Apply</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="endBg">
   <div class="modal">
     <h2>When did you finish?</h2>
