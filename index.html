@@ -164,12 +164,11 @@
       <div class="stat"><div class="label">Earned</div><div class="val" id="payEarned">$0.00</div></div>
       <div class="stat"><div class="label">Received</div><div class="val" id="payRecv">$0.00</div></div>
     </div>
-    <div class="pay-note">Earned is hours &times; rate. Tips are yours and aren't counted as owed.</div>
+    <div class="pay-note">Earned is hours &times; rate. Tips aren't counted.</div>
     <button id="payAdd" class="big-btn pay-btn">+ Log a payment</button>
     <div style="text-align:center"><button id="stmtBtn" class="link">Pay statement for the owner</button></div>
   </div>
   <div class="card warn" id="payDue" style="display:none"><div class="pay-h">Overdue</div><div id="payDueTxt"></div></div>
-  <div class="card" id="taxCard" style="display:none"><div class="pay-h">Set aside for tax</div><div id="taxTxt"></div></div>
   <div class="card">
     <div class="pay-h" id="payMonthLabel">This month</div>
     <div class="stats">
@@ -187,7 +186,6 @@
     <div style="font-weight:700; margin-bottom:4px">Settings</div>
     <div class="settings-row"><span>Pay rate ($/hour)</span><input id="rateInput" type="number" min="0" step="0.25" inputmode="decimal"></div>
     <div class="settings-row"><span>Payday (day of month)</span><input id="paydayInput" type="number" min="1" max="28" step="1" inputmode="numeric" placeholder="off"></div>
-    <div class="settings-row"><span>Set aside for tax (%)</span><input id="taxInput" type="number" min="0" max="60" step="1" inputmode="decimal" placeholder="off"></div>
     <div class="settings-row"><span>Weekly goal ($)</span><input id="goalInput" type="number" min="0" step="10" inputmode="decimal" placeholder="none"></div>
     <div class="settings-row"><span>Appearance</span><span class="seg" id="themeSeg"><button data-t="auto">Auto</button><button data-t="light">Light</button><button data-t="dark">Dark</button></span></div>
     <div class="settings-row"><span>Export</span><span><button class="icon-btn" id="csvBtn">CSV</button><button class="icon-btn" id="xlsxBtn">Excel</button><button class="icon-btn" id="jsonBtn">Backup</button></span></div>

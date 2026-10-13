@@ -32,7 +32,6 @@ function cleanCore(d){   // the user's data only (shifts + display prefs)
   if(["auto","light","dark"].includes(d.theme)) out.theme = d.theme;
   if(["week","month","year"].includes(d.anaPeriod)) out.anaPeriod = d.anaPeriod;
   const pd = Math.round(Number(d.payday)); if(Number.isFinite(pd) && pd >= 1 && pd <= 28) out.payday = pd;
-  const tx = Number(d.taxPct); if(Number.isFinite(tx) && tx > 0 && tx <= 60) out.taxPct = tx;
   const seen = new Set();
   (Array.isArray(d.shifts) ? d.shifts : []).slice(0, 50000).forEach(x => { const c = cleanShift(x); if(c && !seen.has(c.id)){ seen.add(c.id); out.shifts.push(c); } });
   const ps = new Set(); out.payments = [];
@@ -460,9 +459,8 @@ $("hm").addEventListener("click",e=>{ const i=e.target.closest("i"); if(!i) retu
   const t=Number(i.dataset.t), v=heatData[dayKey(t)];
   $("hmInfo").textContent=fmtDate(t)+" · "+(v ? v.h.toFixed(1)+"h · "+money(v.e) : (t>Date.now()?"upcoming":"no shifts")); });
 $("factBtn").addEventListener("click",()=>{ factIdx++; renderFun(); });
-$("paydayInput").value=db.payday||""; $("taxInput").value=db.taxPct||"";
+$("paydayInput").value=db.payday||"";
 $("paydayInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>=1&&v<=28) db.payday=v; else delete db.payday; e.target.value=db.payday||""; save(); renderPay(); });
-$("taxInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); if(Number.isFinite(v)&&v>0) db.taxPct=Math.min(v,60); else delete db.taxPct; e.target.value=db.taxPct||""; save(); renderPay(); });
 $("goalInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); db.goal=(Number.isFinite(v)&&v>0)?Math.min(v,1000000):0; if(!db.goal) delete db.goal; save(); renderAnalytics(); });
 $("goalSet").addEventListener("click",()=>{ document.querySelector('.tabbar [data-tab="settings"]').click(); setTimeout(()=>$("goalInput").focus(),350); });
 
@@ -844,7 +842,7 @@ $("csvBtn").onclick=()=>{
   });
   download("workclock.csv",csv,"text/csv");
 };
-$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, taxPct:db.taxPct, shifts:db.shifts, payments:db.payments||[]},null,2),"application/json");  // never includes sync URL/secret
+$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, shifts:db.shifts, payments:db.payments||[]},null,2),"application/json");  // never includes sync URL/secret
 $("importBtn").onclick=()=>$("importFile").click();
 $("importFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -860,7 +858,7 @@ $("importFile").addEventListener("change",e=>{
   r.readAsText(f); e.target.value="";
 });
 $("wipeBtn").onclick=()=>{ if(confirm("Delete ALL shifts and payments and reset? This can't be undone.")){
-  const keep={rate:db.rate, goal:db.goal, payday:db.payday, taxPct:db.taxPct, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
+  const keep={rate:db.rate, goal:db.goal, payday:db.payday, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
   db=Object.assign({shifts:[], outbox:[]}, keep); save(); render(); updateSyncStatus(); }};
 
 // google sheets sync settings
@@ -1090,14 +1088,6 @@ function renderPayExtras(done, P, recv){
     if(over>0.004){ const days=Math.floor((Date.now()-cut)/86400000);
       $("payDueTxt").textContent=money(over)+" was due on "+fmtDate(cut)+(days>0?" ("+days+" day"+(days===1?"":"s")+" ago).":" (today)."); due.style.display="block"; }
   }
-  // tax set-aside on this month's wages + tips
-  const tc=$("taxCard"); tc.style.display="none";
-  if(db.taxPct){
-    const mk=monthKey(Date.now()); let w=0,t=0, aw=0, at=0;
-    db.shifts.forEach(s=>{ const tp=tipOf(s); at+=tp; if(s.end) aw+=pay(s); if(monthKey(s.start)===mk){ t+=tp; if(s.end) w+=pay(s); } });
-    $("taxTxt").textContent="Keep "+money((w+t)*db.taxPct/100)+" aside from "+monthLabel(mk)+" ("+db.taxPct+"% of "+money(w+t)+" wages + tips). All time: "+money((aw+at)*db.taxPct/100)+".";
-    tc.style.display="block";
-  }
 }
 let payEditing=null;
 function openPay(p){
@@ -1124,17 +1114,16 @@ $("paySave").onclick=()=>{
 function buildStatement(fromTs, toTs){
   const done=db.shifts.filter(s=>s.end).sort((a,b)=>a.start-b.start);
   const inR=done.filter(s=>s.start>=fromTs && s.start<=toTs);
-  const hours=inR.reduce((a,s)=>a+hrs(s),0), wages=inR.reduce((a,s)=>a+pay(s),0), tips=inR.reduce((a,s)=>a+tipOf(s),0);
+  const hours=inR.reduce((a,s)=>a+hrs(s),0), wages=inR.reduce((a,s)=>a+pay(s),0);
   const earnedTo=done.filter(s=>s.start<=toTs).reduce((a,s)=>a+pay(s),0);
   const paidTo=pays().filter(p=>p.ts<=toTs).reduce((a,p)=>a+p.amount,0);
   const payIn=pays().filter(p=>p.ts>=fromTs && p.ts<=toTs).sort((a,b)=>a.ts-b.ts);
-  return {inR, hours, wages, tips, earnedTo, paidTo, owed:Math.round((earnedTo-paidTo)*100)/100, payIn, fromTs, toTs};
+  return {inR, hours, wages, earnedTo, paidTo, owed:Math.round((earnedTo-paidTo)*100)/100, payIn, fromTs, toTs};
 }
 function statementText(S){
   const L=["Pay statement "+fmtDate(S.fromTs)+" to "+fmtDate(S.toTs), "Rate: "+money(db.rate)+"/hr", ""];
   S.inR.forEach(s=>L.push(fmtDate(s.start)+"  "+fmtTime(s.start)+" - "+fmtTime(s.end)+"  "+hrs(s).toFixed(2)+"h  "+money(pay(s))));
   L.push("", "Hours: "+S.hours.toFixed(2), "Wages: "+money(S.wages));
-  if(S.tips>0) L.push("Tips (kept by me): "+money(S.tips));
   if(S.payIn.length){ L.push("", "Payments received:"); S.payIn.forEach(p=>L.push(fmtDate(p.ts)+"  "+money(p.amount)+(p.note?"  "+p.note:""))); }
   L.push("", "Wages earned through "+fmtDate(S.toTs)+": "+money(S.earnedTo), "Paid through "+fmtDate(S.toTs)+": "+money(S.paidTo), S.owed>0.004?"Balance owed: "+money(S.owed):S.owed<-0.004?"Paid ahead: "+money(-S.owed):"Balance: paid in full");
   return L.join("\n");
@@ -1151,7 +1140,7 @@ function showStatement(S){
   if(!S.inR.length){ const r=el("tr"), c=el("td","No shifts in this period"); c.colSpan=5; r.appendChild(c); tb.appendChild(r); }
   pg.appendChild(tb);
   const sum=(l,v,b)=>{ const r=el("div",null,"srow"+(b?" b":"")); r.appendChild(el("span",l)); r.appendChild(el("span",v)); pg.appendChild(r); };
-  sum("Hours",S.hours.toFixed(2)); sum("Wages",money(S.wages)); if(S.tips>0) sum("Tips (kept by me, not owed)",money(S.tips));
+  sum("Hours",S.hours.toFixed(2)); sum("Wages",money(S.wages));
   if(S.payIn.length){ pg.appendChild(el("h2","Payments received")); S.payIn.forEach(p=>sum(fmtDate(p.ts)+(p.note?" \u00b7 "+p.note:""),money(p.amount))); }
   pg.appendChild(el("h2","Balance as of "+fmtDate(S.toTs)));
   sum("Wages earned (all shifts through this date)",money(S.earnedTo)); sum("Paid (all payments through this date)",money(S.paidTo));
