@@ -677,12 +677,13 @@ function payPayload(p){ return {id:p.id, date:fmtDate(p.ts), month:monthKey(p.ts
 async function syncCall(body){
   const c=syncCfg();
   if(!SYNC_URL_RE.test(c.url||"")) throw new Error("That isn't a Google Apps Script web app URL (it should end in /exec).");
-  let res;
+  let res; const ac=new AbortController(); const tmo=setTimeout(()=>ac.abort(),30000);
   try{
-    res=await fetch(c.url, {method:"POST", redirect:"follow", credentials:"omit", referrerPolicy:"no-referrer", cache:"no-store",
+    res=await fetch(c.url, {method:"POST", redirect:"follow", credentials:"omit", referrerPolicy:"no-referrer", cache:"no-store", signal:ac.signal,
       headers:{"Content-Type":"text/plain;charset=utf-8"},
       body:JSON.stringify(Object.assign({secret:c.secret}, body))});
-  }catch(e){ const err=new Error(navigator.onLine ? "Can't reach the script. Check the URL and that access is set to Anyone." : "Offline"); err.offline=!navigator.onLine; throw err; }
+  }catch(e){ clearTimeout(tmo); if(e && e.name==="AbortError"){ const t=new Error("The script didn't answer in 30 s. Open the URL in Safari to check it, or redeploy the script (new version)."); throw t; } const err=new Error(navigator.onLine ? "Can't reach the script. Check the URL and that access is set to Anyone." : "Offline"); err.offline=!navigator.onLine; throw err; }
+  clearTimeout(tmo);
   let j; try{ j=await res.json(); }catch(e){ throw new Error("Script didn't answer properly. Replace it with the latest Code.gs and redeploy."); }
   if(!j || !j.ok) throw new Error((j && j.error) || "Script error");
   return j;
@@ -1134,7 +1135,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.19";
+const APP_VERSION="2026.10.14.20";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
