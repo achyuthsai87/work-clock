@@ -675,7 +675,7 @@ function queueSettings(){   // only the newest settings matter, so replace any w
 function payPayload(p){ return {id:p.id, date:fmtDate(p.ts), month:monthKey(p.ts), amount:p.amount, note:p.note, ts:p.ts}; }
 // Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
 async function syncCall(body){
-  const c=syncCfg();
+  const c=syncCfg(); window.__syncStep=body&&body.action;
   if(!SYNC_URL_RE.test(c.url||"")) throw new Error("That isn't a Google Apps Script web app URL (it should end in /exec).");
   let res; const ac=new AbortController(); const tmo=setTimeout(()=>ac.abort(),30000);
   try{
@@ -715,7 +715,7 @@ async function flushOutbox(){
     }
     if(warn){ c.err=warn; save(); }
   }catch(e){ if(!e.offline) c.err=e.message; save(); }   // remaining events stay queued
-  flushing=false;
+  finally{ flushing=false; }
   updateSyncStatus();
 }
 // Merge shifts that exist in the sheet but not on this device (restore after reinstall).
@@ -1135,7 +1135,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.20";
+const APP_VERSION="2026.10.14.21";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
