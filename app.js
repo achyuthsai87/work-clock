@@ -97,7 +97,7 @@ function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;"
 
 function openShift(){ return db.shifts.find(s=>!s.end); }
 
-let timer=null;
+let timer=null, liveTimer=null;
 function render(){
   const btn=$("clockBtn"), line=$("statusLine"), cancel=$("cancelShift");
   const open=openShift();
@@ -106,13 +106,13 @@ function render(){
     cancel.style.display="block";
     const tick=()=>{ const el=(Date.now()-open.start)/1000;
       const h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
-      line.innerHTML='<span class="dot"></span>Clocked in at <b>'+esc(fmtTime(open.start))+"</b> · <b>"+
-        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+"</b> elapsed"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':''); };
+      line.innerHTML='<div class="live-row"><span class="live-l"><span class="dot"></span>Shift in progress</span><b class="live-t">'+
+        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+'</b></div><div class="live-s">Clocked in at '+esc(fmtTime(open.start))+" · earnings update live</div>"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':''); };
     tick(); clearInterval(timer); timer=setInterval(tick,1000);
   } else {
     btn.textContent="Clock In"; btn.classList.remove("out"); cancel.style.display="none";
     clearInterval(timer);
-    line.innerHTML = db.shifts.length ? "Not clocked in." : "Tap <b>Clock In</b> when your shift starts.";
+    line.innerHTML = db.shifts.length ? '<div class="live-row"><span class="live-l idle"><span class="dot off"></span>Not clocked in</span></div><div class="live-s">Ready for your next shift</div>' : "Tap <b>Clock In</b> when your shift starts.";
   }
 
   // stats
@@ -135,6 +135,10 @@ function render(){
   $("heroEarn").textContent = money(et);
   $("tipToday").textContent = tt>0 ? "Tips today "+money(tt) : "No tips logged today";
   $("heroSub").textContent = th>0 ? th.toFixed(2)+"h worked today"+(tt>0?" · + "+money(tt)+" tips":"") : "No shifts yet today — tap Clock In below";
+  clearInterval(liveTimer);
+  if(open && dayKey(open.start)===today){ const upd=()=>{ const h=(Date.now()-open.start)/3600000, hh=(db.breakMin>0&&h>=(db.breakAfter||6))?Math.max(0,h-db.breakMin/60):h;
+      $("heroEarn").textContent=money(et+hh*rateOf(open)); $("heroSub").textContent=(th+hh).toFixed(2)+"h so far today"+(tt>0?" · + "+money(tt)+" tips":""); };
+    upd(); liveTimer=setInterval(upd,1000); }
   renderAnalytics();
   renderPay();
 
@@ -795,11 +799,16 @@ $("endSave").onclick=()=>{
   s.end=cand; save(); render(); $("endBg").classList.remove("open"); queueSync({action:"upsert", shift:shiftPayload(s)});
 };
 sheetDrag($("endBg"), ()=>$("endBg").classList.remove("open"));
+function countUp(el,from,to){
+  if(!(isFinite(from)&&isFinite(to))||Math.abs(to-from)<0.005||(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches)) return;
+  const t0=performance.now(), D=650, fin=el.textContent;
+  (function step(t){ const k=Math.min(1,(t-t0)/D), e=1-Math.pow(1-k,3); el.textContent=k<1?money(from+(to-from)*e):fin; if(k<1) requestAnimationFrame(step); })(t0);
+}
 $("clockBtn").onclick=()=>{
   try{ if(navigator.vibrate) navigator.vibrate(18); }catch(e){}
   { const b=$("clockBtn"); b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); }
   const open=openShift();
-  if(open){ open.end=Date.now(); save(); render(); queueSync({action:"upsert", shift:shiftPayload(open)});
+  if(open){ const fromTxt=$("heroEarn").textContent; open.end=Date.now(); save(); render(); countUp($("heroEarn"), parseFloat(fromTxt.replace(/[^0-9.]/g,"")), parseFloat($("heroEarn").textContent.replace(/[^0-9.]/g,""))); queueSync({action:"upsert", shift:shiftPayload(open)});
     toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); }
   else { db.shifts.push({id:uid(), start:Date.now(), end:null, rate:db.rate}); save(); render(); }
 };
@@ -1003,7 +1012,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.9";
+const APP_VERSION="2026.10.14.10";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
