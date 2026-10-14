@@ -874,8 +874,15 @@ function cfmDone(v){ $("cfmBg").classList.remove("open"); const r=cfmResolve; cf
 $("cfmYes").onclick=()=>cfmDone(true); $("cfmNo").onclick=()=>cfmDone(false);
 $("cfmBg").addEventListener("click",e=>{ if(e.target===$("cfmBg")) cfmDone(false); });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && cfmResolve) cfmDone(false); });
-function showUndo(msg, fn){ undoFn=fn; $("undoTxt").textContent=msg; $("undoBar").hidden=false; clearTimeout(undoTimer); undoTimer=setTimeout(()=>{ $("undoBar").hidden=true; undoFn=null; },8000); }
-$("undoBtn").onclick=()=>{ const f=undoFn; undoFn=null; $("undoBar").hidden=true; clearTimeout(undoTimer); if(f) f(); };
+function hideUndo(){ const b=$("undoBar"); clearTimeout(undoTimer); undoFn=null; if(b.hidden) return; b.classList.add("out"); setTimeout(()=>{ if(!undoFn){ b.hidden=true; } b.classList.remove("out"); b.style.transform=""; b.style.opacity=""; },220); }
+function showUndo(msg, fn){ const b=$("undoBar"); undoFn=fn; $("undoTxt").textContent=msg; b.classList.remove("out"); b.style.transform=""; b.style.opacity=""; b.hidden=false; clearTimeout(undoTimer); undoTimer=setTimeout(hideUndo,5000); }
+(()=>{ const b=$("undoBar"); let x0=null,y0=0,dx=0;
+  b.addEventListener("pointerdown",e=>{ if(e.target.closest("button")) return; x0=e.clientX; y0=e.clientY; dx=0; b.style.transition="none"; clearTimeout(undoTimer); });
+  b.addEventListener("pointermove",e=>{ if(x0==null) return; dx=e.clientX-x0; b.style.transform="translateX(calc(-50% + "+dx+"px))"; b.style.opacity=String(Math.max(0.2,1-Math.abs(dx)/200)); });
+  const end=()=>{ if(x0==null) return; x0=null; b.style.transition=""; if(Math.abs(dx)>60){ b.style.transform="translateX(calc(-50% + "+(dx>0?400:-400)+"px))"; b.style.opacity="0"; hideUndo(); } else { b.style.transform=""; b.style.opacity=""; undoTimer=setTimeout(hideUndo,3000); } };
+  b.addEventListener("pointerup",end); b.addEventListener("pointercancel",end);
+})();
+$("undoBtn").onclick=()=>{ const f=undoFn; hideUndo(); if(f) f(); };
 let toastTimer=null, toastShift=null, toastTap=0;
 function hideToast(){ $("toast").hidden=true; clearTimeout(toastTimer); }
 $("toastBtn").onclick=()=>{ const s=db.shifts.find(x=>x.id===toastShift); if(!s) return hideToast(); hideToast();
@@ -1127,7 +1134,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.14";
+const APP_VERSION="2026.10.14.16";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1454,7 +1461,7 @@ document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tabbar button").forEach(x=>x.classList.toggle("on",x===b));
   const t=b.dataset.tab;
   document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("on",p.id==="tab-"+t));
-  window.scrollTo(0,0);
+  window.scrollTo(0,0); hideUndo();
   if(t==="analytics"){ renderAnalytics(); drawChart(); }
   if(t==="pay") renderPay();
        if(t==="home"||t==="pay") countUpAll(t);
@@ -1477,3 +1484,9 @@ if ("serviceWorker" in navigator) {
     if(!(m && m.classList.contains("open"))) location.reload();
   });
 }
+
+// Block pinch and double-tap zoom (iOS Safari ignores user-scalable)
+["gesturestart","gesturechange","gestureend"].forEach(t=>document.addEventListener(t,e=>e.preventDefault()));
+let lastTouchEnd=0;
+document.addEventListener("touchend",e=>{ const n=Date.now(); if(n-lastTouchEnd<300 && !e.target.closest("input,textarea,select")) e.preventDefault(); lastTouchEnd=n; },{passive:false});
+document.addEventListener("touchmove",e=>{ if(e.touches.length>1) e.preventDefault(); },{passive:false});

@@ -643,3 +643,13 @@ html[data-theme="dark"] .card:has(.tips3),html[data-theme="dark"] .card:has(.fla
   @keyframes mbreathe{0%,100%{box-shadow:0 8px 24px rgba(52,199,89,.25)}50%{box-shadow:0 10px 36px rgba(52,199,89,.5)}}
   #heroEarn{background-size:200% 100%}
 }
+
+/* Undo toast: slide in, swipe away, slide out */
+.toast{touch-action:pan-y;transition:transform .22s ease,opacity .22s ease;animation:toastIn .3s cubic-bezier(.2,.9,.3,1.2)}
+.toast.out{opacity:0;transform:translateX(-50%) translateY(16px)}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.toast{animation:none;transition:none}}
+
+/* No pinch / double-tap zoom; inputs at 16px so iOS doesn't zoom on focus */
+html,body{touch-action:pan-x pan-y;-webkit-text-size-adjust:100%}
+input,select,textarea{font-size:max(16px,1em)}
