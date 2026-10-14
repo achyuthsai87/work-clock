@@ -731,8 +731,9 @@ function openModal(shift){
   $("modalDelete").style.display = shift ? "" : "none";
   $("modalBg").classList.add("open");
 }
-$("modalDelete").onclick=()=>{
+$("modalDelete").onclick=async()=>{
   const id=editingId, gone=db.shifts.find(s=>s.id===id); if(!gone) return;
+  if(!await askConfirm("Delete this shift?", fmtDate(gone.start)+" · "+fmtTime(gone.start)+(gone.end?" – "+fmtTime(gone.end):"")+". You can undo right after.", "Delete", true)) return;
   closeModal(); db.shifts=db.shifts.filter(s=>s.id!==id); save(); render(); queueSync({action:"delete", id:id});
   showUndo("Shift deleted.", ()=>{ db.shifts.push(gone); save(); render(); if(gone.end) queueSync({action:"upsert", shift:shiftPayload(gone)}); });
 };
@@ -782,6 +783,17 @@ $("tipSave").onclick=()=>{
 
 // clock in/out
 let undoFn=null, undoTimer=null;
+let cfmResolve=null;
+function askConfirm(title,msg,yesLabel,danger){
+  return new Promise(res=>{
+    if(cfmResolve) cfmResolve(false);
+    cfmResolve=res; $("cfmTitle").textContent=title; $("cfmMsg").textContent=msg||""; $("cfmYes").textContent=yesLabel||"Confirm";
+    $("cfmYes").classList.toggle("danger-btn",!!danger); $("cfmBg").classList.add("open"); setTimeout(()=>{ try{ $("cfmNo").focus(); }catch(e){} },60); });
+}
+function cfmDone(v){ $("cfmBg").classList.remove("open"); const r=cfmResolve; cfmResolve=null; if(r) r(v); }
+$("cfmYes").onclick=()=>cfmDone(true); $("cfmNo").onclick=()=>cfmDone(false);
+$("cfmBg").addEventListener("click",e=>{ if(e.target===$("cfmBg")) cfmDone(false); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && cfmResolve) cfmDone(false); });
 function showUndo(msg, fn){ undoFn=fn; $("undoTxt").textContent=msg; $("undoBar").hidden=false; clearTimeout(undoTimer); undoTimer=setTimeout(()=>{ $("undoBar").hidden=true; undoFn=null; },8000); }
 $("undoBtn").onclick=()=>{ const f=undoFn; undoFn=null; $("undoBar").hidden=true; clearTimeout(undoTimer); if(f) f(); };
 let toastTimer=null, toastShift=null, toastTap=0;
@@ -812,7 +824,7 @@ $("clockBtn").onclick=()=>{
     toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); }
   else { db.shifts.push({id:uid(), start:Date.now(), end:null, rate:db.rate}); save(); render(); }
 };
-$("cancelShift").onclick=()=>{ if(confirm("Discard the current open shift?")){
+$("cancelShift").onclick=async()=>{ if(await askConfirm("Discard this shift?","The shift you're clocked into will be thrown away, not saved.","Discard",true)){
   db.shifts=db.shifts.filter(s=>s.end); save(); render(); }};
 
 // settings
@@ -977,16 +989,16 @@ $("importFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
   if(f.size>5e6){ alert("That file is too large to be a Work Clock backup."); e.target.value=""; return; }
   const r=new FileReader();
-  r.onload=()=>{ try{ const d=JSON.parse(r.result);
+  r.onload=async()=>{ try{ const d=JSON.parse(r.result);
       if(!d || !Array.isArray(d.shifts)||typeof d.rate!=="number") throw 0;
       const clean=cleanCore(d), skipped=d.shifts.length-clean.shifts.length;
-      if(confirm("Replace current data with this backup ("+clean.shifts.length+" shifts, "+clean.payments.length+" payments"+(skipped>0?", "+skipped+" invalid skipped":"")+")?")){
+      if(await askConfirm("Replace your data?","Your current shifts and payments will be replaced by this backup ("+clean.shifts.length+" shifts, "+clean.payments.length+" payments"+(skipped>0?", "+skipped+" invalid skipped":"")+").","Replace",true)){
         // only shifts + display prefs come from a file; sync, secret and lock settings always stay as they are
         db=Object.assign(clean,{sync:db.sync, outbox:db.outbox, lastSync:db.lastSync, lock:db.lock}); save(); render(); }
     }catch(_){ alert("That file doesn't look like a Work Clock backup."); } };
   r.readAsText(f); e.target.value="";
 });
-$("wipeBtn").onclick=()=>{ if(confirm("Delete ALL shifts and payments and reset? This can't be undone.")){
+$("wipeBtn").onclick=async()=>{ if(await askConfirm("Delete all data?","Every shift and payment on this phone will be erased. This can't be undone. Back up first if you're not sure.","Delete everything",true)){
   const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
   db=Object.assign({shifts:[], outbox:[]}, keep); save(); render(); updateSyncStatus(); }};
 
@@ -1006,13 +1018,13 @@ $("syncForm").addEventListener("submit",e=>{ e.preventDefault(); readSyncFields(
 $("syncToggle").onclick=()=>{ const c=syncCfg(); c.enabled=!c.enabled; save(); updateSyncToggle(); updateSyncStatus(); if(c.enabled) flushOutbox(); };
 $("syncNowBtn").onclick=()=>syncRun("Syncing", async()=>{ await flushOutbox(); if(syncCfg().err) throw new Error(syncCfg().err); const n=await syncPull(); return n?"Restored "+n+" shift"+(n===1?"":"s"):"Up to date ✓"; });
 $("syncUpBtn").onclick=()=>syncRun("Uploading", async()=>{ const n=await syncUploadAll(); return "Uploaded "+n+" shift"+(n===1?"":"s")+" ✓"; });
-$("syncDownBtn").onclick=()=>syncRun("Restoring", async()=>{ const n=await syncPull(true); return n?"Restored "+n+" item"+(n===1?"":"s")+" ✓":"Restored from the sheet ✓"; });
+$("syncDownBtn").onclick=async()=>{ if(!await askConfirm("Restore from your sheet?","Shifts, payments and settings on this phone will be updated to match your Google Sheet.","Restore",false)) return; syncRun("Restoring", async()=>{ const n=await syncPull(true); return n?"Restored "+n+" item"+(n===1?"":"s")+" ✓":"Restored from the sheet ✓"; }); };
 // pull on open + whenever the app comes back to the foreground (iOS keeps PWAs alive)
 async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.onLine) return;
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.10";
+const APP_VERSION="2026.10.14.11";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1203,7 +1215,7 @@ function renderPay(){
     r.className="prow"; m.textContent=money(p.amount); n.textContent=fmtDate(p.ts)+(p.note?" \u00b7 "+p.note:"");
     a.appendChild(m); a.appendChild(document.createElement("br")); a.appendChild(n);
     e.className="icon-btn"; e.textContent="Edit"; e.onclick=()=>openPay(p); d.className="icon-btn danger"; d.textContent="Delete";
-    d.onclick=()=>{ db.payments=pays().filter(x=>x.id!==p.id); save(); render(); queueSync({action:"pdelete", id:p.id});
+    d.onclick=async()=>{ if(!await askConfirm("Delete this payment?", money(p.amount)+" · "+fmtDate(p.ts)+(p.note?" · "+p.note:"")+". You can undo right after.", "Delete", true)) return; db.payments=pays().filter(x=>x.id!==p.id); save(); render(); queueSync({action:"pdelete", id:p.id});
       showUndo("Payment deleted.", ()=>{ pays().push(p); save(); render(); queueSync({action:"pupsert", payment:payPayload(p)}); }); };
     b.appendChild(e); b.appendChild(d); r.appendChild(a); r.appendChild(b); lb.appendChild(r); });
   renderPayExtras(done, P, recv);

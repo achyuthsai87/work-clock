@@ -597,3 +597,8 @@ html[data-theme="dark"] .card:has(.tips3),html[data-theme="dark"] .card:has(.fla
 .ring-fg.done{animation:goalPulse 1.6s ease-out 1.1s 1;}
 @keyframes goalPulse{0%{filter:drop-shadow(0 0 6px rgba(62,230,176,.55));} 40%{filter:drop-shadow(0 0 16px rgba(62,230,176,.95));} 100%{filter:drop-shadow(0 0 6px rgba(62,230,176,.55));}}
 @media (prefers-reduced-motion:reduce){ .ring-fg.done{animation:none;} }
+
+/* confirmation sheet */
+#cfmBg{z-index:80;}
+.cfm-msg{margin:0 0 16px; color:var(--muted); font-size:15px; line-height:1.4;}
+.btn.danger-btn{background:linear-gradient(135deg,#ff7a7a,#f0476b 60%,#d93a8a); color:#fff; box-shadow:0 6px 18px rgba(240,71,107,.3);}
