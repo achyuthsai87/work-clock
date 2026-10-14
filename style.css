@@ -602,3 +602,11 @@ html[data-theme="dark"] .card:has(.tips3),html[data-theme="dark"] .card:has(.fla
 #cfmBg{z-index:80;}
 .cfm-msg{margin:0 0 16px; color:var(--muted); font-size:15px; line-height:1.4;}
 .btn.danger-btn{background:linear-gradient(135deg,#ff7a7a,#f0476b 60%,#d93a8a); color:#fff; box-shadow:0 6px 18px rgba(240,71,107,.3);}
+
+/* planned shift */
+.planrow{display:flex; align-items:center; justify-content:center; gap:10px; margin-top:2px; flex-wrap:wrap;}
+.plan-line{font-size:13px; color:var(--muted); font-weight:500;}
+.daychips{display:flex; gap:6px; flex-wrap:wrap;}
+.daychips button{flex:1; min-width:44px; border:1px solid var(--field-bd); background:var(--chip); color:var(--muted); border-radius:12px; padding:10px 0; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;}
+.daychips button.on{background:color-mix(in srgb,var(--accent) 20%,transparent); color:var(--accent); border-color:color-mix(in srgb,var(--accent) 45%,transparent);}
+.daychips{gap:4px; flex-wrap:nowrap;} .daychips button{min-width:0; flex:1 1 0; padding:10px 0; font-size:12.5px;}

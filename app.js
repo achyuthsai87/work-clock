@@ -18,6 +18,7 @@ function cleanShift(s){
   if(Number.isFinite(tp) && tp > 0 && tp <= 100000) o.tip = tp;
   const sr = s.rate == null || s.rate === "" ? NaN : Number(s.rate); if(Number.isFinite(sr) && sr >= 0 && sr <= 100000) o.rate = sr;
   const nt = cleanText(s.note, 80); if(nt) o.note = nt;
+  const ae = Number(s.autoEnd); if(end === null && Number.isFinite(ae) && ae > start && ae - start <= MAX_SHIFT_MS) o.autoEnd = ae;
   return o;
 }
 // Free text (notes): no control characters or angle brackets, and nothing a spreadsheet could read as a formula.
@@ -27,6 +28,14 @@ function cleanPayment(p){
   const id = String(p.id == null ? "" : p.id), ts = Number(p.ts), amt = Math.round(Number(p.amount) * 100) / 100;
   if(!ID_RE.test(id) || !Number.isFinite(ts) || ts < MIN_TS || ts > MAX_TS || !Number.isFinite(amt) || amt <= 0 || amt > 10000000) return null;
   return {id, ts, amount: amt, note: cleanText(p.note, 60)};
+}
+const HM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+function cleanPlan(p){   // today's/auto schedule: start+end as HH:MM, optional repeat weekdays (0=Sun) or a single date
+  if(!p || typeof p !== "object" || !HM_RE.test(String(p.start)) || !HM_RE.test(String(p.end)) || p.start === p.end) return null;
+  const o = {start: String(p.start), end: String(p.end)};
+  const days = Array.isArray(p.days) ? Array.from(new Set(p.days.map(Number).filter(n => Number.isInteger(n) && n >= 0 && n <= 6))).sort() : [];
+  if(days.length) o.days = days; else if(/^\d{4}-\d{2}-\d{2}$/.test(String(p.once))) o.once = String(p.once); else return null;
+  return o;
 }
 function cleanCore(d){   // the user's data only (shifts + display prefs)
   const out = {rate: 14, theme: "auto", shifts: []};
@@ -60,6 +69,8 @@ function cleanLocal(d){  // everything persisted on this device, incl. sync + lo
     const u = String(d.sync.url || ""), good = SYNC_URL_RE.test(u);
     out.sync = {url: good ? u : "", secret: typeof d.sync.secret === "string" ? d.sync.secret.slice(0,200) : "", enabled: good && !!d.sync.enabled, err: ""};
   }
+  out.plan = cleanPlan(d && d.plan); if(!out.plan) delete out.plan;
+  if(d && d.planDone && typeof d.planDone === "object"){ out.planDone = {}; Object.keys(d.planDone).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-60).forEach(k => { out.planDone[k] = true; }); }
   out.outbox = (d && Array.isArray(d.outbox) ? d.outbox : []).slice(0, 5000).map(e => cleanEvent(e, out.rate)).filter(Boolean);
   if(d && Number.isFinite(Number(d.lastSync))) out.lastSync = Number(d.lastSync);
   if(d && d.lock && typeof d.lock.cred === "string" && /^[A-Za-z0-9_-]{8,2048}$/.test(d.lock.cred)) out.lock = {cred: d.lock.cred};
@@ -98,7 +109,36 @@ function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;"
 function openShift(){ return db.shifts.find(s=>!s.end); }
 
 let timer=null, liveTimer=null;
+// ---- planned shift: starts and ends by itself at the set times (applied whenever the app is open) ----
+function planTimes(plan, base){   // base = local midnight of the day the plan starts on
+  const [sh,sm]=plan.start.split(":").map(Number), [eh,em]=plan.end.split(":").map(Number);
+  const S=new Date(base); S.setHours(sh,sm,0,0); const E=new Date(base); E.setHours(eh,em,0,0);
+  if(E<=S) E.setDate(E.getDate()+1);
+  return {S:S.getTime(), E:E.getTime()};
+}
+function planApplies(plan, d){ return plan.once ? plan.once===dayKey(d.getTime()) : (plan.days||[]).includes(d.getDay()); }
+function applyPlan(){
+  let changed=false; const now=Date.now();
+  db.shifts.forEach(s=>{ if(s.end==null && s.autoEnd && now>=s.autoEnd){ s.end=s.autoEnd; delete s.autoEnd; changed=true; queueSync({action:"upsert", shift:shiftPayload(s)}); } });
+  const plan=db.plan; if(plan){
+    db.planDone=db.planDone||{};
+    for(let back=1; back>=0; back--){
+      const base=new Date(); base.setHours(0,0,0,0); base.setDate(base.getDate()-back);
+      const k=dayKey(base.getTime()); if(db.planDone[k] || !planApplies(plan, base)) continue;
+      const {S,E}=planTimes(plan, base); if(now<S) continue;
+      db.planDone[k]=true; changed=true;
+      if(db.shifts.some(s=>s.start<E && (s.end==null ? true : s.end>S) && s.start>=S-2*3600000)) continue;   // already clocked something in that window
+      if(db.shifts.some(s=>s.end==null)) continue;
+      const sh={id:uid(), start:S, end:null, rate:db.rate};
+      if(now>=E){ sh.end=E; queueSync({action:"upsert", shift:shiftPayload(sh)}); } else sh.autoEnd=E;
+      db.shifts.push(sh);
+    }
+    if(plan.once && plan.once<dayKey(now) && db.planDone[plan.once]){ delete db.plan; changed=true; }
+  }
+  if(changed) save(); return changed;
+}
 function render(){
+  applyPlan();
   const btn=$("clockBtn"), line=$("statusLine"), cancel=$("cancelShift");
   const open=openShift();
   if(open){
@@ -135,6 +175,12 @@ function render(){
   $("heroEarn").textContent = money(et);
   $("tipToday").textContent = tt>0 ? "Tips today "+money(tt) : "No tips logged today";
   $("heroSub").textContent = th>0 ? th.toFixed(2)+"h worked today"+(tt>0?" · + "+money(tt)+" tips":"") : "No shifts yet today — tap Clock In below";
+  { const pl=db.plan, line=$("planLine");
+    if(pl){ const f=t=>{ const [hh,mm]=t.split(":").map(Number); const d=new Date(); d.setHours(hh,mm,0,0); return fmtTime(d.getTime()); };
+      const dn=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      line.textContent="Auto: "+f(pl.start)+" – "+f(pl.end)+" · "+(pl.once?"today":[1,2,3,4,5,6,0].filter(x=>pl.days.includes(x)).map(x=>dn[x]).join(" "));
+      line.style.display=""; $("planBtn").textContent="Edit"; }
+    else { line.textContent=""; line.style.display="none"; $("planBtn").textContent="Plan a shift"; } }
   clearInterval(liveTimer);
   if(open && dayKey(open.start)===today){ const upd=()=>{ const h=(Date.now()-open.start)/3600000, hh=(db.breakMin>0&&h>=(db.breakAfter||6))?Math.max(0,h-db.breakMin/60):h;
       $("heroEarn").textContent=money(et+hh*rateOf(open)); $("heroSub").textContent=(th+hh).toFixed(2)+"h so far today"+(tt>0?" · + "+money(tt)+" tips":""); };
@@ -816,6 +862,29 @@ function countUp(el,from,to){
   const t0=performance.now(), D=650, fin=el.textContent;
   (function step(t){ const k=Math.min(1,(t-t0)/D), e=1-Math.pow(1-k,3); el.textContent=k<1?money(from+(to-from)*e):fin; if(k<1) requestAnimationFrame(step); })(t0);
 }
+// plan sheet
+function closePlan(){ $("planBg").classList.remove("open"); }
+$("planBtn").onclick=()=>{
+  const p=db.plan; $("planStart").value=p?p.start:"15:00"; $("planEnd").value=p?p.end:"23:00";
+  document.querySelectorAll("#planDays button").forEach(b=>b.classList.toggle("on", !!(p&&p.days&&p.days.includes(Number(b.dataset.d)))));
+  $("planRemove").style.display=p?"":"none"; $("planBg").classList.add("open"); };
+document.querySelectorAll("#planDays button").forEach(b=>b.onclick=()=>b.classList.toggle("on"));
+$("planCancel").onclick=closePlan;
+$("planBg").addEventListener("click",e=>{ if(e.target===$("planBg")) closePlan(); });
+$("planRemove").onclick=async()=>{ if(!await askConfirm("Remove the plan?","Automatic clock in and out will stop. Shifts already logged stay.","Remove",true)) return;
+  delete db.plan; save(); closePlan(); render(); };
+$("planSave").onclick=async()=>{
+  const days=[...document.querySelectorAll("#planDays button.on")].map(b=>Number(b.dataset.d));
+  const plan=cleanPlan({start:$("planStart").value, end:$("planEnd").value, days:days, once:dayKey(Date.now())});
+  if(!plan){ alert("Pick a start and an end time that are different."); return; }
+  if(!days.length){ const {S,E}=planTimes(plan, new Date(new Date().setHours(0,0,0,0)));
+    if(E<=Date.now() && !await askConfirm("That time has already passed","Today's plan will be added right away as a finished shift.","Add it",false)) return; }
+  db.plan=plan; if(!days.length) { db.planDone=db.planDone||{}; delete db.planDone[dayKey(Date.now())]; }
+  else { db.planDone=db.planDone||{}; const k=dayKey(Date.now()); const {S}=planTimes(plan, new Date(new Date().setHours(0,0,0,0))); if(plan.days.includes(new Date().getDay()) && Date.now()>S) db.planDone[k]=true; }
+  save(); closePlan(); render(); };
+sheetDrag($("planBg"), closePlan);
+setInterval(()=>{ if(!document.hidden && applyPlan()) render(); }, 20000);
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden && applyPlan()) render(); });
 $("clockBtn").onclick=()=>{
   try{ if(navigator.vibrate) navigator.vibrate(18); }catch(e){}
   { const b=$("clockBtn"); b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); }
@@ -1024,7 +1093,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.11";
+const APP_VERSION="2026.10.14.12";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

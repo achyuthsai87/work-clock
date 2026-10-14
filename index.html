@@ -64,6 +64,7 @@
     <button id="cancelShift" class="cancel-shift" style="display:none">Discard this shift</button>
     <span id="tipToday" hidden></span>
     <div class="quickrow"><button id="tipBtn" class="link">Add tip</button><i></i><button id="manualBtn" class="link">Add shift manually</button></div>
+    <div class="planrow"><div id="planLine" class="plan-line"></div><button id="planBtn" class="link">Plan a shift</button></div>
   </div>
 
 <div class="card tipbox">
@@ -299,6 +300,22 @@
     <div class="btn-row">
       <button class="btn ghost" id="payCancel">Cancel</button>
       <button class="btn primary" id="paySave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="planBg">
+  <div class="modal">
+    <h2>Plan a shift</h2>
+    <div class="cfm-msg" style="margin-bottom:12px">Clocks you in and out at these times. The app can't run while it's closed, so it fills the shift in the next time you open it, with hours counted from the exact times. You can still edit it in History.</div>
+    <div class="field"><label>Starts</label><input type="time" id="planStart" value="15:00"></div>
+    <div class="field"><label>Ends</label><input type="time" id="planEnd" value="23:00"></div>
+    <div class="field"><label>Repeat on (leave empty for today only)</label>
+      <div class="daychips" id="planDays"><button type="button" data-d="1">Mon</button><button type="button" data-d="2">Tue</button><button type="button" data-d="3">Wed</button><button type="button" data-d="4">Thu</button><button type="button" data-d="5">Fri</button><button type="button" data-d="6">Sat</button><button type="button" data-d="0">Sun</button></div></div>
+    <button type="button" class="link danger-link" id="planRemove" style="display:none">Remove plan</button>
+    <div class="btn-row">
+      <button class="btn ghost" id="planCancel">Cancel</button>
+      <button class="btn primary" id="planSave">Save plan</button>
     </div>
   </div>
 </div>
