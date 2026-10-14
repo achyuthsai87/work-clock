@@ -603,7 +603,21 @@ function renderInsights(){
     w.appendChild(r); });
 }
 
+let anaRaf=0;
+const RM=()=>window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
 function drawAnaChart(days, p){
+  cancelAnimationFrame(anaRaf);
+  if(RM()){ drawAnaFrame(days,p,1); return; }
+  const t0=performance.now(), n=days.length, DUR=520, STAG=Math.min(40,300/Math.max(1,n));
+  const step=now=>{
+    const el=now-t0; drawAnaFrame(days,p,el/ (DUR+STAG*n), el);
+    if(el<DUR+STAG*n) anaRaf=requestAnimationFrame(step); else drawAnaFrame(days,p,null);
+  };
+  anaRaf=requestAnimationFrame(step);
+}
+function drawAnaFrame(days, p, prog, el){
+  const DUR=520, n0=days.length, STAG=Math.min(40,300/Math.max(1,n0));
+  const kOf=i=> prog==null ? 1 : (()=>{ const u=Math.min(1,Math.max(0,(el-i*STAG)/DUR)); return 1-Math.pow(1-u,3); })();
   const cv=$("anaChart"), ctx=cv.getContext("2d");
   const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
   cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
@@ -615,14 +629,14 @@ function drawAnaChart(days, p){
   const best=days.reduce((a,x)=> x.hours>a.hours ? x : a, days[0]);
   ctx.font="10.5px -apple-system, sans-serif"; ctx.textAlign="center";
   days.forEach((d,i)=>{
-    const h=Math.max(2,(d.hours/maxH)*(H-padB-padT));
+    const k=kOf(i), h=Math.max(2,(d.hours/maxH)*(H-padB-padT))*k;
     const x=i*slot+slot/2;
     const g=ctx.createLinearGradient(0,H-padB-h,0,H-padB);
     if(d===best && d.hours>0){ g.addColorStop(0,"#4fbf8b"); g.addColorStop(1,"#bfe8d5"); }
     else { g.addColorStop(0,"#6f93f2"); g.addColorStop(1,"#c5d3fa"); }
     ctx.fillStyle=g;
     ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-h, bw, h, 5); ctx.fill();
-    if(d.hours>0 && (p==="week" || d===best)){ ctx.fillStyle=colInk; ctx.fillText(d.hours.toFixed(1)+"h", x, H-padB-h-5); }
+    if(k>0.85 && d.hours>0 && (p==="week" || d===best)){ ctx.fillStyle=colInk; ctx.fillText(d.hours.toFixed(1)+"h", x, H-padB-h-5); }
     if(p!=="month" || i%5===0 || i===n-1){ ctx.fillStyle=colMuted; ctx.fillText(d.label, x, H-7); }
   });
 }
@@ -1113,7 +1127,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.13";
+const APP_VERSION="2026.10.14.14";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1417,6 +1431,25 @@ $("stmtCopy").onclick=async()=>{ try{ await navigator.clipboard.writeText(stmtTe
 sheetDrag($("stmtBg"), ()=>$("stmtBg").classList.remove("open"));
 
 // tab bar
+function tweenText(el){
+  if(!el || RM() || el.dataset.tw) return;
+  const n=el.firstChild; if(!n || n.nodeType!==3) return;
+  const m=n.nodeValue.match(/^(\D*)([\d,]+(?:\.\d+)?)(.*)$/s); if(!m) return;
+  const to=parseFloat(m[2].replace(/,/g,"")); if(!isFinite(to)||to===0) return;
+  const dec=(m[2].split(".")[1]||"").length, pre=m[1], post=m[3], t0=performance.now(), D=650;
+  el.dataset.tw="1";
+  const f=now=>{
+    const u=Math.min(1,(now-t0)/D), v=to*(1-Math.pow(1-u,3));
+    n.nodeValue=pre+v.toLocaleString("en-US",{minimumFractionDigits:dec,maximumFractionDigits:dec})+post;
+    if(u<1) requestAnimationFrame(f); else { n.nodeValue=m[1]+m[2]+m[3]; delete el.dataset.tw; }
+  };
+  requestAnimationFrame(f);
+}
+function countUpAll(tab){
+  const ids= tab==="home" ? ["statToday","statMonth","statAll","tipDay","tipWeek","tipMonth","tipAll"] : ["payOwed"];
+  if(tab==="home" && !db.shifts.some(s=>!s.end)) ids.unshift("heroEarn");
+  ids.forEach(id=>tweenText($(id)));
+}
 document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tabbar button").forEach(x=>x.classList.toggle("on",x===b));
   const t=b.dataset.tab;
@@ -1424,8 +1457,10 @@ document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{
   window.scrollTo(0,0);
   if(t==="analytics"){ renderAnalytics(); drawChart(); }
   if(t==="pay") renderPay();
+       if(t==="home"||t==="pay") countUpAll(t);
 });
 render();
+setTimeout(()=>countUpAll("home"),60);
 })();
 /* Register the service worker so the app works fully offline once installed. */
 if ("serviceWorker" in navigator) {

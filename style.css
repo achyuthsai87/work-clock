@@ -615,3 +615,31 @@ html[data-theme="dark"] .card:has(.tips3),html[data-theme="dark"] .card:has(.fla
 .shortcut-help summary{cursor:pointer; padding:8px 0; color:var(--accent); font-weight:600;}
 .shortcut-body p,.shortcut-body ol{margin:6px 0; line-height:1.45;} .shortcut-body ol{padding-left:20px;}
 .shortcut-body code{background:var(--chip); padding:1px 6px; border-radius:6px; font-size:12px;}
+
+/* ===== Motion pass ===== */
+@media (prefers-reduced-motion:no-preference){
+  .tabpane.on{animation:none}
+  .tabpane.on > *{animation:mrise .55s cubic-bezier(.2,.8,.2,1) both}
+  .tabpane.on > *:nth-child(2){animation-delay:.05s}
+  .tabpane.on > *:nth-child(3){animation-delay:.1s}
+  .tabpane.on > *:nth-child(4){animation-delay:.15s}
+  .tabpane.on > *:nth-child(5){animation-delay:.2s}
+  .tabpane.on > *:nth-child(6){animation-delay:.25s}
+  .tabpane.on > *:nth-child(n+7){animation-delay:.3s}
+  @keyframes mrise{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+  #history > *, #history .row{animation:mrise .45s cubic-bezier(.2,.8,.2,1) both}
+  #history > *:nth-child(2){animation-delay:.04s}#history > *:nth-child(3){animation-delay:.08s}
+  #history > *:nth-child(4){animation-delay:.12s}#history > *:nth-child(5){animation-delay:.16s}
+  #history > *:nth-child(6){animation-delay:.2s}#history > *:nth-child(n+7){animation-delay:.24s}
+  .wk .bar i, #payBar{transform-origin:left center;animation:mgrow .8s cubic-bezier(.2,.8,.2,1) both .15s}
+  @keyframes mgrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .tabbar button.on svg{animation:mtab .45s cubic-bezier(.3,1.6,.5,1)}
+  @keyframes mtab{0%{transform:scale(.7)}100%{transform:scale(1)}}
+  .card, .row, .big-btn, .btn, .tabbar button{transition:transform .18s ease, box-shadow .25s ease, background .25s ease}
+  .card:active, .row:active, .big-btn:active, .btn:active{transform:scale(.97)}
+  body::before{animation:mdrift 28s ease-in-out infinite alternate;will-change:transform}
+  @keyframes mdrift{from{transform:translate3d(0,0,0) scale(1.05)}to{transform:translate3d(-2.5%,2%,0) scale(1.12)}}
+  #clockBtn:not(.out){animation:mbreathe 3.4s ease-in-out infinite}
+  @keyframes mbreathe{0%,100%{box-shadow:0 8px 24px rgba(52,199,89,.25)}50%{box-shadow:0 10px 36px rgba(52,199,89,.5)}}
+  #heroEarn{background-size:200% 100%}
+}
