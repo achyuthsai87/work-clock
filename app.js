@@ -122,8 +122,8 @@ function render(){
     if(dayKey(s.start)===today){ th+=h; et+=p; } if(monthKey(s.start)===mk){ mh+=h; em+=p; } });
   db.shifts.forEach(s=>{ const tp=tipOf(s); if(!tp) return; ta+=tp; if(s.start>=wk0) tw+=tp; if(dayKey(s.start)===today) tt+=tp; if(monthKey(s.start)===mk) tm+=tp; });
   $("tipDay").textContent=money(tt); $("tipWeek").textContent=money(tw); $("tipMonth").textContent=money(tm); $("tipAll").textContent=money(ta);
-  $("statToday").innerHTML = th.toFixed(2)+"h<small>"+money(et)+"</small>";
-  $("statMonth").innerHTML = mh.toFixed(2)+"h<small>"+money(em)+"</small>";
+  $("statToday").innerHTML = money(et)+"<small>"+th.toFixed(1)+"h</small>";
+  $("statMonth").innerHTML = money(em)+"<small>"+mh.toFixed(1)+"h</small>";
   $("monthLabel").textContent = monthLabel(mk);
   $("statAll").innerHTML = money(ea)+"<small>"+ah.toFixed(1)+"h total</small>";
 
@@ -784,6 +784,8 @@ $("endSave").onclick=()=>{
 };
 sheetDrag($("endBg"), ()=>$("endBg").classList.remove("open"));
 $("clockBtn").onclick=()=>{
+  try{ if(navigator.vibrate) navigator.vibrate(18); }catch(e){}
+  { const b=$("clockBtn"); b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); }
   const open=openShift();
   if(open){ open.end=Date.now(); save(); render(); queueSync({action:"upsert", shift:shiftPayload(open)});
     toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); }
@@ -989,7 +991,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.7";
+const APP_VERSION="2026.10.14.8";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

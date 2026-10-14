@@ -504,3 +504,32 @@ html[data-theme="dark"] .sub,html[data-theme="dark"] .status-line,html[data-them
 #syncStatus.err{display:flex; flex:1 1 100%; order:-1; border-radius:16px; font-size:13px; padding:10px 14px 10px 10px; align-items:flex-start;}
 #syncStatus.err::before{margin-top:1px;}
 .settings-row:has(#syncStatus.err) #syncNowBtn{margin-left:auto;}
+
+/* ===== Hierarchy pass ===== */
+/* hero stronger, secondary cards quieter */
+.hero{box-shadow:0 20px 50px color-mix(in srgb,var(--accent) 16%,transparent), var(--glass-shadow), var(--glass-hi);}
+html[data-theme="dark"] .hero{background:linear-gradient(135deg,rgba(110,140,255,.26),rgba(150,110,255,.18)), var(--glass); border-color:rgba(160,180,255,.22);}
+@media (prefers-color-scheme:dark){ html[data-theme="auto"] .hero{background:linear-gradient(135deg,rgba(110,140,255,.26),rgba(150,110,255,.18)), var(--glass); border-color:rgba(160,180,255,.22);} }
+.hero-earn{font-size:50px;}
+.card:has(.tips3),.card:has(.flat3){box-shadow:none; background:color-mix(in srgb,var(--glass) 70%,transparent);}
+.card{margin-bottom:12px;}
+.hero{margin-bottom:12px;}
+/* secondary text a notch brighter */
+html[data-theme="dark"]{--muted:#b3bdd1;}
+@media (prefers-color-scheme:dark){ html[data-theme="auto"]{--muted:#b3bdd1;} }
+html[data-theme="dark"] .sub,html[data-theme="dark"] .status-line,html[data-theme="dark"] .hero-sub,html[data-theme="dark"] .stat .label,html[data-theme="dark"] .row .t,html[data-theme="dark"] .field label{color:#b3bdd1;}
+@media (prefers-color-scheme:dark){ html[data-theme="auto"] .sub,html[data-theme="auto"] .status-line,html[data-theme="auto"] .hero-sub,html[data-theme="auto"] .stat .label,html[data-theme="auto"] .row .t{color:#b3bdd1;} }
+html[data-theme="light"]{--muted:#566079;}
+/* stats: bigger numbers, quieter labels, consistent (money big, hours small) */
+.stat .label{font-size:12px; font-weight:500; opacity:.9;}
+.stat .val{font-size:20px; font-weight:750; letter-spacing:-.02em;}
+.stat .val small{font-size:12px; margin-top:2px;}
+.flat3 .stat .val,.tips3 .stat .val{font-size:20px;}
+/* clock button feedback */
+.big-btn{transition:transform .18s cubic-bezier(.3,.8,.4,1), box-shadow .3s, background .3s;}
+.big-btn:active{transform:scale(.97);}
+.big-btn.pop{animation:clockPop .5s cubic-bezier(.2,.9,.3,1.3);}
+@keyframes clockPop{0%{transform:scale(.96);} 45%{transform:scale(1.025);} 100%{transform:scale(1);}}
+@media (prefers-reduced-motion:reduce){ .big-btn.pop{animation:none;} }
+.card:has(.flat3){padding:16px;} .card:has(.flat3) .tipbox-t{color:var(--muted); font-size:12px;} .card:has(.flat3) .tipbox-t{font-weight:400;}
+.flat3 .stat .val{font-size:18px;} .flat3 .stat{padding:12px 4px;}
