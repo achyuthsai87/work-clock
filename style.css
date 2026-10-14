@@ -496,3 +496,11 @@ html[data-theme="dark"] .sub,html[data-theme="dark"] .status-line,html[data-them
 
 /* Settings pickers as glass pills */
 .settings-row select{border-radius:99px; background-color:color-mix(in srgb,var(--ink) 7%,transparent); border:1px solid var(--glass-edge); padding:8px 30px 8px 16px; font-weight:600; color:var(--ink);}
+
+/* Sync status: keep the button compact, let long errors sit on their own line */
+#syncNowBtn{white-space:nowrap; flex:none;}
+.settings-row:has(#syncStatus){flex-wrap:wrap; gap:10px;}
+#syncStatus{min-width:0;}
+#syncStatus.err{display:flex; flex:1 1 100%; order:-1; border-radius:16px; font-size:13px; padding:10px 14px 10px 10px; align-items:flex-start;}
+#syncStatus.err::before{margin-top:1px;}
+.settings-row:has(#syncStatus.err) #syncNowBtn{margin-left:auto;}
