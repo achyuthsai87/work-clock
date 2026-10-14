@@ -1134,7 +1134,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.17";
+const APP_VERSION="2026.10.14.18";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1453,7 +1453,7 @@ function tweenText(el){
   requestAnimationFrame(f);
 }
 function countUpAll(tab){
-  const ids= tab==="home" ? ["statToday","statMonth","statAll","tipDay","tipWeek","tipMonth","tipAll"] : ["payOwed"];
+  const ids= tab==="home" ? ["statToday","statMonth","statAll","tipDay","tipWeek","tipMonth","tipAll"] : ["payOwed","payEarned","payRecv","payMEarn","payMRecv","payMBal"];
   if(tab==="home" && !db.shifts.some(s=>!s.end)) ids.unshift("heroEarn");
   ids.forEach(id=>tweenText($(id)));
 }
