@@ -209,6 +209,12 @@
     </form>
     <div class="settings-row" style="margin-top:10px"><span>Auto-sync</span><button class="ios-switch" id="syncToggle" role="switch" aria-checked="false" aria-label="Auto-sync"></button></div>
     <div class="settings-row"><span>Sheet data</span><span><button class="icon-btn" id="syncUpBtn">Upload all</button><button class="icon-btn" id="syncDownBtn">Restore</button></span></div>
+    <details class="shortcut-help"><summary>iPhone Shortcuts: clock in and out from the lock screen</summary>
+      <div class="shortcut-body">
+        <p>Make two Shortcuts (Shortcuts app → +): <b>Clock In</b> and <b>Clock Out</b>. Each has one action, <b>Get Contents of URL</b>:</p>
+        <ol><li>URL: your web app URL from above</li><li>Method: <b>POST</b></li><li>Request Body: <b>JSON</b>, with three Text fields:<br><code>action</code> = <code>punch</code><br><code>kind</code> = <code>in</code> (or <code>out</code>)<br><code>secret</code> = your secret</li></ol>
+        <p>Then in Shortcuts → Automation, add <b>Arrive</b> at work → run Clock In (and <b>Leave</b> → Clock Out), or put them on the Action Button or a Lock Screen widget. Open Work Clock afterwards and the shift appears with the exact time you tapped. The app has to be open for sync to pull it in, and Auto-sync must be on.</p>
+      </div></details>
     <div class="settings-row"><span id="syncStatus">Not set up</span><button class="icon-btn" id="syncNowBtn">Sync now</button></div>
   </div>
 

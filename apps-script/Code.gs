@@ -47,6 +47,16 @@ function paySheet_(ss) {
   return p;
 }
 
+// Punches: "clock in" / "clock out" requests sent from an iPhone Shortcut. The app picks them up next time it opens.
+const PUNCH_SHEET = "Punches";
+const PUNCH_HEADERS = ["id", "kind", "ts", "Time"];
+function punchSheet_(ss) {
+  let p = ss.getSheetByName(PUNCH_SHEET);
+  if (!p) p = ss.insertSheet(PUNCH_SHEET);
+  if (p.getLastRow() === 0) { p.appendRow(PUNCH_HEADERS); try { p.getRange(1, 1, 1, 4).setFontWeight("bold"); p.setFrozenRows(1); p.hideColumns(1); p.hideColumns(3); } catch (_) {} }
+  return p;
+}
+
 // A live "Summary" tab: per month hours / tips / earned / received / balance, plus all-time totals. Formulas only.
 // Rebuilt automatically when the layout version below changes.
 function summary_(ss) {
@@ -229,6 +239,33 @@ function doPost(e) {
       if (!ID_RE.test(String(b.id))) return out_({ ok: false, error: "Bad request" });
       const p = paySheet_(SpreadsheetApp.getActiveSpreadsheet()), r = idMap_(p)[String(b.id)];
       if (r) p.deleteRow(r);
+      return out_({ ok: true });
+    }
+
+    if (b.action === "punch") {
+      const kind = String(b.kind);
+      if (kind !== "in" && kind !== "out") return out_({ ok: false, error: "Bad request" });
+      const p = punchSheet_(SpreadsheetApp.getActiveSpreadsheet()), n = p.getLastRow() - 1, now = Date.now();
+      if (n > 200) return out_({ ok: false, error: "Open the app to catch up first" });
+      const last = n > 0 ? p.getRange(n + 1, 1, 1, 3).getValues()[0] : null;
+      if (last && String(last[1]) === kind && now - Number(last[2]) < 20000) return out_({ ok: true, duplicate: true });   // double-tap guard
+      p.appendRow([Utilities.getUuid().replace(/-/g, "").slice(0, 16), kind, now, Utilities.formatDate(new Date(now), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")]);
+      return out_({ ok: true, kind: kind });
+    }
+
+    if (b.action === "punches") {
+      const p = punchSheet_(SpreadsheetApp.getActiveSpreadsheet()), n = p.getLastRow() - 1;
+      const rows = n > 0 ? p.getRange(2, 1, n, 3).getValues() : [];
+      return out_({ ok: true, punches: rows.filter(r => r[0] && (r[1] === "in" || r[1] === "out") && r[2]).map(r => ({ id: String(r[0]), kind: String(r[1]), ts: Number(r[2]) })) });
+    }
+
+    if (b.action === "punchdel") {
+      const ids = Array.isArray(b.ids) ? b.ids.map(String).filter(x => ID_RE.test(x)).slice(0, 500) : [];
+      const p = punchSheet_(SpreadsheetApp.getActiveSpreadsheet()), n = p.getLastRow() - 1;
+      if (n > 0 && ids.length) {
+        const vals = p.getRange(2, 1, n, 1).getValues();
+        for (let i = n - 1; i >= 0; i--) if (ids.indexOf(String(vals[i][0])) >= 0) p.deleteRow(i + 2);
+      }
       return out_({ ok: true });
     }
 

@@ -610,3 +610,8 @@ html[data-theme="dark"] .card:has(.tips3),html[data-theme="dark"] .card:has(.fla
 .daychips button{flex:1; min-width:44px; border:1px solid var(--field-bd); background:var(--chip); color:var(--muted); border-radius:12px; padding:10px 0; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;}
 .daychips button.on{background:color-mix(in srgb,var(--accent) 20%,transparent); color:var(--accent); border-color:color-mix(in srgb,var(--accent) 45%,transparent);}
 .daychips{gap:4px; flex-wrap:nowrap;} .daychips button{min-width:0; flex:1 1 0; padding:10px 0; font-size:12.5px;}
+
+.shortcut-help{margin-top:10px; font-size:13px; color:var(--muted);}
+.shortcut-help summary{cursor:pointer; padding:8px 0; color:var(--accent); font-weight:600;}
+.shortcut-body p,.shortcut-body ol{margin:6px 0; line-height:1.45;} .shortcut-body ol{padding-left:20px;}
+.shortcut-body code{background:var(--chip); padding:1px 6px; border-radius:6px; font-size:12px;}

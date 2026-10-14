@@ -71,6 +71,7 @@ function cleanLocal(d){  // everything persisted on this device, incl. sync + lo
   }
   out.plan = cleanPlan(d && d.plan); if(!out.plan) delete out.plan;
   if(d && d.planDone && typeof d.planDone === "object"){ out.planDone = {}; Object.keys(d.planDone).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-60).forEach(k => { out.planDone[k] = true; }); }
+  if(d && Array.isArray(d.punchSeen)) out.punchSeen = d.punchSeen.map(String).filter(x => ID_RE.test(x)).slice(-80);
   out.outbox = (d && Array.isArray(d.outbox) ? d.outbox : []).slice(0, 5000).map(e => cleanEvent(e, out.rate)).filter(Boolean);
   if(d && Number.isFinite(Number(d.lastSync))) out.lastSync = Number(d.lastSync);
   if(d && d.lock && typeof d.lock.cred === "string" && /^[A-Za-z0-9_-]{8,2048}$/.test(d.lock.cred)) out.lock = {cred: d.lock.cred};
@@ -726,8 +727,27 @@ async function syncPull(applySettings){
         added+=0; save(); render(); }
     }catch(e){ if(e.message!=="Unknown action") throw e; }
   }
+  try{ added+=await applyPunches(); }catch(e){ if(!e.offline) throw e; }
   if(added){ save(); render(); }
   return added;
+}
+// "Clock in" / "clock out" sent from an iPhone Shortcut (via the sheet script) are applied here, at the exact time they were sent.
+async function applyPunches(){
+  let j; try{ j=await syncCall({action:"punches"}); }catch(e){ if(e.message==="Unknown action") return 0; throw e; }
+  const list=(Array.isArray(j.punches)?j.punches:[]).filter(x=>x && /^[A-Za-z0-9_-]{1,64}$/.test(String(x.id)) && (x.kind==="in"||x.kind==="out") && Number.isFinite(Number(x.ts))).slice(0,200).sort((p,q)=>p.ts-q.ts);
+  db.punchSeen=Array.isArray(db.punchSeen)?db.punchSeen:[];
+  const now=Date.now(); let n=0; const done=[];
+  list.forEach(x=>{
+    done.push(String(x.id)); if(db.punchSeen.includes(String(x.id))) return; db.punchSeen.push(String(x.id));
+    const ts=Number(x.ts); if(ts>now+5*60000 || ts<now-72*3600000) return;
+    const open=openShift();
+    if(x.kind==="in"){ if(open || db.shifts.some(s=>s.end && s.start<=ts && ts<s.end)) return; db.shifts.push({id:uid(), start:ts, end:null, rate:db.rate}); n++; }
+    else if(open && ts>open.start){ open.end=ts; delete open.autoEnd; queueSync({action:"upsert", shift:shiftPayload(open)}); n++; }
+  });
+  db.punchSeen=db.punchSeen.slice(-80);
+  if(done.length){ save(); try{ await syncCall({action:"punchdel", ids:done}); }catch(e){} }
+  if(n) render();
+  return n;
 }
 async function syncUploadAll(){
   const list=db.shifts.filter(x=>x.end).map(shiftPayload);
@@ -1093,7 +1113,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.12";
+const APP_VERSION="2026.10.14.13";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1412,7 +1432,7 @@ if ("serviceWorker" in navigator) {
   var hadController = !!navigator.serviceWorker.controller, reloaded = false;
   window.addEventListener("load", function(){
     navigator.serviceWorker.register("./sw.js").then(function(reg){
-      document.addEventListener("visibilitychange", function(){ if(!document.hidden) reg.update().catch(function(){}); });
+      document.addEventListener("visibilitychange", function(){ if(!document.hidden && reg) reg.update().catch(function(){}); });
     });
   });
   // a new version took over: reload once (never while the Add shift sheet is open)
