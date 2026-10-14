@@ -1134,7 +1134,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.16";
+const APP_VERSION="2026.10.14.17";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1443,10 +1443,10 @@ function tweenText(el){
   const n=el.firstChild; if(!n || n.nodeType!==3) return;
   const m=n.nodeValue.match(/^(\D*)([\d,]+(?:\.\d+)?)(.*)$/s); if(!m) return;
   const to=parseFloat(m[2].replace(/,/g,"")); if(!isFinite(to)||to===0) return;
-  const dec=(m[2].split(".")[1]||"").length, pre=m[1], post=m[3], t0=performance.now(), D=650;
+  const dec=(m[2].split(".")[1]||"").length, pre=m[1], post=m[3], t0=performance.now(), D=950;
   el.dataset.tw="1";
   const f=now=>{
-    const u=Math.min(1,(now-t0)/D), v=to*(1-Math.pow(1-u,3));
+    const u=Math.min(1,(now-t0)/D), v=to*(1-Math.pow(1-u,4));
     n.nodeValue=pre+v.toLocaleString("en-US",{minimumFractionDigits:dec,maximumFractionDigits:dec})+post;
     if(u<1) requestAnimationFrame(f); else { n.nodeValue=m[1]+m[2]+m[3]; delete el.dataset.tw; }
   };
@@ -1467,7 +1467,10 @@ document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{
        if(t==="home"||t==="pay") countUpAll(t);
 });
 render();
-setTimeout(()=>countUpAll("home"),60);
+function replayActive(){ const on=document.querySelector(".tabpane.on"); if(!on) return; const t=on.id.replace("tab-",""); if(t==="home"||t==="pay") countUpAll(t); }
+setTimeout(replayActive,80);
+let hidAt=0;
+document.addEventListener("visibilitychange",()=>{ if(document.hidden){ hidAt=Date.now(); } else if(Date.now()-hidAt>4000){ setTimeout(replayActive,150); } });
 })();
 /* Register the service worker so the app works fully offline once installed. */
 if ("serviceWorker" in navigator) {
