@@ -697,7 +697,7 @@ function updateSyncStatus(msg){
 }
 function updateSyncToggle(){
   const b=$("syncToggle");
-  if(b) b.textContent=syncCfg().enabled ? "On" : "Off";
+  if(b){ const on=!!syncCfg().enabled; b.setAttribute("aria-checked",on?"true":"false"); }
 }
 // ---------- /Google Sheets sync ----------
 
@@ -989,7 +989,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.1";
+const APP_VERSION="2026.10.14.2";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1022,8 +1022,8 @@ async function enableLock(){
   if(!(await lockCheck(id))) throw new Error("Verification failed");   // prove it works BEFORE turning it on, so you can't lock yourself out
   db.lock={cred:id}; save();
 }
-function updateLockUi(){ $("lockToggle").textContent=lockOn()?"On":"Off";
-  const st=$("lockStatus"); if(!st.classList.contains("err")) st.textContent=lockOn()?"Locks after 30 s away from the app":"Off"; }
+function updateLockUi(){ $("lockToggle").setAttribute("aria-checked",lockOn()?"true":"false");
+  const st=$("lockStatus"); if(!st.classList.contains("err")) st.textContent=lockOn()?"Locks after 30 s away from the app":"Locks after 30 s away, using Face ID or your passcode"; }
 $("lockToggle").onclick=async()=>{ const st=$("lockStatus"); st.classList.remove("err");
   try{ if(lockOn()){ if(await lockCheck(db.lock.cred)){ delete db.lock; save(); } } else { await enableLock(); } }
   catch(e){ st.classList.add("err"); st.textContent = e && e.name==="NotAllowedError" ? "Cancelled" : ((e && e.message) || "Couldn't change app lock"); }
