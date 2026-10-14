@@ -88,7 +88,8 @@ function dayKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d.g
 function monthKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
 function monthLabel(key){ const [y,m]=key.split("-").map(Number); return MONTHS[m-1]+" "+y; }
 function hrs(s){ const h=(s.end - s.start)/3600000; return (db.breakMin>0 && h>=(db.breakAfter||6)) ? Math.max(0,h-db.breakMin/60) : h; }   // optional unpaid break
-function money(n){ return "$"+n.toFixed(2); }
+function money(n){ return "$"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtDay(ts){ const d=new Date(ts), y=d.getFullYear()===new Date().getFullYear()?"":", "+d.getFullYear(); return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()]+", "+MONTHS[d.getMonth()]+" "+d.getDate()+y; }
 function tipOf(s){ return s.tip||0; }
 const rateOf=s=>s.rate!=null?s.rate:db.rate;   // each shift keeps the rate it was worked at
 function pay(s){ return hrs(s)*rateOf(s); }   // wages only; tips are tracked separately
@@ -146,23 +147,19 @@ function render(){
     const dk=dayKey(s.start);
     if(dk!==lastDay){ lastDay=dk;
       const d=document.createElement("div");
-      d.style.cssText="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px";
-      d.textContent=fmtDate(s.start); box.appendChild(d);
+      d.className="dayhead"; const dt=done.filter(x=>dayKey(x.start)===dk).reduce((t,x)=>t+pay(x),0);
+      const dl=document.createElement("span"); dl.textContent=fmtDay(s.start); const dm=document.createElement("span"); dm.textContent=done.filter(x=>dayKey(x.start)===dk).length>1?money(dt):""; d.appendChild(dl); d.appendChild(dm); box.appendChild(d);
     }
     const h=hrs(s), row=document.createElement("div"); row.className="row";
     row.innerHTML='<div><div class="d">'+esc(fmtTime(s.start))+" – "+esc(fmtTime(s.end))+'</div>'+
       '<div class="t">'+h.toFixed(2)+' hours'+(s.tip?' · '+money(s.tip)+' tip':'')+(s.rate!=null&&s.rate!==db.rate?' · '+money(s.rate)+'/hr':'')+'</div></div>'+
-      '<div class="m"><b>'+money(pay(s))+'</b>'+
-      '<span><button class="icon-btn" data-edit="'+esc(s.id)+'">Edit</button>'+
-      '<button class="icon-btn danger" data-del="'+esc(s.id)+'">Delete</button></span></div>';
+      '<div class="m"><b>'+money(pay(s))+'</b><span class="chev" aria-hidden="true">\u203a</span></div>';
+    row.dataset.edit=s.id; row.tabIndex=0; row.setAttribute("role","button"); row.setAttribute("aria-label","Edit shift "+fmtTime(s.start));
     if(s.note){ const nd=document.createElement("div"); nd.className="shnote"; nd.textContent="\uD83D\uDCDD "+s.note; row.appendChild(nd); }
     box.appendChild(row);
   });
-  box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
-    const id=b.dataset.del, gone=db.shifts.find(s=>s.id===id); if(!gone) return;
-    db.shifts=db.shifts.filter(s=>s.id!==id); save(); render(); queueSync({action:"delete", id:id});
-    showUndo("Shift deleted.", ()=>{ db.shifts.push(gone); save(); render(); if(gone.end) queueSync({action:"upsert", shift:shiftPayload(gone)}); }); });
-  box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openModal(db.shifts.find(s=>s.id===b.dataset.edit)));
+  box.querySelectorAll("[data-edit]").forEach(b=>{ b.onclick=()=>openModal(db.shifts.find(s=>s.id===b.dataset.edit));
+    b.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); b.click(); } }; });
 
   drawChart();
   applyTheme();
@@ -715,8 +712,14 @@ function openModal(shift){
   $("fIn").value = shift ? t2(shift.start) : "";
   $("fOut").value = (shift && shift.end) ? t2(shift.end) : "";
   $("fTip").value = (shift && shift.tip) ? shift.tip : ""; $("fNote").value = (shift && shift.note) ? shift.note : ""; $("fRate").value = shift ? rateOf(shift) : db.rate;
+  $("modalDelete").style.display = shift ? "" : "none";
   $("modalBg").classList.add("open");
 }
+$("modalDelete").onclick=()=>{
+  const id=editingId, gone=db.shifts.find(s=>s.id===id); if(!gone) return;
+  closeModal(); db.shifts=db.shifts.filter(s=>s.id!==id); save(); render(); queueSync({action:"delete", id:id});
+  showUndo("Shift deleted.", ()=>{ db.shifts.push(gone); save(); render(); if(gone.end) queueSync({action:"upsert", shift:shiftPayload(gone)}); });
+};
 function closeModal(){ $("modalBg").classList.remove("open"); editingId=null; }
 $("modalCancel").onclick=closeModal;
 $("modalBg").addEventListener("click",e=>{ if(e.target===$("modalBg")) closeModal(); });
@@ -986,7 +989,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.13.13";
+const APP_VERSION="2026.10.14.1";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1146,7 +1149,7 @@ function renderPay(){
   $("payEarned").textContent=money(earned); $("payRecv").textContent=money(recv);
   const big=$("payOwed"); big.textContent=money(Math.abs(owed)); big.className="pay-big "+(owed>0.004?"owe":"ok");
   $("payOwedSub").textContent = !done.length && !P.length ? "Log what you're paid and it shows here." :
-    owed>0.004 ? "Still owed to you" : owed<-0.004 ? "Paid ahead of what you've worked" : "All paid up \u2713";
+    owed>0.004 ? (earned>0 ? "You've been paid "+Math.round(Math.min(100,recv/earned*100))+"% of what you've earned" : "Still owed") : owed<-0.004 ? "Paid ahead of what you've worked" : "All paid up \u2713";
   $("payBar").style.width=(earned>0?Math.min(100,recv/earned*100):(recv>0?100:0))+"%";
   // this month
   const mk=monthKey(Date.now()); let me=0, mr=0;
@@ -1182,6 +1185,12 @@ function renderPay(){
     b.appendChild(e); b.appendChild(d); r.appendChild(a); r.appendChild(b); lb.appendChild(r); });
   renderPayExtras(done, P, recv);
 }
+function payRow(id, title, sub, amt){
+  const el=$(id); el.textContent="";
+  const l=document.createElement("div"), t=document.createElement("b"), s=document.createElement("small"), a=document.createElement("div");
+  t.textContent=title; s.textContent=sub; l.appendChild(t); l.appendChild(document.createElement("br")); l.appendChild(s);
+  a.className="amt"; a.textContent=amt; el.className="payrow"; el.appendChild(l); el.appendChild(a);
+}
 function renderPayExtras(done, P, recv){
   // next payday: what you're owed now, plus a projection at your recent pace (last 28 days)
   const nx=$("payNext"); nx.style.display="none";
@@ -1191,7 +1200,7 @@ function renderPayExtras(done, P, recv){
     const pace=done.filter(s=>s.start>=since).reduce((a,s)=>a+pay(s),0)/28, days=Math.max(0,Math.ceil((nd.getTime()-Date.now())/86400000));
     const proj=owedNow+pace*days;
     if(owedNow>0.004 || pace>0){
-      $("payNextTxt").textContent=fmtDate(nd.getTime())+" ("+days+" day"+(days===1?"":"s")+"): "+money(owedNow)+" owed so far"+(pace>0?", about "+money(proj)+" by then at your recent pace.":".");
+      payRow("payNextTxt","Next payday \u00b7 "+fmtDay(nd.getTime()),days+" day"+(days===1?"":"s")+" away \u00b7 expected",money(pace>0?proj:owedNow));
       nx.style.display="block"; }
   }
   // overdue: wages for work done before the most recent payday, minus everything received so far
@@ -1201,7 +1210,7 @@ function renderPayExtras(done, P, recv){
     if(pd.getTime()>now.getTime()) pd.setMonth(pd.getMonth()-1);
     const cut=pd.getTime(), wages=done.filter(s=>s.start<cut).reduce((a,s)=>a+pay(s),0), over=Math.round((wages-recv)*100)/100;
     if(over>0.004){ const days=Math.floor((Date.now()-cut)/86400000);
-      $("payDueTxt").textContent=money(over)+" was due on "+fmtDate(cut)+(days>0?" ("+days+" day"+(days===1?"":"s")+" ago).":" (today)."); due.style.display="block"; }
+      payRow("payDueTxt","Overdue",(days>0?"since "+fmtDay(cut)+" \u00b7 "+days+" day"+(days===1?"":"s")+" late":"due today"),money(over)); due.style.display="block"; }
   }
 }
 let payEditing=null;

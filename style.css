@@ -376,3 +376,54 @@ html[data-theme="dark"] .btn.primary{color:#0c1020;}
   width:min(440px,calc(100% - 28px));padding:12px 16px;border-radius:18px;background:var(--glass-strong);border:1px solid var(--line);
   -webkit-backdrop-filter:blur(30px);backdrop-filter:blur(30px);box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:14px}
 .toast[hidden]{display:none} .toast .link{margin:0 0 0 auto;white-space:nowrap}
+
+/* ===== Calm pass: quieter labels, flatter blocks, clearer hierarchy ===== */
+.stat .label,.field label,.ana-tile .l,.tipbox-h,.pay-h{text-transform:none; letter-spacing:0; font-size:13px; font-weight:500; color:var(--muted);}
+.ana-tile .l{font-size:12.5px;}
+.pay-h{margin-bottom:8px;}
+.val,.hero-earn,.pay-big,.amt,.ana-tile .v,.row .m b,.dayhead span{font-variant-numeric:tabular-nums;}
+
+/* flat stat columns inside cards (no boxes inside boxes) */
+.tipbox .stat,.pay2 .stat{background:transparent; box-shadow:none; border:0; border-radius:0; -webkit-backdrop-filter:none; backdrop-filter:none; padding:6px 4px;}
+.tips3,.pay2{gap:0;}
+.tips3 .stat+.stat,.pay2 .stat+.stat{border-left:1px solid var(--line, rgba(128,140,160,.22));}
+.tipbox-top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;}
+.tipbox-top .tipbox-h{margin:0;}
+.tipbox-t{margin:0; font-size:13px; color:var(--muted);}
+
+/* Home: one quiet row for the two secondary actions */
+.quickrow{display:flex; justify-content:center; align-items:center; gap:14px; margin-top:14px;}
+.quickrow i{width:1px; height:16px; background:var(--line, rgba(128,140,160,.3));}
+.quickrow .link{margin:0; padding:6px 4px; font-size:15px; font-weight:600;}
+
+/* History: day headers with the day's total, calm text-style actions */
+.dayhead{display:flex; justify-content:space-between; align-items:baseline; margin:18px 2px 2px; font-size:13px; font-weight:600; color:var(--muted);}
+.dayhead:first-child{margin-top:4px;}
+.row .icon-btn{background:transparent; padding:6px 8px; font-size:14px; font-weight:600; border-radius:10px; min-height:0;}
+.row .icon-btn.danger{background:transparent; color:var(--red); opacity:.85;}
+.row .m b{font-size:17px;}
+.row .d{font-weight:600;}
+
+/* Pay: payday rows */
+.payrow{display:flex; justify-content:space-between; align-items:center; gap:12px;}
+.payrow small{color:var(--muted); font-size:13px; font-weight:400;}
+.payrow .amt{font-size:21px; font-weight:700; white-space:nowrap;}
+.card.warn{border:0; box-shadow:inset 3px 0 0 var(--red);} .card.warn .amt{color:var(--red);}
+#payNext,#payDue{padding-top:16px; padding-bottom:16px;}
+.pay-big{letter-spacing:-.5px;}
+
+/* the clock button: same colour, less glare */
+.big-btn{box-shadow:0 6px 18px rgba(47,158,110,.22);}
+
+.flat3 .stat,.pay3 .stat{background:transparent; box-shadow:none; border:0; border-radius:0; -webkit-backdrop-filter:none; backdrop-filter:none; padding:6px 4px;}
+.flat3,.pay3{gap:0;}
+.flat3 .stat+.stat,.pay3 .stat+.stat{border-left:1px solid var(--line, rgba(128,140,160,.22));}
+.row{cursor:pointer; -webkit-tap-highlight-color:transparent; border-radius:14px; transition:background .15s;}
+.row:active{background:var(--chip);}
+.row:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+.row .m{display:flex; align-items:center; gap:8px;}
+.chev{color:var(--muted); font-size:22px; line-height:1; opacity:.6;}
+.danger-link{color:var(--red); margin-top:10px; font-size:15px;}
+.card.warn{box-shadow:none;} .card.warn .payrow b{color:var(--red);}
+.row{border-radius:0;}
+.row:active{border-radius:12px;}

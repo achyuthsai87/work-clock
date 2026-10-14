@@ -62,25 +62,24 @@
     <button id="clockBtn" class="big-btn">Clock In</button>
     <div id="statusLine" class="status-line"></div>
     <button id="cancelShift" class="cancel-shift" style="display:none">Discard this shift</button>
-    <div class="tip-row"><span id="tipToday">No tips logged today</span><button id="tipBtn" class="link">+ Add tip</button></div>
-    <div style="text-align:center"><button id="manualBtn" class="link">+ Add a shift manually</button></div>
+    <span id="tipToday" hidden></span>
+    <div class="quickrow"><button id="tipBtn" class="link">Add tip</button><i></i><button id="manualBtn" class="link">Add shift manually</button></div>
   </div>
 
 <div class="card tipbox">
-    <div class="tipbox-h">Tips</div>
+    <div class="tipbox-top"><span class="tipbox-h">Tips</span><span class="tipbox-t">Total <b id="tipAll">$0.00</b></span></div>
     <div class="stats tips3">
       <div class="stat"><div class="label">Today</div><div class="val" id="tipDay">$0.00</div></div>
       <div class="stat"><div class="label">This week</div><div class="val" id="tipWeek">$0.00</div></div>
       <div class="stat"><div class="label">This month</div><div class="val" id="tipMonth">$0.00</div></div>
     </div>
-    <div class="tipbox-t">Total tips <b id="tipAll">$0.00</b></div>
   </div>
 
-<div class="stats">
+<div class="card"><div class="stats flat3">
     <div class="stat"><div class="label">Today</div><div class="val" id="statToday">—</div></div>
     <div class="stat"><div class="label" id="monthLabel">This month</div><div class="val" id="statMonth">—</div></div>
     <div class="stat"><div class="label">All time</div><div class="val" id="statAll">—</div></div>
-  </div>
+  </div></div>
   </section>
   <section class="tabpane" id="tab-history">
   <div class="page-title">History</div>
@@ -156,7 +155,7 @@
   <section class="tabpane" id="tab-pay">
   <div class="page-title">Pay</div>
   <div class="card">
-    <div class="pay-h">What you're owed</div>
+    <div class="pay-h">Owed to you</div>
     <div class="pay-big" id="payOwed">$0.00</div>
     <div class="pay-sub" id="payOwedSub">Log what you're paid and it shows here.</div>
     <div class="pbar"><i id="payBar"></i></div>
@@ -167,11 +166,11 @@
     <button id="payAdd" class="big-btn pay-btn">+ Log a payment</button>
     <div style="text-align:center"><button id="stmtBtn" class="link">Pay statement for the owner</button></div>
   </div>
-  <div class="card" id="payNext" style="display:none"><div class="pay-h">Next payday</div><div id="payNextTxt"></div></div>
-  <div class="card warn" id="payDue" style="display:none"><div class="pay-h">Overdue</div><div id="payDueTxt"></div></div>
+  <div class="card" id="payNext" style="display:none"><div id="payNextTxt"></div></div>
+  <div class="card warn" id="payDue" style="display:none"><div id="payDueTxt"></div></div>
   <div class="card">
     <div class="pay-h" id="payMonthLabel">This month</div>
-    <div class="stats">
+    <div class="stats pay3">
       <div class="stat"><div class="label">Earned</div><div class="val" id="payMEarn">$0.00</div></div>
       <div class="stat"><div class="label">Received</div><div class="val" id="payMRecv">$0.00</div></div>
       <div class="stat"><div class="label">Short by</div><div class="val" id="payMBal">$0.00</div></div>
@@ -320,6 +319,7 @@
       <button class="btn ghost" id="modalCancel">Cancel</button>
       <button class="btn primary" id="modalSave">Save</button>
     </div>
+    <div style="text-align:center"><button class="link danger-link" id="modalDelete">Delete this shift</button></div>
   </div>
 </div>
 
