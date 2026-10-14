@@ -719,9 +719,11 @@ async function flushOutbox(){
   updateSyncStatus();
 }
 // Merge shifts that exist in the sheet but not on this device (restore after reinstall).
+let pushedN=0;
 async function syncPull(applySettings){
   const j=await syncCall({action:"list"});
   const have=new Set(db.shifts.map(x=>x.id));
+  const sheetIds=new Set((Array.isArray(j.shifts)?j.shifts:[]).map(r=>String(r&&r.id))); let sheetPIds=null; pushedN=0;
   const pendingDel=new Set((db.outbox||[]).filter(e=>e.action==="delete").map(e=>e.id));
   let added=0;
   (Array.isArray(j.shifts) ? j.shifts : []).slice(0,50000).forEach(r=>{
@@ -731,6 +733,7 @@ async function syncPull(applySettings){
   });
   try{
     const pj=await syncCall({action:"plist"}), haveP=new Set(pays().map(x=>x.id));
+    sheetPIds=new Set((Array.isArray(pj.payments)?pj.payments:[]).map(r=>String(r&&r.id)));
     const pendingPDel=new Set((db.outbox||[]).filter(e=>e.action==="pdelete").map(e=>e.id));
     (Array.isArray(pj.payments)?pj.payments:[]).slice(0,20000).forEach(r=>{ const c=cleanPayment(r); if(!c||haveP.has(c.id)||pendingPDel.has(c.id)) return; haveP.add(c.id); pays().push(c); added++; });
   }catch(e){ if(e.message!=="Unknown action") throw e; }
@@ -742,6 +745,11 @@ async function syncPull(applySettings){
         added+=0; save(); render(); }
     }catch(e){ if(e.message!=="Unknown action") throw e; }
   }
+  // two-way: anything finished on this phone that the sheet doesn't have yet goes up now
+  const queued=new Set((db.outbox||[]).map(e=>e.shift&&e.shift.id||e.payment&&e.payment.id));
+  const missS=db.shifts.filter(x=>x.end && !sheetIds.has(String(x.id)) && !queued.has(x.id));
+  if(missS.length){ await syncCall({action:"bulk", shifts:missS.map(shiftPayload)}); pushedN+=missS.length; }
+  if(sheetPIds){ const missP=pays().filter(x=>!sheetPIds.has(String(x.id)) && !queued.has(x.id)); if(missP.length){ try{ await syncCall({action:"pbulk", payments:missP.map(payPayload)}); pushedN+=missP.length; }catch(e){ if(e.message!=="Unknown action") throw e; } } }
   try{ added+=await applyPunches(); }catch(e){ if(!e.offline) throw e; }
   if(added){ save(); render(); }
   return added;
@@ -1127,7 +1135,7 @@ $("syncForm").addEventListener("submit",e=>{ e.preventDefault(); readSyncFields(
   syncRun("Connecting", async()=>{ await syncCall({action:"ping"}); const n=await syncPull(true); await flushOutbox();
     return n ? "Connected · restored "+n+" shift"+(n===1?"":"s") : "Connected ✓"; }); });
 $("syncToggle").onclick=()=>{ const c=syncCfg(); c.enabled=!c.enabled; save(); updateSyncToggle(); updateSyncStatus(); if(c.enabled) flushOutbox(); };
-$("syncNowBtn").onclick=()=>syncRun("Syncing", async()=>{ await flushOutbox(); if(syncCfg().err) throw new Error(syncCfg().err); const n=await syncPull(); return n?"Restored "+n+" shift"+(n===1?"":"s"):"Up to date ✓"; });
+$("syncNowBtn").onclick=()=>syncRun("Syncing", async()=>{ await flushOutbox(); if(syncCfg().err) throw new Error(syncCfg().err); const n=await syncPull(); return n?"Restored "+n+" shift"+(n===1?"":"s"):(pushedN?"Uploaded "+pushedN+" to your sheet ✓":"Up to date ✓"); });
 $("syncUpBtn").onclick=()=>syncRun("Uploading", async()=>{ const n=await syncUploadAll(); return "Uploaded "+n+" shift"+(n===1?"":"s")+" ✓"; });
 $("syncDownBtn").onclick=async()=>{ if(!await askConfirm("Restore from your sheet?","Shifts, payments and settings on this phone will be updated to match your Google Sheet.","Restore",false)) return; syncRun("Restoring", async()=>{ const n=await syncPull(true); return n?"Restored "+n+" item"+(n===1?"":"s")+" ✓":"Restored from the sheet ✓"; }); };
 // pull on open + whenever the app comes back to the foreground (iOS keeps PWAs alive)
@@ -1135,7 +1143,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.21";
+const APP_VERSION="2026.10.14.22";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
