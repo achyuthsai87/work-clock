@@ -1134,7 +1134,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.18";
+const APP_VERSION="2026.10.14.19";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1452,6 +1452,7 @@ function tweenText(el){
   };
   requestAnimationFrame(f);
 }
+const counted={};
 function countUpAll(tab){
   const ids= tab==="home" ? ["statToday","statMonth","statAll","tipDay","tipWeek","tipMonth","tipAll"] : ["payOwed","payEarned","payRecv","payMEarn","payMRecv","payMBal"];
   if(tab==="home" && !db.shifts.some(s=>!s.end)) ids.unshift("heroEarn");
@@ -1464,13 +1465,13 @@ document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{
   window.scrollTo(0,0); hideUndo();
   if(t==="analytics"){ renderAnalytics(); drawChart(); }
   if(t==="pay") renderPay();
-       if(t==="home"||t==="pay") countUpAll(t);
+       if((t==="home"||t==="pay") && !counted[t]){ counted[t]=1; countUpAll(t); }
 });
 render();
-function replayActive(){ const on=document.querySelector(".tabpane.on"); if(!on) return; const t=on.id.replace("tab-",""); if(t==="home"||t==="pay") countUpAll(t); }
+function replayActive(){ const on=document.querySelector(".tabpane.on"); if(!on) return; const t=on.id.replace("tab-",""); if(t==="home"||t==="pay"){ counted[t]=1; countUpAll(t); } }
 setTimeout(replayActive,80);
 let hidAt=0;
-document.addEventListener("visibilitychange",()=>{ if(document.hidden){ hidAt=Date.now(); } else if(Date.now()-hidAt>4000){ setTimeout(replayActive,150); } });
+document.addEventListener("visibilitychange",()=>{ if(document.hidden){ hidAt=Date.now(); } else if(Date.now()-hidAt>4000){ for(const k in counted) delete counted[k]; setTimeout(replayActive,150); } });
 })();
 /* Register the service worker so the app works fully offline once installed. */
 if ("serviceWorker" in navigator) {
