@@ -251,8 +251,20 @@ function renderAnalytics(){
     ["Best "+bucketWord, best.earned>0 ? money(best.earned)+"<small>"+esc(p==="year"?MONTHS[days.indexOf(best)]:best.label)+"</small>" : "—"],
     ["Longest shift", longest>0 ? longest.toFixed(1)+"h" : "—"]
   ];
-  if(earned>0 && anaOff===0 && p!=="week" && done>0 && done<days.length) tiles.push(["On pace for", money(earned/done*days.length)+"<small>"+(hours/done*days.length).toFixed(0)+"h</small>"]);
-  else if(earned>0 && anaOff===0 && p==="week" && done>0 && done<7) tiles.push(["On pace for", money(earned/done*7)+"<small>"+(hours/done*7).toFixed(0)+"h</small>"]);
+  // projection: point estimate at the pace so far, with a likely range from how much each finished day/month varied
+  const paceTile=(total)=>{
+    const point=earned/done*total, r=total-done, comp=days.filter(x=>x.b<=nowT).map(x=>x.earned);
+    let sub=(hours/done*total).toFixed(0)+"h", main=money(point);
+    if(comp.length>=3 && r>0){
+      const mean=comp.reduce((a,x)=>a+x,0)/comp.length, sd=Math.sqrt(comp.reduce((a,x)=>a+(x-mean)*(x-mean),0)/(comp.length-1));
+      const spread=sd*Math.sqrt(r), rd=v=>Math.round(v/10)*10;
+      const lo=Math.max(earned,rd(point-spread)), hi=Math.max(lo,rd(point+spread));
+      if(hi-lo>=10){ main=money(lo).replace(/\.00$/,"")+" – "+money(hi).replace(/\.00$/,""); sub="likely range · about "+money(point).replace(/\.00$/,"")+" at this pace"; }
+    } else if(comp.length<3){ sub+=" · too early for a range"; }
+    tiles.push(["On pace for", main+"<small>"+sub+"</small>"]);
+  };
+  if(earned>0 && anaOff===0 && p!=="week" && done>0 && done<days.length) paceTile(days.length);
+  else if(earned>0 && anaOff===0 && p==="week" && done>0 && done<7) paceTile(7);
   const g=$("anaStats"); g.innerHTML="";
   tiles.forEach(([l,v])=>{ const d=document.createElement("div"); d.className="ana-tile";
     d.innerHTML='<div class="l">'+l+'</div><div class="v">'+v+'</div>'; g.appendChild(d); });
@@ -991,7 +1003,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.8";
+const APP_VERSION="2026.10.14.9";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
