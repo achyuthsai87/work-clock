@@ -2,7 +2,7 @@
 <html lang="en" data-theme="auto">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <link rel="canonical" href="https://achyuthsai87.github.io/work-clock/">
 <style id="fb">html{visibility:hidden}</style>
@@ -52,7 +52,9 @@
 <div class="edge edge-top" aria-hidden="true"></div><div class="edge edge-bot" aria-hidden="true"></div>
 <noscript><div style="padding:24px;font-family:sans-serif">Work Clock needs JavaScript enabled.</div></noscript>
 <div class="wrap">
+  <div class="topbar"><button id="avatarBtn" class="av" data-tab="settings" aria-label="Profile and settings"><span class="av-face" id="avFace"></span><span class="av-type" aria-hidden="true"><i></i><i></i><i></i></span></button></div>
   <section class="tabpane on" id="tab-home">
+<div class="page-title">Home</div>
 <div class="card nudge" id="backupNudge" hidden><div class="nudge-t">Back up your history</div><div class="nudge-s">Nothing has been saved off this phone lately. If iOS clears the app, your shifts would be gone.</div><div class="nudge-b"><button id="nudgeNow" class="btn primary">Back up now</button><button id="nudgeSync" class="link">Set up sync</button><button id="nudgeLater" class="link">Later</button></div></div>
 <div class="hero">
     <div class="hero-top"><span id="greet">Hello</span><span id="heroDate"></span></div>
@@ -231,6 +233,17 @@
   </section>
   <section class="tabpane" id="tab-settings">
   <div class="page-title">Settings</div>
+<div class="card" id="profileCard">
+    <div class="pay-h">Profile</div>
+    <div class="prof-top"><div class="av big still" id="profPrev"><span class="av-face"></span></div>
+      <div class="field" style="flex:1;margin:0"><label for="profName">Your name</label><input id="profName" type="text" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="e.g. Mohindra Prakash"></div></div>
+    <div class="sub" style="margin:12px 2px 8px">Picture</div>
+    <div class="av-grid" id="avGrid"></div>
+    <div class="prof-links"><button type="button" class="link" id="avUpload">Upload a photo</button><button type="button" class="link danger-link" id="avRemove" hidden>Remove photo</button></div>
+    <input type="file" id="avFile" accept="image/*" hidden>
+    <div class="sub" id="profMsg" style="margin:4px 2px 0"></div>
+  </div>
+
 <div class="card">
     <div class="pay-h">Pay</div>
     <div class="settings-row"><span>Pay rate<small>$ per hour, for new shifts</small></span><input id="rateInput" type="number" min="0" step="0.25" inputmode="decimal"></div>
@@ -319,13 +332,13 @@
   </div>
   </section>
 
-  <nav class="tabbar">
+  <nav class="tabbar" data-optional>
     <button data-tab="home" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg><span>Home</span></button>
     <button data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>History</span></button>
     <button data-tab="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Calendar</span></button>
     <button data-tab="analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>
     <button data-tab="pay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15v-4"/><path d="M21 12v5h-4a2.5 2.5 0 0 1 0-5z"/></svg><span>Pay</span></button>
-    <button data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
+
   </nav>
 </div>
 
@@ -465,6 +478,7 @@
 </div>
 <div id="fsClock" class="fs-clock" hidden role="dialog" aria-modal="true" aria-label="Shift timer">
   <div class="fs-glow" aria-hidden="true"></div>
+  <div class="av working fs-av" id="fsAv" aria-hidden="true"><span class="av-face" id="fsAvFace"></span><span class="av-type"><i></i><i></i><i></i></span></div>
   <div class="fs-top">
   <div class="fs-live"><span class="dot"></span>Shift in progress</div>
     <div class="fs-loc" id="fsLoc" hidden></div>

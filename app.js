@@ -134,6 +134,11 @@ function cleanLocal(d){  // everything persisted on this device, incl. sync + lo
     if(d.loc.at && typeof d.loc.at === "object"){ out.loc.at = {}; Object.keys(d.loc.at).slice(0, 12).forEach(k => { if((k === "" || ID_RE.test(k)) && d.loc.at[k] === 1) out.loc.at[k] = 1; }); }
     if(d.loc.work && typeof d.loc.work === "object") Object.keys(d.loc.work).slice(0, 12).forEach(k => { if((k === "" || ID_RE.test(k)) && placeOk(d.loc.work[k])) out.loc.work[k] = d.loc.work[k]; });
   }
+  if(d && d.profile && typeof d.profile === "object"){
+    const pf = d.profile, kinds = ["initials","photo","animal"], animals = ["lion","cat","fox","panda","bunny","penguin"];
+    out.profile = {name: cleanText(pf.name, 30).replace(/\s+/g, " "), kind: kinds.includes(pf.kind) ? pf.kind : "initials", animal: animals.includes(pf.animal) ? pf.animal : "lion"};
+    if(typeof pf.photo === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]{1,120000}$/.test(pf.photo)) out.profile.photo = pf.photo;
+  }
   if(d && d.planDone && typeof d.planDone === "object"){ out.planDone = {};
     Object.keys(d.planDone).forEach(k => { const m = /^(?:([A-Za-z0-9_-]{1,64}):)?(\d{4}-\d{2}-\d{2})$/.exec(k); if(!m) return; const key = m[1] ? k : (d.plan && !d.plans ? "plan1:" + k : ""); if(key) out.planDone[key] = true; });
     const ks = Object.keys(out.planDone).sort((a,b) => a.split(":").pop() < b.split(":").pop() ? -1 : 1); ks.slice(0, Math.max(0, ks.length - 300)).forEach(k => delete out.planDone[k]); }
@@ -326,6 +331,7 @@ function updateNudge(){ const el=$("backupNudge"); if(!el) return; const DAY=864
   const need=db.shifts.filter(s=>s.end).length>=3 && !synced && now-(db.lastBackup||0)>21*DAY && now-(db.nudgeAt||0)>7*DAY;
   el.hidden=!need; }
 function render(){
+  if(typeof updateAvatar==="function") try{ updateAvatar(); }catch(e){}
   applyPlan();
   if(!openShift()) hideFs();
   updateNudge();
@@ -660,8 +666,8 @@ function openDrill(mode, level, mk, wk){ syncBack(); dr={mode, level, floor:leve
 function openWeekFor(monthKeySel, mode){ openDrill(mode||"all", 1, monthKeySel); }
 // when a pop-up sends you to another tab, remember where you came from so Back can return you to the same spot
 let navBack=null;
-function currentTab(){ const b=document.querySelector(".tabbar button.on"); return b?b.dataset.tab:"home"; }
-function redirectTo(tab, open){ navBack={tab:currentTab(), y:window.scrollY}; document.querySelector('.tabbar [data-tab="'+tab+'"]').click(); setTimeout(()=>{ open(); syncBack(); },120); }
+function currentTab(){ const b=document.querySelector(".tabbar button.on, #avatarBtn.on"); return b?b.dataset.tab:"home"; }
+function redirectTo(tab, open){ navBack={tab:currentTab(), y:window.scrollY}; document.querySelector('[data-tab="'+tab+'"]').click(); setTimeout(()=>{ open(); syncBack(); },120); }
 function syncBack(){ const b=$("mwHome"); if(b) b.hidden=!navBack; }
 function goDrill(mode, level){ if(hasJobs()){ jobFilter=homeJob; } redirectTo("analytics", ()=>openDrill(mode, level)); }
 const moveWeek=d=>{
@@ -674,7 +680,7 @@ $("mwBack").onclick=()=>{ if(dr.level===2){ dr.mk=monthKey(dr.wk+3*86400000); dr
 $("wkChart").addEventListener("click",e=>{ if(!drGeom||dr.level>=2) return; const r=$("wkChart").getBoundingClientRect(), i=Math.floor((e.clientX-r.left-drGeom.padL)/drGeom.cw); if(i<0||i>=drGeom.n) return;
   if(dr.level===0){ dr.mk=drGeom.targets[i]; dr.level=1; } else { dr.wk=drGeom.targets[i]; dr.level=2; } renderWeek(); });
 const closeMon=()=>{ $("monBg").classList.remove("open"); navBack=null; syncBack(); };
-$("mwHome").onclick=()=>{ const nb=navBack; closeMon(); if(!nb) return; document.querySelector('.tabbar [data-tab="'+nb.tab+'"]').click(); setTimeout(()=>window.scrollTo(0,nb.y),60); };
+$("mwHome").onclick=()=>{ const nb=navBack; closeMon(); if(!nb) return; document.querySelector('[data-tab="'+nb.tab+'"]').click(); setTimeout(()=>window.scrollTo(0,nb.y),60); };
 $("mwClose").onclick=closeMon; $("monBg").addEventListener("click",e=>{ if(e.target===$("monBg")) closeMon(); }); sheetDrag($("monBg"), closeMon);
 [["monthStat","wages",1],["allStat","wages",0],["tipWeekStat","tips",2],["tipMonthStat","tips",1],["tipTot","tips",0]].forEach(([id,mode,lv])=>{ const el=$(id); el.addEventListener("click",()=>goDrill(mode,lv)); el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); el.click(); } }); });
 $("monPrev").onclick=()=>{ monOff--; drawChart(); }; $("monNext").onclick=()=>{ if(monOff<0){ monOff++; drawChart(); } };
@@ -997,7 +1003,7 @@ $("breakInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.t
 $("breakAfterInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); if(Number.isFinite(v)&&v>=1) db.breakAfter=Math.min(v,24); else delete db.breakAfter; e.target.value=db.breakAfter||""; save(); render(); queueSettings(); });
 $("paydayInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>=1&&v<=28){ db.payday=v; db.payCycle="monthly"; } else delete db.payday; e.target.value=db.payday||""; save(); render(); queueMeta(); queueSettings(); });
 $("goalInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); db.goal=(Number.isFinite(v)&&v>0)?Math.min(v,1000000):0; if(!db.goal) delete db.goal; save(); renderAnalytics(); queueSettings(); });
-$("goalSet").addEventListener("click",()=>{ document.querySelector('.tabbar [data-tab="settings"]').click(); setTimeout(()=>$("goalInput").focus(),350); });
+$("goalSet").addEventListener("click",()=>{ document.querySelector('[data-tab="settings"]').click(); setTimeout(()=>$("goalInput").focus(),350); });
 
 function renderInsights(){
   const done=S().filter(x=>x.end).sort((a,b)=>a.start-b.start);
@@ -1502,7 +1508,7 @@ $("startSave").onclick=()=>{ const s=openShift(), v=$("startTime").value; if(!s|
 $("histQ").addEventListener("input",e=>{ histQ=e.target.value; render(); });
 $("histMonth").addEventListener("change",e=>{ histMonth=e.target.value; render(); });
 $("nudgeNow").onclick=()=>{ $("jsonBtn").click(); };
-$("nudgeSync").onclick=()=>{ document.querySelector('.tabbar button[data-tab="settings"]').click(); if(!syncCfg().url) setTimeout(()=>openSheet(null),50); };
+$("nudgeSync").onclick=()=>{ document.querySelector('[data-tab="settings"]').click(); if(!syncCfg().url) setTimeout(()=>openSheet(null),50); };
 $("nudgeLater").onclick=()=>{ db.nudgeAt=Date.now(); save(); updateNudge(); };
 
 // ---------- Where you clocked in and out: checked only at the moment you tap, never tracked in the background ----------
@@ -1735,17 +1741,70 @@ $("importFile").addEventListener("change",e=>{
       const clean=cleanCore(d), skipped=d.shifts.length-clean.shifts.length;
       if(await askConfirm("Replace your data?","Your current shifts and payments will be replaced by this backup ("+clean.shifts.length+" shifts, "+clean.payments.length+" payments"+(skipped>0?", "+skipped+" invalid skipped":"")+").","Replace",true)){
         // only shifts + display prefs come from a file; sync, secret and lock settings always stay as they are
-        db=Object.assign(clean,{sync:db.sync, outbox:db.outbox, lastSync:db.lastSync, lock:db.lock, loc:db.loc}); save(); render(); }
+        db=Object.assign(clean,{sync:db.sync, outbox:db.outbox, lastSync:db.lastSync, lock:db.lock, loc:db.loc, profile:db.profile}); save(); render(); }
     }catch(_){ alert("That file doesn't look like a Work Clock backup."); } };
   r.readAsText(f); e.target.value="";
 });
 $("wipeBtn").onclick=async()=>{ if(await askConfirm("Delete all data?","Every shift and payment on this phone will be erased. You get a few seconds to undo it afterwards, so back up first if you're not sure.","Delete everything",true)){
-  const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, sound:db.sound, payCycle:db.payCycle, payAnchor:db.payAnchor, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock, loc:db.loc};
-  const snapAll=JSON.stringify(Object.assign({},db,{sync:undefined, lock:undefined, outbox:undefined, loc:undefined}));
+  const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, sound:db.sound, payCycle:db.payCycle, payAnchor:db.payAnchor, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock, loc:db.loc, profile:db.profile};
+  const snapAll=JSON.stringify(Object.assign({},db,{sync:undefined, lock:undefined, outbox:undefined, loc:undefined, profile:undefined}));
   db=Object.assign({shifts:[], outbox:[]}, keep); mirrors().forEach(m=>{ m.outbox=[]; }); save(); render(); updateSyncStatus();
-  showUndo("All data deleted.", ()=>{ const o=JSON.parse(snapAll); db=Object.assign(o,{sync:db.sync, lock:db.lock, outbox:db.outbox, lastSync:db.lastSync, loc:db.loc}); save(); render(); updateSyncStatus();
+  showUndo("All data deleted.", ()=>{ const o=JSON.parse(snapAll); db=Object.assign(o,{sync:db.sync, lock:db.lock, outbox:db.outbox, lastSync:db.lastSync, loc:db.loc, profile:db.profile}); save(); render(); updateSyncStatus();
     const l=(o.shifts||[]).filter(x=>x.end).map(x=>shiftPayload(x)); if(l.length) queueSync({action:"bulk", shifts:l}); (o.payments||[]).forEach(p=>queueSync({action:"pupsert", payment:payPayload(p)})); queueMeta(); }); }};
 
+
+// ---------- Profile circle: initials, your photo, or a cute animal; it "types" while you're clocked in ----------
+const ANIMALS=[["lion","Lion"],["cat","Cat"],["fox","Fox"],["panda","Panda"],["bunny","Bunny"],["penguin","Penguin"]];
+const AV_SVG={
+ lion:'<rect width="100" height="100" fill="#ffe7b0"/><g class="a-head"><circle cx="50" cy="56" r="38" fill="#e59a3d"/><circle cx="27" cy="27" r="9" fill="#f2b25a"/><circle cx="27" cy="27" r="4.6" fill="#ffd9b0"/><circle cx="73" cy="27" r="9" fill="#f2b25a"/><circle cx="73" cy="27" r="4.6" fill="#ffd9b0"/><circle cx="50" cy="58" r="27" fill="#ffd694"/><ellipse cx="50" cy="68" rx="13" ry="10" fill="#fff0d2"/><g class="a-eyes"><circle cx="40" cy="54" r="3.7" fill="#3a2a22"/><circle cx="60" cy="54" r="3.7" fill="#3a2a22"/><circle cx="41.2" cy="52.8" r="1.2" fill="#fff"/><circle cx="61.2" cy="52.8" r="1.2" fill="#fff"/></g><path d="M46 62h8l-4 4z" fill="#c2603a"/><path d="M50 66v3M50 69q-4 4-8 1M50 69q4 4 8 1" stroke="#7a4a32" stroke-width="1.6" fill="none" stroke-linecap="round"/><ellipse cx="33" cy="64" rx="4.5" ry="3" fill="#ff9d8a" opacity=".65"/><ellipse cx="67" cy="64" rx="4.5" ry="3" fill="#ff9d8a" opacity=".65"/></g>',
+ cat:'<rect width="100" height="100" fill="#d3e3ff"/><g class="a-head"><path d="M22 44L27 14L47 31Z" fill="#9ca8bf"/><path d="M28 36L30 22L40 31Z" fill="#ffb6c8"/><path d="M78 44L73 14L53 31Z" fill="#9ca8bf"/><path d="M72 36L70 22L60 31Z" fill="#ffb6c8"/><ellipse cx="50" cy="60" rx="31" ry="27" fill="#b6c0d5"/><path d="M50 36v8M43 37l2 7M57 37l-2 7" stroke="#8f9bb4" stroke-width="2.4" stroke-linecap="round"/><g class="a-eyes"><ellipse cx="38" cy="58" rx="4" ry="5" fill="#2b2f45"/><ellipse cx="62" cy="58" rx="4" ry="5" fill="#2b2f45"/><circle cx="39.4" cy="56.2" r="1.4" fill="#fff"/><circle cx="63.4" cy="56.2" r="1.4" fill="#fff"/></g><path d="M47 66h6l-3 3.2z" fill="#ff8fa8"/><path d="M50 69q-3 4-7 2M50 69q3 4 7 2" stroke="#6b5a6b" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M24 66l-12-2M24 70l-12 3M76 66l12-2M76 70l12 3" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity=".85"/><ellipse cx="31" cy="68" rx="4" ry="2.8" fill="#ff9fb4" opacity=".6"/><ellipse cx="69" cy="68" rx="4" ry="2.8" fill="#ff9fb4" opacity=".6"/></g>',
+ fox:'<rect width="100" height="100" fill="#ffe3d3"/><g class="a-head"><path d="M20 46L25 12L47 30Z" fill="#ee7b38"/><path d="M26 36L28 21L40 30Z" fill="#4a3328"/><path d="M80 46L75 12L53 30Z" fill="#ee7b38"/><path d="M74 36L72 21L60 30Z" fill="#4a3328"/><ellipse cx="50" cy="58" rx="31" ry="27" fill="#f28c47"/><path d="M19 62Q36 80 50 86Q64 80 81 62Q66 70 50 70Q34 70 19 62Z" fill="#fff3e6"/><g class="a-eyes"><ellipse cx="38" cy="56" rx="3.6" ry="4.4" fill="#2a1f1f"/><ellipse cx="62" cy="56" rx="3.6" ry="4.4" fill="#2a1f1f"/><circle cx="39.2" cy="54.6" r="1.2" fill="#fff"/><circle cx="63.2" cy="54.6" r="1.2" fill="#fff"/></g><circle cx="50" cy="70" r="3.3" fill="#2a1f1f"/><path d="M50 73q-3 3.5-6 1.5M50 73q3 3.5 6 1.5" stroke="#6b3d28" stroke-width="1.4" fill="none" stroke-linecap="round"/><ellipse cx="30" cy="66" rx="4" ry="2.8" fill="#ff9d8a" opacity=".55"/><ellipse cx="70" cy="66" rx="4" ry="2.8" fill="#ff9d8a" opacity=".55"/></g>',
+ panda:'<rect width="100" height="100" fill="#dff4e4"/><g class="a-head"><circle cx="25" cy="28" r="10.5" fill="#2c2c36"/><circle cx="75" cy="28" r="10.5" fill="#2c2c36"/><ellipse cx="50" cy="58" rx="32" ry="29" fill="#fff"/><ellipse cx="36" cy="55" rx="7.5" ry="9.5" transform="rotate(22 36 55)" fill="#2c2c36"/><ellipse cx="64" cy="55" rx="7.5" ry="9.5" transform="rotate(-22 64 55)" fill="#2c2c36"/><g class="a-eyes"><circle cx="37" cy="55" r="3.3" fill="#fff"/><circle cx="63" cy="55" r="3.3" fill="#fff"/><circle cx="37.4" cy="55.4" r="1.9" fill="#111"/><circle cx="62.6" cy="55.4" r="1.9" fill="#111"/></g><ellipse cx="50" cy="66" rx="4.4" ry="3.2" fill="#2c2c36"/><path d="M50 69q-3 4-7 2M50 69q3 4 7 2" stroke="#2c2c36" stroke-width="1.5" fill="none" stroke-linecap="round"/><ellipse cx="28" cy="68" rx="4" ry="2.8" fill="#ffa7b8" opacity=".6"/><ellipse cx="72" cy="68" rx="4" ry="2.8" fill="#ffa7b8" opacity=".6"/></g>',
+ bunny:'<rect width="100" height="100" fill="#fde6f1"/><g class="a-head"><ellipse cx="35" cy="26" rx="8.5" ry="21" fill="#fff"/><ellipse cx="35" cy="27" rx="4" ry="14" fill="#ffbdd2"/><ellipse cx="65" cy="26" rx="8.5" ry="21" fill="#fff"/><ellipse cx="65" cy="27" rx="4" ry="14" fill="#ffbdd2"/><ellipse cx="50" cy="63" rx="30" ry="26" fill="#fff"/><g class="a-eyes"><circle cx="39" cy="60" r="3.7" fill="#3b2a3a"/><circle cx="61" cy="60" r="3.7" fill="#3b2a3a"/><circle cx="40.2" cy="58.8" r="1.2" fill="#fff"/><circle cx="62.2" cy="58.8" r="1.2" fill="#fff"/></g><ellipse cx="50" cy="67" rx="3.2" ry="2.3" fill="#ff8fb0"/><path d="M50 69.3q-4 4-7 1M50 69.3q4 4 7 1" stroke="#a66a80" stroke-width="1.4" fill="none" stroke-linecap="round"/><rect x="47" y="72" width="6" height="5" rx="1.6" fill="#fff" stroke="#e4cfd8" stroke-width="1"/><ellipse cx="30" cy="68" rx="4.4" ry="3" fill="#ffa7c0" opacity=".65"/><ellipse cx="70" cy="68" rx="4.4" ry="3" fill="#ffa7c0" opacity=".65"/></g>',
+ penguin:'<rect width="100" height="100" fill="#d9edff"/><g class="a-head"><ellipse cx="50" cy="58" rx="31" ry="31" fill="#27324f"/><circle cx="39" cy="55" r="14" fill="#fff"/><circle cx="61" cy="55" r="14" fill="#fff"/><ellipse cx="50" cy="68" rx="21" ry="14" fill="#fff"/><g class="a-eyes"><circle cx="40" cy="56" r="3.5" fill="#1b2036"/><circle cx="60" cy="56" r="3.5" fill="#1b2036"/><circle cx="41.2" cy="54.8" r="1.2" fill="#fff"/><circle cx="61.2" cy="54.8" r="1.2" fill="#fff"/></g><path d="M43 63q7-4 14 0q-7 9-14 0Z" fill="#ffa83a"/><ellipse cx="31" cy="64" rx="4" ry="2.8" fill="#ff9fb0" opacity=".65"/><ellipse cx="69" cy="64" rx="4" ry="2.8" fill="#ff9fb0" opacity=".65"/></g>'
+};
+const animalSvg=k=>'<svg viewBox="0 0 100 100" aria-hidden="true">'+(AV_SVG[k]||AV_SVG.lion)+'</svg>';
+function profile(){ const p=db.profile||{}; return {name:p.name||"", kind:p.kind||"initials", animal:p.animal||"lion", photo:p.photo||""}; }
+function initialsOf(n){ const w=String(n||"").trim().split(/\s+/).filter(Boolean); if(!w.length) return ""; const f=Array.from(w[0])[0]||"", l=w.length>1?(Array.from(w[w.length-1])[0]||""):""; return (f+l).toUpperCase(); }
+function nameHue(n){ let h=0; for(const ch of String(n)) h=(h*31+ch.charCodeAt(0))%360; return h; }
+function paintFace(el, kind, pf){
+  el.textContent=""; el.style.background="";
+  if(kind==="animal"){ el.innerHTML=animalSvg(pf.animal); return; }
+  if(kind==="photo" && pf.photo){ const im=document.createElement("img"); im.alt=""; im.src=pf.photo; el.appendChild(im); return; }
+  const ini=initialsOf(pf.name), h=nameHue(pf.name||"x");
+  if(ini){ el.style.background="linear-gradient(135deg,hsl("+h+" 72% 58%),hsl("+((h+42)%360)+" 70% 44%))"; const s=document.createElement("span"); s.className="av-ini"; s.textContent=ini; el.appendChild(s); }
+  else { el.style.background="linear-gradient(135deg,#8da2c0,#5d7396)"; el.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:56%;height:56%"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.5 20c.9-3.6 3.9-5.6 7.5-5.6s6.6 2 7.5 5.6"/></svg>'; }
+}
+function effKind(pf){ return pf.kind==="photo" && !pf.photo ? "initials" : pf.kind; }
+function updateAvatar(){
+  const pf=profile(), b=$("avatarBtn"); if(!b) return;
+  const sig=JSON.stringify([effKind(pf), pf.name, pf.animal, pf.photo.length]); if(sig!==updateAvatar.sig){ updateAvatar.sig=sig; paintFace($("avFace"), effKind(pf), pf); paintFace($("fsAvFace"), effKind(pf), pf); }
+  b.classList.toggle("working", !!openShift());
+  b.setAttribute("aria-label", (pf.name?pf.name+", ":"")+"profile and settings"+(openShift()?" (clocked in)":""));
+}
+function renderProfile(){
+  const pf=profile(), kind=effKind(pf), grid=$("avGrid"); grid.textContent="";
+  if(document.activeElement!==$("profName")) $("profName").value=pf.name;
+  paintFace($("profPrev").firstElementChild, kind, pf);
+  const tile=(label, on, paint, fn)=>{ const b=document.createElement("button"); b.type="button"; b.className="av-tile"+(on?" on":""); b.setAttribute("aria-label",label); b.setAttribute("aria-pressed",on?"true":"false");
+    const f=document.createElement("span"); f.className="av-face still"; paint(f); b.appendChild(f); const t=document.createElement("small"); t.textContent=label; b.appendChild(t); b.onclick=fn; grid.appendChild(b); };
+  tile("Initials", kind==="initials", f=>paintFace(f,"initials",{name:pf.name}), ()=>setProfile({kind:"initials"}));
+  tile("Photo", kind==="photo", f=>{ if(pf.photo) paintFace(f,"photo",pf); else { f.style.background="var(--chip)"; f.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:46%;height:46%;color:var(--muted)" aria-hidden="true"><path d="M4 8h3l1.6-2.2h6.8L17 8h3v11H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg>'; } }, ()=>{ if(pf.photo) setProfile({kind:"photo"}); else $("avFile").click(); });
+  ANIMALS.forEach(([k,n])=>tile(n, kind==="animal"&&pf.animal===k, f=>paintFace(f,"animal",{animal:k}), ()=>setProfile({kind:"animal", animal:k})));
+  $("avUpload").textContent=pf.photo?"Change photo":"Upload a photo"; $("avRemove").hidden=!pf.photo;
+}
+function setProfile(patch){ db.profile=Object.assign({name:"",kind:"initials",animal:"lion"}, db.profile||{}, patch); save(); updateAvatar(); renderProfile(); }
+$("profName").addEventListener("input",e=>{ const v=cleanText(e.target.value,30).replace(/\s+/g," "); db.profile=Object.assign({name:"",kind:"initials",animal:"lion"}, db.profile||{}, {name:v}); save(); updateAvatar(); paintFace($("profPrev").firstElementChild, effKind(profile()), profile()); renderProfileTilesOnly(); });
+function renderProfileTilesOnly(){ const t=$("avGrid").firstElementChild; if(t){ paintFace(t.querySelector(".av-face"),"initials",{name:profile().name}); } }
+function readPhoto(file){ return new Promise((res,rej)=>{ if(!file||!/^image\//.test(file.type)||file.size>20e6) return rej(new Error("Choose a picture file."));
+  const r=new FileReader(); r.onerror=()=>rej(new Error("Couldn’t read that picture.")); r.onload=()=>{ const im=new Image(); im.onerror=()=>rej(new Error("Couldn’t open that picture.")); im.onload=()=>{
+    const S=256, c=document.createElement("canvas"); c.width=c.height=S; const x=c.getContext("2d"), m=Math.min(im.width,im.height); if(!m) return rej(new Error("Couldn’t open that picture."));
+    x.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,S,S); res(c.toDataURL("image/jpeg",.85)); }; im.src=r.result; }; r.readAsDataURL(file); }); }
+$("avUpload").onclick=()=>$("avFile").click();
+$("avFile").addEventListener("change",async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return; $("profMsg").textContent="";
+  try{ const url=await readPhoto(f); setProfile({photo:url, kind:"photo"}); }catch(err){ $("profMsg").textContent=err.message||"Couldn’t use that picture."; } });
+$("avRemove").onclick=()=>{ const p=Object.assign({}, db.profile||{}); delete p.photo; if(p.kind==="photo") p.kind="initials"; db.profile=p; save(); updateAvatar(); renderProfile(); };
+updateAvatar(); renderProfile();
 // location settings
 function renderLoc(){
   const on=locOn(); $("locToggle").setAttribute("aria-checked",on?"true":"false"); const box=$("locWork"); box.textContent=""; box.hidden=!on;
@@ -1842,7 +1901,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.39";
+const APP_VERSION="2026.10.18.40";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1897,23 +1956,24 @@ function liquid(box, itemSel, pressScale){
   thumb.className="glass-thumb"; echo.className="glass-thumb echo";
   box.prepend(thumb); box.prepend(echo); box.classList.add("liquid");
   const items=()=>Array.from(box.querySelectorAll(itemSel));
-  const active=()=>box.querySelector(itemSel+".on")||items()[0];
+  const active=()=>box.querySelector(itemSel+".on")||(box.hasAttribute("data-optional")?null:items()[0]);
   const S={x:0,w:0,vx:0,vw:0,sc:1,vs:0,ex:0,evx:0}, T={x:0,w:0,sc:1};
-  let raf=0, last=0, drag=null, ready=false;
+  let raf=0, last=0, drag=null, ready=false, hidden=false;
+  const hideThumb=()=>{ hidden=true; paint(); };
   function geom(it){ return {x:it.offsetLeft, w:it.offsetWidth, h:it.offsetHeight, top:it.offsetTop, r:getComputedStyle(it).borderRadius}; }
   function aim(g, snap){
     if(!g.w) return;
-    T.x=g.x; T.w=g.w;
+    hidden=false; T.x=g.x; T.w=g.w;
     [thumb,echo].forEach(el=>{ el.style.height=g.h+"px"; el.style.top=g.top+"px"; el.style.borderRadius=g.r; });
     if(snap||REDUCED||!ready){ S.x=S.ex=g.x; S.w=g.w; S.vx=S.evx=S.vw=S.vs=0; S.sc=T.sc=1; paint(); } else kick();
   }
   function paint(){
     const stretch=Math.min(Math.abs(S.vx)/2400,.34);                 // faster travel => longer, thinner drop
     const sx=(1+stretch)*S.sc, sy=(1-stretch*.5)*S.sc;
-    thumb.style.width=S.w+"px"; thumb.style.opacity=ready?1:0;
+    thumb.style.width=S.w+"px"; thumb.style.opacity=ready&&!hidden?1:0;
     thumb.style.transform="translate3d("+S.x+"px,0,0) scale("+sx+","+sy+")";
     const lag=Math.abs(S.ex-S.x);
-    echo.style.width=S.w+"px"; echo.style.opacity=ready?Math.min(lag/14,1)*.6:0;   // trailing smear fades in while moving
+    echo.style.width=S.w+"px"; echo.style.opacity=ready&&!hidden?Math.min(lag/14,1)*.6:0;   // trailing smear fades in while moving
     echo.style.transform="translate3d("+S.ex+"px,0,0) scale("+(1+Math.min(lag/60,.25))+",.94)";
   }
   function step(dt){
@@ -1931,8 +1991,8 @@ function liquid(box, itemSel, pressScale){
     if(rest){ S.x=S.ex=T.x; S.w=T.w; S.sc=T.sc; S.vx=S.vw=S.vs=S.evx=0; paint(); raf=0; } else raf=requestAnimationFrame(tick);
   }
   function kick(){ if(!raf){ last=performance.now(); raf=requestAnimationFrame(tick); } }
-  new MutationObserver(()=>{ if(!drag) aim(geom(active())); }).observe(box,{subtree:true,attributes:true,attributeFilter:["class"]});
-  new ResizeObserver(()=>{ const a=active(); if(a){ aim(geom(a),true); ready=true; paint(); } }).observe(box);
+  new MutationObserver(()=>{ if(!drag){ const a=active(); if(a) aim(geom(a)); else hideThumb(); } }).observe(box,{subtree:true,attributes:true,attributeFilter:["class"]});
+  new ResizeObserver(()=>{ const a=active(); if(a){ aim(geom(a),true); ready=true; paint(); } else { ready=true; hideThumb(); } }).observe(box);
   // press and drag the lens across the options, like iOS
   box.addEventListener("pointerdown",e=>{
     if(e.button>0) return; const it=e.target.closest(itemSel); if(!it||!box.contains(it)||it.disabled) return;
@@ -1954,7 +2014,7 @@ function liquid(box, itemSel, pressScale){
     if(!drag||e.pointerId!==drag.id) return;
     const it=drag.hover; drag=null; T.sc=1; items().forEach(i=>i.classList.remove("hot"));
     try{ box.releasePointerCapture(e.pointerId); }catch(_){}
-    if(e.type==="pointerup" && it && it!==active()) it.click(); else aim(geom(active()));
+    if(e.type==="pointerup" && it && it!==active()) it.click(); else { const a=active(); if(a) aim(geom(a)); else hideThumb(); }
     kick();
   };
   box.addEventListener("pointerup",end); box.addEventListener("pointercancel",end);
@@ -2219,9 +2279,9 @@ function countUpAll(tab){
   if(tab==="home" && !db.shifts.some(s=>!s.end)) ids.unshift("heroEarn");
   ids.forEach(id=>tweenText($(id)));
 }
-document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{
+document.querySelectorAll(".tabbar button, #avatarBtn").forEach(b=>b.onclick=()=>{
   hideFs();   // the full-screen timer steps aside when you go to another tab
-  document.querySelectorAll(".tabbar button").forEach(x=>x.classList.toggle("on",x===b));
+  document.querySelectorAll(".tabbar button, #avatarBtn").forEach(x=>x.classList.toggle("on",x===b));
   const t=b.dataset.tab;
   document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("on",p.id==="tab-"+t));
   window.scrollTo(0,0); hideUndo();
