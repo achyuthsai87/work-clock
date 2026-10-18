@@ -2,7 +2,7 @@
 <html lang="en" data-theme="auto">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; media-src 'self' blob:; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <link rel="canonical" href="https://achyuthsai87.github.io/work-clock/">
 <style id="fb">html{visibility:hidden}</style>
@@ -245,7 +245,19 @@
     <div class="settings-row"><span>Mileage rate<small>$ per mile, used for mileage</small></span><input id="mileInput" type="number" min="0" max="10" step="0.005" inputmode="decimal" placeholder="0"></div>
   </div>
 
-<div class="card">
+<div class="card" id="soundCard">
+    <div class="pay-h">Alarm sound</div>
+    <div class="settings-row"><span>Alarm at clock-out time<small>rings when your planned or chosen end time arrives</small></span><select id="sndOn" aria-label="Alarm at clock-out time"><option value="1">On</option><option value="">Off</option></select></div>
+    <div class="settings-row"><span>Sound when I tap Clock Out<small>a short version of your sound</small></span><select id="sndTap" aria-label="Sound when I tap Clock Out"><option value="">Off</option><option value="1">On</option></select></div>
+    <div class="snd-list" id="sndList"></div>
+    <div class="settings-row"><span>Volume</span><input type="range" id="sndVol" min="10" max="100" step="5" aria-label="Volume"></div>
+    <button class="btn ghost" id="sndAdd" type="button" style="width:100%;margin-top:6px">Add your own sound</button>
+    <input type="file" id="sndFile" accept="audio/*" hidden>
+    <div class="sub" id="sndMsg" style="margin:8px 2px 0" role="status"></div>
+    <div class="sub" style="margin:6px 2px 0">Rings while Work Clock is open on your screen. iPhone doesn't let web apps ring in the background, and silent mode can mute it. Your own sounds stay on this phone only.</div>
+  </div>
+
+  <div class="card">
     <div class="pay-h">Optional pay rules</div>
     <div class="job-hint">All off until you turn them on. Leave blank if they don't apply to your job.</div>
     <div class="settings-row"><span>Overtime after<small>hours per week</small></span><input id="otWeekInput" type="number" min="0" max="168" step="0.5" inputmode="decimal" placeholder="Off"></div>
@@ -348,6 +360,17 @@
       <button class="btn primary" id="tgSave" type="button">Save</button>
     </div>
     <button class="link" id="tgClear" type="button" hidden style="display:block;margin:10px auto 0">Remove end time</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="alarmBg" role="alertdialog" aria-modal="true" aria-labelledby="alarmH">
+  <div class="modal">
+    <h2 id="alarmH">Time to clock out</h2>
+    <div class="sub" id="alarmTxt" style="margin:0 0 14px"></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="alarmStop" type="button">Keep working</button>
+      <button class="btn primary" id="alarmOut" type="button">Clock out</button>
+    </div>
   </div>
 </div>
 
