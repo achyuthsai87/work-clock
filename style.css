@@ -1112,6 +1112,6 @@ html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme
 /* full-screen clock: timer higher, break/late under it, Clock Out low beside "swipe up" */
 .fs-clock{padding-top:calc(env(safe-area-inset-top) + 40px); padding-bottom:calc(env(safe-area-inset-bottom) + 86px)}
 .fs-clock > .fs-mid{flex:1 1 auto; justify-content:flex-start; padding-top:5vh; padding-bottom:0; gap:20px}
-.fs-clock .fs-mid .fs-row{margin-top:10px}
-.fs-clock .fs-mid .fs-sub{margin-top:0}
+.fs-clock .fs-bot{gap:6px}
+.fs-clock .fs-bot .fs-out{margin-top:10px}
 .fs-clock > .fs-bot{margin-top:auto; padding-bottom:6px}
