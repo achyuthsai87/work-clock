@@ -61,7 +61,7 @@
   </div>
 
 <div class="card">
-    <div class="jobpick" id="jobPickRow" hidden><label for="jobPick">Working at</label><select id="jobPick"></select></div>
+    <div class="jobpick" id="jobPickRow" hidden><div class="jp-h" id="jobPickH">Clock in for</div><div class="jchips" id="jobChips"></div><select id="jobPick" hidden></select></div>
     <button id="clockBtn" class="big-btn">Clock In</button>
     <div id="statusLine" class="status-line"></div>
     <button type="button" id="startEdit" class="link" style="display:none;margin:2px auto 8px">Started late? Change start time</button>
@@ -71,8 +71,10 @@
     <div class="planrow"><div id="planLine" class="plan-line"></div><button id="planBtn" class="link">Plan a shift</button></div>
   </div>
 
+<div class="homeview" id="homeJobRow" hidden><div class="jp-h">Showing</div><div class="jchips" id="homeChips"></div></div>
+
 <div class="card tipbox">
-    <div class="tipbox-top"><span class="tipbox-h">Tips</span><span class="tipbox-t tap" id="tipTot" role="button" tabindex="0" aria-label="See tips month by month">Total <b id="tipAll">$0.00</b></span></div>
+    <div class="tipbox-top"><span class="tipbox-h" id="tipHead">Tips</span><span class="tipbox-t tap" id="tipTot" role="button" tabindex="0" aria-label="See tips month by month">Total <b id="tipAll">$0.00</b></span></div>
     <div class="stats tips3">
       <div class="stat"><div class="label">Today</div><div class="val" id="tipDay">$0.00</div></div>
       <div class="stat tap" id="tipWeekStat" role="button" tabindex="0" aria-label="See this week day by day"><div class="label">This week</div><div class="val" id="tipWeek">$0.00</div></div>
@@ -80,15 +82,17 @@
     </div>
   </div>
 
-<div class="card"><div class="tipbox-top"><span class="tipbox-h">Wages</span></div><div class="stats flat3">
+<div class="card"><div class="tipbox-top"><span class="tipbox-h" id="wageHead">Wages</span></div><div class="stats flat3">
     <div class="stat"><div class="label">Today</div><div class="val" id="statToday">—</div></div>
     <div class="stat tap" id="monthStat" role="button" tabindex="0" aria-label="See this month week by week"><div class="label" id="monthLabel">This month</div><div class="val" id="statMonth">—</div></div>
     <div class="stat tap" id="allStat" role="button" tabindex="0" aria-label="See all time month by month"><div class="label">All time</div><div class="val" id="statAll">—</div></div>
   </div></div>
+  <div id="jobCards" class="jobcards" hidden></div>
   </section>
   <section class="tabpane" id="tab-history">
   <div class="page-title">History</div>
 <div class="card">
+    <div class="jchips hist-chips" id="histChips" hidden></div>
     <div class="hfilter"><select id="histJob" aria-label="Filter by job" hidden></select><input id="histQ" type="search" placeholder="Search notes, dates, amounts" autocomplete="off" maxlength="40" aria-label="Search history"><select id="histMonth" aria-label="Jump to month"></select></div>
     <div id="histSum" class="hsum" hidden></div>
     <div id="history"></div>
@@ -107,7 +111,7 @@
   </section>
   <section class="tabpane" id="tab-analytics">
   <div class="page-title">Analytics</div>
-  <div class="anajob-row" id="anaJobRow" hidden><select id="anaJob" aria-label="Job"></select></div>
+  <div class="anajob-row" id="anaJobRow" hidden><div class="jchips" id="anaChips"></div><select id="anaJob" aria-label="Job" hidden></select></div>
 <div class="card goal-card" style="margin-top:12px">
     <div class="ring-wrap">
       <svg viewBox="0 0 120 120" class="ring" aria-hidden="true"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3ee6b0"/><stop offset="1" stop-color="#4aa8ff"/></linearGradient></defs><circle class="ring-bg" cx="60" cy="60" r="48"/><circle class="ring-fg" id="goalRing" cx="60" cy="60" r="48" stroke-dasharray="301.59" stroke-dashoffset="301.59" transform="rotate(-90 60 60)"/></svg>
@@ -417,6 +421,7 @@
   <div class="fs-glow" aria-hidden="true"></div>
   <div class="fs-top">
   <div class="fs-live"><span class="dot"></span>Shift in progress</div>
+    <div class="fs-job" id="fsJob" hidden><span class="fj-dot"><i></i></span><span id="fsJobName"></span></div>
   </div>
   <div class="fs-mid">
   <div class="fs-time" id="fsTime"><span id="fsH">00</span><i>:</i><span id="fsM">00</span><i>:</i><span id="fsS">00</span></div>

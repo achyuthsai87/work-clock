@@ -267,8 +267,21 @@ function fillJobSelect(sel, val){ sel.innerHTML=""; const add=(v,t)=>{ const o=d
 const hasJobs=()=>!!(db.jobs&&db.jobs.length);
 const jobOk=(s,f)=>f==="all" ? !jobLeft(s.job) : (f==="main" ? !s.job || !(db.jobs||[]).some(j=>j.id===s.job) : s.job===f);
 function S(){ return db.shifts.filter(s=>jobOk(s,jobFilter)); }   // shifts in view for Analytics
+let homeJob="all";   // which job the Home totals are showing
+const JPAL=["#4f8bff","#2fd08e","#ff9b5e","#c78bff","#ff6fa3","#f2c94c","#38c6d9","#9aa7bd"];
+function jobColor(id){ const i=id?(db.jobs||[]).findIndex(j=>j.id===id)+1:0; return JPAL[(i<0?0:i)%JPAL.length]; }
+const jobDot=id=>'<i class="jd" style="--jc:'+jobColor(id)+'"></i>';
+// a row of job chips; opt: all (adds "All jobs"), main (value used for the main job), left (include jobs you left), disabled
+function jobChips(el, cur, onPick, opt){
+  el.innerHTML=""; const mk=(v,t,id)=>{ const b=document.createElement("button"); b.type="button"; b.className="jchip"+(v===cur?" on":""); b.style.setProperty("--jc", id==null?"var(--muted)":jobColor(id));
+    b.innerHTML=(id==null?"":'<i class="jd"></i>')+esc(t); b.disabled=!!opt.disabled; b.setAttribute("aria-pressed", v===cur); b.onclick=()=>onPick(v); el.appendChild(b); };
+  if(opt.all) mk("all","All jobs",null); mk(opt.main==null?"":opt.main, jobName(""), "");
+  (db.jobs||[]).forEach(j=>{ if(!j.left || opt.left) mk(j.id, j.name+(j.left?" (left)":""), j.id); }); }
+function jobStats(f){ const today=dayKey(Date.now()), mk=monthKey(Date.now()), r={tw:0,th:0,mw:0,mh:0,aw:0,ah:0,tt:0,mt:0,n:0};
+  db.shifts.forEach(s=>{ if(!jobOk(s,f)) return; const tp=tipOf(s); if(tp){ if(dayKey(s.start)===today) r.tt+=tp; if(monthKey(s.start)===mk) r.mt+=tp; }
+    if(!s.end) return; r.n++; const h=hrs(s), p=pay(s); r.ah+=h; r.aw+=p; if(dayKey(s.start)===today){ r.th+=h; r.tw+=p; } if(monthKey(s.start)===mk){ r.mh+=h; r.mw+=p; } }); return r; }
 
-function showFs(){ const el=$("fsClock"); if(!openShift()) return; el.hidden=false; { const mc=document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute("content","#0b0f1a"); } document.body.classList.add("fs-open"); tickFs(); clearInterval(fsTimer); fsTimer=setInterval(tickFs,250); }
+function showFs(){ const el=$("fsClock"); if(!openShift()) return; el.hidden=false; { const mc=document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute("content","#0b0f1a"); } document.body.classList.add("fs-open"); tickFs(); { const jp=$("fsJob"); jp.classList.remove("pop"); void jp.offsetWidth; jp.classList.add("pop"); } clearInterval(fsTimer); fsTimer=setInterval(tickFs,250); }
 function hideFs(){ const el=$("fsClock"); if(!el||el.hidden) return; el.hidden=true; el.style.transform=""; el.style.transition=""; el.classList.remove("dragging"); applyTheme(); document.body.classList.remove("fs-open"); clearInterval(fsTimer); }
 let fsTimer=null;
 function planOf(o){   // the planned shift this clock-in belongs to, if any
@@ -279,6 +292,7 @@ function planOf(o){   // the planned shift this clock-in belongs to, if any
 function tickFs(){ const o=openShift(); if(!o){ hideFs(); return; } const el=Math.max(0,Date.now()-o.start)/1000, h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60), p2=n=>String(n).padStart(2,"0");
   $("fsH").textContent=p2(h); $("fsM").textContent=p2(m); $("fsS").textContent=p2(s);
   const pl=o.tgt?{S:o.start,E:o.tgt}:planOf(o), tr=$("fsTrack"), cap=$("fsPlan"); tr.hidden=false; tr.classList.toggle("idle",!pl); cap.hidden=!pl;
+  { const jp=$("fsJob"); jp.hidden=!hasJobs(); if(hasJobs()){ $("fsJobName").textContent=jobName(o.job); $("fsClock").style.setProperty("--jc",jobColor(o.job)); } }
   $("fsEnd").textContent=o.tgt?"Ends "+fmtTime(o.tgt)+" \u00b7 change":"Set end time";
   if(!pl){ $("fsFill").style.width="100%"; $("fsExtra").style.width="0%"; }
   if(pl){ const len=pl.E-pl.S, worked=hrs({start:o.start,end:Date.now(),brk:o.brk,bp:o.bp})*3600000, f=worked/len, ex=Math.max(0,worked-len)/60000;
@@ -303,7 +317,7 @@ function render(){
     const tick=()=>{ const el=(Date.now()-open.start)/1000;
       const h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
       line.innerHTML='<div class="live-row"><span class="live-l"><span class="dot"></span>Shift in progress</span><b class="live-t">'+
-        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+'</b></div><div class="live-s">Clocked in at '+esc(fmtTime(open.start))+" · tap for full screen</div>"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':''); };
+        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+'</b></div><div class="live-s">Clocked in at '+esc(fmtTime(open.start))+(hasJobs()?" · "+esc(jobName(open.job)):"")+" · tap for full screen</div>"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':''); };
     tick(); clearInterval(timer); timer=setInterval(tick,1000);
   } else {
     btn.textContent="Clock In"; btn.classList.remove("out"); cancel.style.display="none"; $("startEdit").style.display="none";
@@ -314,9 +328,11 @@ function render(){
   // stats
   const today=dayKey(Date.now()), mk=monthKey(Date.now());
   let th=0, mh=0, ah=0, et=0, em=0, ea=0, tt=0, tw=0, tm=0, ta=0; const wk0=startOfWeek(Date.now());
-  db.shifts.forEach(s=>{ if(!s.end) return; const h=hrs(s), p=pay(s); ah+=h; ea+=p;
+  const hv=db.shifts.filter(s=>jobOk(s,homeJob));
+  hv.forEach(s=>{ if(!s.end) return; const h=hrs(s), p=pay(s); ah+=h; ea+=p;
     if(dayKey(s.start)===today){ th+=h; et+=p; } if(monthKey(s.start)===mk){ mh+=h; em+=p; } });
-  db.shifts.forEach(s=>{ const tp=tipOf(s); if(!tp) return; ta+=tp; if(s.start>=wk0) tw+=tp; if(dayKey(s.start)===today) tt+=tp; if(monthKey(s.start)===mk) tm+=tp; });
+  hv.forEach(s=>{ const tp=tipOf(s); if(!tp) return; ta+=tp; if(s.start>=wk0) tw+=tp; if(dayKey(s.start)===today) tt+=tp; if(monthKey(s.start)===mk) tm+=tp; });
+  { const nm=homeJob==="all"?"":" \u00b7 "+jobName(homeJob==="main"?"":homeJob); $("tipHead").textContent="Tips"+nm; $("wageHead").textContent="Wages"+nm; }
   $("tipDay").textContent=money(tt); $("tipWeek").textContent=money(tw); $("tipMonth").textContent=money(tm); $("tipAll").textContent=money(ta);
   $("statToday").innerHTML = money(et)+"<small>"+th.toFixed(1)+"h</small>";
   $("statMonth").innerHTML = money(em)+"<small>"+mh.toFixed(1)+"h</small>";
@@ -339,7 +355,7 @@ function render(){
     else if(pls.length>1){ const nx=nextPlanned(); line.textContent=pls.length+" planned shifts"+(nx?" · next "+(nx.today?"today ":fmtDay(nx.day)+" ")+f(nx.plan.start):""); line.style.display=""; $("planBtn").textContent="Calendar"; }
     else { line.textContent=""; line.style.display="none"; $("planBtn").textContent="Plan a shift"; } }
   clearInterval(liveTimer);
-  if(open && dayKey(open.start)===today){ const upd=()=>{ const h=(Date.now()-open.start)/3600000, hh=(db.breakMin>0&&h>=(db.breakAfter||6))?Math.max(0,h-db.breakMin/60):h;
+  if(open && jobOk(open,homeJob) && dayKey(open.start)===today){ const upd=()=>{ const h=(Date.now()-open.start)/3600000, hh=(db.breakMin>0&&h>=(db.breakAfter||6))?Math.max(0,h-db.breakMin/60):h;
       $("heroEarn").textContent=money(et+hh*rateOf(open)); $("heroSub").textContent=(th+hh).toFixed(2)+"h so far today"+(tt>0?" · + "+money(tt)+" tips":""); };
     upd(); liveTimer=setInterval(upd,1000); }
   renderJobsUI();
@@ -369,7 +385,7 @@ function render(){
     }
     const h=hrs(s), row=document.createElement("div"); row.className="row";
     row.innerHTML='<div><div class="d">'+esc(fmtTime(s.start))+" – "+esc(fmtTime(s.end))+'</div>'+
-      '<div class="t">'+h.toFixed(2)+' hours'+(s.tip?' · '+money(s.tip)+' tip':'')+(s.rate!=null&&s.rate!==jobRate(s.job)?' · '+money(s.rate)+'/hr':'')+(hasJobs()?' · '+esc(jobName(s.job)):'')+'</div></div>'+
+      '<div class="t">'+h.toFixed(2)+' hours'+(s.tip?' · '+money(s.tip)+' tip':'')+(s.rate!=null&&s.rate!==jobRate(s.job)?' · '+money(s.rate)+'/hr':'')+(hasJobs()?' · <span class="jtag" style="--jc:'+jobColor(s.job)+'"><i class="jd"></i>'+esc(jobName(s.job))+'</span>':'')+'</div></div>'+
       '<div class="m"><b>'+money(pay(s))+'</b><span class="chev" aria-hidden="true">\u203a</span></div>';
     row.dataset.edit=s.id; row.tabIndex=0; row.setAttribute("role","button"); row.setAttribute("aria-label","Edit shift "+fmtTime(s.start));
     if(s.note){ const nd=document.createElement("div"); nd.className="shnote"; nd.textContent="\uD83D\uDCDD "+s.note; row.appendChild(nd); }
@@ -464,16 +480,34 @@ function renderTipYield(){
 }
 function renderJobsUI(){
   const on=hasJobs();
-  const row=$("jobPickRow"); row.hidden=!on; if(on){ if(db.activeJob && !db.jobs.some(j=>j.id===db.activeJob && !j.left)) delete db.activeJob; fillJobSelect($("jobPick"), db.activeJob); }
+  const row=$("jobPickRow"); row.hidden=!on; if(on){ if(db.activeJob && !db.jobs.some(j=>j.id===db.activeJob && !j.left)) delete db.activeJob; fillJobSelect($("jobPick"), db.activeJob);
+    const o=openShift(), cur=o?(o.job||""):(db.activeJob||"");
+    $("jobPickH").textContent=o?"Clocked in for":"Clock in for";
+    jobChips($("jobChips"), cur, v=>{ if(v) db.activeJob=v; else delete db.activeJob; save(); renderJobsUI(); }, {main:"", disabled:!!o}); }
+  { const hr=$("homeJobRow"); hr.hidden=!on; if(!on) homeJob="all";
+    if(on){ if(homeJob!=="all" && homeJob!=="main" && !(db.jobs||[]).some(j=>j.id===homeJob && !j.left)) homeJob="all";
+      jobChips($("homeChips"), homeJob, v=>{ homeJob=v; render(); }, {all:true, main:"main"}); } }
+  renderJobCards();
   for(const [id,get,set] of [["histJob",()=>histJob,v=>histJob=v],["anaJob",()=>jobFilter,v=>jobFilter=v]]){
-    const el=$(id); el.hidden=!on; $("anaJobRow").hidden=!on; if(!on){ set("all"); continue; }
+    const el=$(id); el.hidden=true; $("anaJobRow").hidden=!on; $("histChips").hidden=!on; if(!on){ set("all"); continue; }
     el.innerHTML=""; const add=(v,t)=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; el.appendChild(o); };
     add("all","All jobs"); add("main",jobName("")); db.jobs.forEach(j=>add(j.id,j.name+(j.left?" (left)":"")));
     if(![...el.options].some(o=>o.value===get())) set("all"); el.value=get(); }
+  if(on){ jobChips($("histChips"), histJob, v=>{ histJob=v; render(); }, {all:true, main:"main", left:true}); jobChips($("anaChips"), jobFilter, v=>{ jobFilter=v; renderJobsUI(); renderAnalytics(); drawChart(); }, {all:true, main:"main", left:true}); }
   const L=$("jobList"); L.innerHTML="";
   const mk=(id,name,rate,left)=>{ const r=document.createElement("button"); r.type="button"; r.className="job-row"+(left?" job-left":""); r.dataset.job=id;
     const n=document.createElement("span"); n.textContent=name; const m=document.createElement("span"); m.className="job-rate"; m.textContent=left?"Left "+fmtDay(new Date(left+"T12:00:00").getTime()):money(rate)+"/hr"; r.appendChild(n); r.appendChild(m); r.onclick=()=>openJob(id||null, true); L.appendChild(r); };
   mk("", jobName(""), db.rate); (db.jobs||[]).forEach(j=>mk(j.id,j.name,j.rate,j.left));
+}
+function renderJobCards(){
+  const box=$("jobCards"); box.innerHTML=""; const on=hasJobs() && homeJob==="all"; box.hidden=!on; if(!on) return;
+  const list=[["main","",jobName(""),db.rate]].concat((db.jobs||[]).filter(j=>!j.left).map(j=>[j.id,j.id,j.name,j.rate]));
+  list.forEach(([f,id,name,rate])=>{ const st=jobStats(f), c=document.createElement("button"); c.type="button"; c.className="card jobcard"; c.style.setProperty("--jc", jobColor(id));
+    const live=openShift() && (openShift().job||"")===id;
+    c.innerHTML='<div class="jc-top"><span class="jc-name"><i class="jd"></i>'+esc(name)+(live?'<em class="jc-live">working now</em>':'')+'</span><span class="jc-rate">'+money(rate)+'/hr</span></div>'+
+      '<div class="jc-grid"><div><small>Today</small><b>'+money(st.tw)+'</b><span>'+st.th.toFixed(1)+'h</span></div><div><small>This month</small><b>'+money(st.mw)+'</b><span>'+st.mh.toFixed(1)+'h</span></div><div><small>Tips (month)</small><b class="tp">'+money(st.mt)+'</b><span>'+money(st.tt)+' today</span></div></div>'+
+      '<div class="jc-all">All time '+money(st.aw)+' \u00b7 '+st.ah.toFixed(1)+'h</div>';
+    c.onclick=()=>{ homeJob=f; render(); window.scrollTo(0,0); }; box.appendChild(c); });
 }
 let jobEditId=null, jobIsMain=false;
 function openJob(id, existing){
@@ -598,7 +632,7 @@ let navBack=null;
 function currentTab(){ const b=document.querySelector(".tabbar button.on"); return b?b.dataset.tab:"home"; }
 function redirectTo(tab, open){ navBack={tab:currentTab(), y:window.scrollY}; document.querySelector('.tabbar [data-tab="'+tab+'"]').click(); setTimeout(()=>{ open(); syncBack(); },120); }
 function syncBack(){ const b=$("mwHome"); if(b) b.hidden=!navBack; }
-function goDrill(mode, level){ redirectTo("analytics", ()=>openDrill(mode, level)); }
+function goDrill(mode, level){ if(hasJobs()){ jobFilter=homeJob; } redirectTo("analytics", ()=>openDrill(mode, level)); }
 const moveWeek=d=>{
   if(dr.level===0) dr.off+=d*6;
   else if(dr.level===1){ const [y,m]=dr.mk.split("-").map(Number); dr.mk=monthKey(new Date(y,m-1+d,1).getTime()); }
@@ -1600,7 +1634,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.33";
+const APP_VERSION="2026.10.18.34";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
