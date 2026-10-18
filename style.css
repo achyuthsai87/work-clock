@@ -727,7 +727,7 @@ body.fs-open{overflow:hidden}
 .miss-btns .btn{width:100%}
 .miss-btns .link{align-self:center; margin-top:4px}
 .fs-sub{background:none; border:0; color:rgba(255,255,255,.6); font-size:15px; padding:8px 12px; cursor:pointer; margin-top:-24px}
-#startBg,#cfmBg,#brkBg,#endBg,#alarmBg{z-index:130}
+#startBg,#lateBg,#cfmBg,#brkBg,#endBg,#alarmBg{z-index:130}
 
 /* the full-screen timer covers the tab bar; use Minimise to leave it */
 body.fs-open .tabbar{display:none}

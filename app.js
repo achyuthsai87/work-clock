@@ -1513,7 +1513,7 @@ $("planSave").onclick=async()=>{
 sheetDrag($("planBg"), closePlan);
 setInterval(()=>{ if(!document.hidden){ if(applyPlan()) render(); showMissed(); } }, 20000);
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ if(applyPlan()) render(); setTimeout(showMissed,400); } });
-$("fsOut").onclick=()=>{ hideFs(); $("clockBtn").onclick(); };
+$("fsOut").onclick=()=>{ Promise.resolve($("clockBtn").onclick()).then(()=>{ if(!openShift()) hideFs(); }); };
 function minimiseFs(){ const el=$("fsClock"); if(el.hidden) return; document.body.classList.remove("fs-open"); el.classList.add("dragging"); el.style.transition="transform .32s cubic-bezier(.3,.8,.3,1)"; el.style.transform="translateY(-104%)"; setTimeout(hideFs,320); }
 $("fsMin").onclick=minimiseFs;
 (function(){ const el=$("fsClock"); let y0=null, id=null, dy=0, drag=false, t0=0;
@@ -1597,7 +1597,7 @@ async function stampPlace(id,key){
   s[key]=r.s; save(); setLocNote(key,placeNote(s,key),id); render(); if(s.end) queueSync({action:"upsert", shift:shiftPayload(s)});
 }
 try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
-$("clockBtn").onclick=()=>{
+function doClock(){
   try{ if(navigator.vibrate) navigator.vibrate(18); }catch(e){}
   { const b=$("clockBtn"); b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); }
   const open=openShift();
@@ -1605,6 +1605,26 @@ $("clockBtn").onclick=()=>{
   if(open){ const fromTxt=$("heroEarn").textContent; open.end=Date.now(); save(); render(); countUp($("heroEarn"), parseFloat(fromTxt.replace(/[^0-9.]/g,"")), parseFloat($("heroEarn").textContent.replace(/[^0-9.]/g,""))); queueSync({action:"upsert", shift:shiftPayload(open)});
     toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); stampPlace(open.id,"pout"); }
   else { const ns=mkShift(Date.now(), null, db.activeJob); db.shifts.push(ns); save(); render(); showFs(); stampPlace(ns.id,"pin"); }
+}
+// planned shifts: ask before starting 5+ minutes late, or clocking out before the planned end
+const PLAN_SLACK=5*60000, hmOf=ts=>{ const d=new Date(ts); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); };
+function lateAsk(t){ return new Promise(res=>{ const now=Date.now();
+  $("lateMsg").textContent="Your shift was planned for "+fmtTime(t.S)+". That was "+brkText(Math.round((now-t.S)/60000))+" ago. Start the clock now, or set the time you really started.";
+  const done=v=>{ $("lateBg").classList.remove("open"); res(v); };
+  $("lateGo").onclick=()=>done("now"); $("lateEdit").onclick=()=>done("edit"); $("lateNo").onclick=()=>done("cancel"); $("lateBg").onclick=e=>{ if(e.target===$("lateBg")) done("cancel"); };
+  $("lateBg").classList.add("open"); }); }
+$("clockBtn").onclick=async()=>{
+  const open=openShift(), now=Date.now();
+  if(open){ const t=planOf(open);
+    if(t && now<t.E-PLAN_SLACK){ const left=brkText(Math.round((t.E-now)/60000));
+      if(!await askConfirm("Clock out now?","Your planned shift ends at "+fmtTime(t.E)+". There's still "+left+" left.","Clock out",true)) return; }
+    return doClock(); }
+  const t=planOf({start:now, job:db.activeJob});
+  if(t && now>t.S+PLAN_SLACK && !db.shifts.some(x=>(x.job||"")===(db.activeJob||"") && x.start>=t.S-2*3600000 && x.start<t.E)){
+    const c=await lateAsk(t); if(c==="cancel") return;
+    doClock(); if(c==="edit"){ openStart(); $("startTime").value=hmOf(t.S); }
+    return; }
+  doClock();
 };
 $("cancelShift").onclick=async()=>{ if(await askConfirm("Discard this shift?","The shift you're clocked into will be thrown away, not saved.","Discard",true)){
   const gone=openShift(); db.shifts=db.shifts.filter(s=>s.end); save(); render(); hideFs();
@@ -1957,7 +1977,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.44";
+const APP_VERSION="2026.10.18.45";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
