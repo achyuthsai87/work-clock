@@ -36,7 +36,7 @@ function cleanJob(j){
   if(!j || typeof j !== "object" || !ID_RE.test(String(j.id))) return null;
   const name = cleanText(j.name, 24), rate = Number(j.rate);
   if(!name || !Number.isFinite(rate) || rate < 0 || rate > 100000) return null;
-  return {id: String(j.id), name, rate};
+  const out={id: String(j.id), name, rate}; if(typeof j.left==="string" && DAY_RE.test(j.left)) out.left=j.left; return out;
 }
 function cleanExpense(x){
   if(!x || typeof x !== "object" || !ID_RE.test(String(x.id))) return null;
@@ -139,6 +139,7 @@ function hrs(s){ const h=(s.end - s.start)/3600000; return (db.breakMin>0 && h>=
 function money(n){ return "$"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2}); }
 function fmtDay(ts){ const d=new Date(ts), y=d.getFullYear()===new Date().getFullYear()?"":", "+d.getFullYear(); return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()]+", "+MONTHS[d.getMonth()]+" "+d.getDate()+y; }
 function tipOf(s){ return s.tip||0; }
+const jobLeft=id=>{ const j=id && (db.jobs||[]).find(x=>x.id===id); return !!(j&&j.left); };
 function jobRate(id){ const j=id && (db.jobs||[]).find(x=>x.id===id); return j ? j.rate : db.rate; }
 function jobName(id){ const j=id && (db.jobs||[]).find(x=>x.id===id); return j ? j.name : (db.jobName||"Main job"); }
 function rateAt(job, ts){ let r=jobRate(job); const w=db.wkndPct||0; if(w>0){ const dw=new Date(ts).getDay(); if(dw===0||dw===6) r=Math.round(r*(1+w/100)*100)/100; } return r; }   // weekend premium applies to new shifts
@@ -157,7 +158,7 @@ function planTimes(plan, base){   // base = local midnight of the day the plan s
   if(E<=S) E.setDate(E.getDate()+1);
   return {S:S.getTime(), E:E.getTime()};
 }
-function planApplies(plan, d){ return plan.once ? plan.once===dayKey(d.getTime()) : (plan.days||[]).includes(d.getDay()); }
+function planApplies(plan, d){ if(plan.job && jobLeft(plan.job)) return false; return plan.once ? plan.once===dayKey(d.getTime()) : (plan.days||[]).includes(d.getDay()); }
 function nextPlanned(days){   // soonest planned shift that hasn't started (looks ahead, skips days off)
   const pls=db.plans||[]; const base=new Date(); base.setHours(0,0,0,0);
   for(let i=0;i<(days||21);i++){ const d=new Date(base); d.setDate(base.getDate()+i); const dk=dayKey(d.getTime()); if(db.daysOff&&db.daysOff[dk]) continue;
@@ -223,7 +224,7 @@ function mergeMeta(remote){   // sheet -> phone: add anything missing here, neve
   return n;
 }
 function fillJobSelect(sel, val){ sel.innerHTML=""; const add=(v,t)=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); };
-  add("", jobName("")); (db.jobs||[]).forEach(j=>add(j.id,j.name)); sel.value=(val&&(db.jobs||[]).some(j=>j.id===val))?val:""; }
+  add("", jobName("")); (db.jobs||[]).forEach(j=>{ if(!j.left || j.id===val) add(j.id,j.name+(j.left?" (left)":"")); }); sel.value=(val&&(db.jobs||[]).some(j=>j.id===val))?val:""; }
 const hasJobs=()=>!!(db.jobs&&db.jobs.length);
 const jobOk=(s,f)=>f==="all" || (f==="main" ? !s.job || !(db.jobs||[]).some(j=>j.id===s.job) : s.job===f);
 function S(){ return db.shifts.filter(s=>jobOk(s,jobFilter)); }   // shifts in view for Analytics
@@ -404,23 +405,23 @@ function renderTipYield(){
 }
 function renderJobsUI(){
   const on=hasJobs();
-  const row=$("jobPickRow"); row.hidden=!on; if(on){ if(db.activeJob && !db.jobs.some(j=>j.id===db.activeJob)) delete db.activeJob; fillJobSelect($("jobPick"), db.activeJob); }
+  const row=$("jobPickRow"); row.hidden=!on; if(on){ if(db.activeJob && !db.jobs.some(j=>j.id===db.activeJob && !j.left)) delete db.activeJob; fillJobSelect($("jobPick"), db.activeJob); }
   for(const [id,get,set] of [["histJob",()=>histJob,v=>histJob=v],["anaJob",()=>jobFilter,v=>jobFilter=v]]){
     const el=$(id); el.hidden=!on; $("anaJobRow").hidden=!on; if(!on){ set("all"); continue; }
     el.innerHTML=""; const add=(v,t)=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; el.appendChild(o); };
-    add("all","All jobs"); add("main",jobName("")); db.jobs.forEach(j=>add(j.id,j.name));
+    add("all","All jobs"); add("main",jobName("")); db.jobs.forEach(j=>add(j.id,j.name+(j.left?" (left)":"")));
     if(![...el.options].some(o=>o.value===get())) set("all"); el.value=get(); }
   const L=$("jobList"); L.innerHTML="";
-  const mk=(id,name,rate)=>{ const r=document.createElement("button"); r.type="button"; r.className="job-row"; r.dataset.job=id;
-    const n=document.createElement("span"); n.textContent=name; const m=document.createElement("span"); m.className="job-rate"; m.textContent=money(rate)+"/hr"; r.appendChild(n); r.appendChild(m); r.onclick=()=>openJob(id||null, true); L.appendChild(r); };
-  mk("", jobName(""), db.rate); (db.jobs||[]).forEach(j=>mk(j.id,j.name,j.rate));
+  const mk=(id,name,rate,left)=>{ const r=document.createElement("button"); r.type="button"; r.className="job-row"+(left?" job-left":""); r.dataset.job=id;
+    const n=document.createElement("span"); n.textContent=name; const m=document.createElement("span"); m.className="job-rate"; m.textContent=left?"Left "+fmtDay(new Date(left+"T12:00:00").getTime()):money(rate)+"/hr"; r.appendChild(n); r.appendChild(m); r.onclick=()=>openJob(id||null, true); L.appendChild(r); };
+  mk("", jobName(""), db.rate); (db.jobs||[]).forEach(j=>mk(j.id,j.name,j.rate,j.left));
 }
 let jobEditId=null, jobIsMain=false;
 function openJob(id, existing){
   jobIsMain=existing && !id; jobEditId=id; const j=(db.jobs||[]).find(x=>x.id===id);
   $("jobTitle").textContent=jobIsMain?"Main job":(j?"Edit job":"Add a job");
   $("jobNameIn").value=jobIsMain?jobName(""):(j?j.name:""); $("jobRateIn").value=j?j.rate:"";
-  $("jobRateF").style.display=jobIsMain?"none":""; $("jobMainNote").style.display=jobIsMain?"":"none"; $("jobDelete").style.display=j?"":"none";
+  $("jobRateF").style.display=jobIsMain?"none":""; $("jobMainNote").style.display=jobIsMain?"":"none"; $("jobDelete").style.display=j?"":"none"; $("jobLeave").style.display=j?"":"none"; $("jobLeave").textContent=(j&&j.left)?"I'm back at this job":"I left this job";
   $("jobBg").classList.add("open"); }
 function closeJob(){ $("jobBg").classList.remove("open"); }
 $("jobAdd").onclick=()=>{ if((db.jobs||[]).length>=7){ alert("That's the maximum number of extra jobs."); return; } openJob(null,false); };
@@ -432,11 +433,24 @@ $("jobSave").onclick=()=>{
     const c=cleanJob({id:jobEditId||("j"+Date.now().toString(36)+Math.random().toString(36).slice(2,4)), name, rate}); if(!c) return;
     db.jobs=db.jobs||[]; const i=db.jobs.findIndex(x=>x.id===c.id); if(i>=0) db.jobs[i]=c; else db.jobs.push(c); }
   save(); closeJob(); render(); queueMeta(); };
-$("jobDelete").onclick=async()=>{ const id=jobEditId; if(db.shifts.some(s=>s.job===id)){ alert("This job has shifts logged, so it can't be deleted. You can rename it instead."); return; }
-  if(!await askConfirm("Delete this job?","Plans for this job will also be removed.","Delete",true)) return;
-  db.jobs=db.jobs.filter(j=>j.id!==id); if(!db.jobs.length) delete db.jobs; if(db.activeJob===id) delete db.activeJob;
-  if(db.plans){ db.plans=db.plans.filter(p=>p.job!==id); if(!db.plans.length) delete db.plans; }
+$("jobLeave").onclick=()=>{ const j=(db.jobs||[]).find(x=>x.id===jobEditId); if(!j) return;
+  if(j.left) delete j.left; else { j.left=dayKey(Date.now()); if(db.activeJob===j.id) delete db.activeJob; }
   save(); closeJob(); render(); queueMeta(); };
+$("jobDelete").onclick=async()=>{
+  const id=expJobId(), j=(db.jobs||[]).find(x=>x.id===id); if(!j) return;
+  const mine=db.shifts.filter(s=>s.job===id), done=mine.filter(s=>s.end);
+  const hh=done.reduce((t,x)=>t+hrs(x),0), ww=done.reduce((t,x)=>t+pay(x),0), pl=(db.plans||[]).filter(p=>p.job===id).length;
+  const msg=done.length||mine.length
+    ? "\""+j.name+"\" has "+mine.length+" shift"+(mine.length===1?"":"s")+" logged ("+hh.toFixed(1)+"h, "+money(ww)+"). They stay in your history and totals with the pay they earned, but will show under "+jobName("")+" instead of this job."+(pl?" "+pl+" planned shift"+(pl===1?"":"s")+" for it will be removed.":"")+" The job itself can't be brought back."
+    : "\""+j.name+"\" has no shifts yet."+(pl?" "+pl+" planned shift"+(pl===1?"":"s")+" for it will be removed.":"")+" This can't be undone.";
+  if(!await askConfirm("Delete "+j.name+"?", msg, "Delete job", true)) return;
+  db.shifts.forEach(s=>{ if(s.job===id){ if(s.rate==null) s.rate=j.rate; delete s.job; } });   // keep each shift's pay exactly as it was
+  db.jobs=db.jobs.filter(x=>x.id!==id); if(!db.jobs.length) delete db.jobs; if(db.activeJob===id) delete db.activeJob;
+  if(db.plans){ db.plans=db.plans.filter(p=>p.job!==id); if(!db.plans.length) delete db.plans; }
+  if(histJob===id) histJob="all"; if(jobFilter===id) jobFilter="all";
+  const upd=mine.filter(s=>s.end).map(s=>shiftPayload(s)); if(upd.length) queueSync({action:"bulk", shifts:upd});
+  save(); closeJob(); render(); queueMeta(); };
+function expJobId(){ return jobEditId; }
 sheetDrag($("jobBg"), closeJob);
 $("jobPick").onchange=e=>{ if(e.target.value) db.activeJob=e.target.value; else delete db.activeJob; save(); };
 $("histJob").onchange=e=>{ histJob=e.target.value; render(); };
@@ -1403,7 +1417,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.2";
+const APP_VERSION="2026.10.18.4";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

@@ -716,3 +716,6 @@ body.fs-open{overflow:hidden}
 /* tip yield */
 .ty-h{font-size:13px; color:var(--muted); margin:12px 0 6px}
 #tipYieldCard .wk .v{min-width:66px; text-align:right}
+
+.job-row.job-left{opacity:.5}
+.job-row.job-left span:first-child{text-decoration:line-through;text-decoration-thickness:1px}
