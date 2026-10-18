@@ -518,7 +518,7 @@ function stackedChart(cv, items){
     if(v>0){ if(it.w>0.004) wh=Math.max(wh,20); if(hasT) th=Math.max(th,18); }
     const topY=H-padB-(wh+th);
     const g=ctx.createLinearGradient(0,H-padB-wh,0,H-padB); g.addColorStop(0,"#4fcf93"); g.addColorStop(1,"#1fa971");
-    ctx.fillStyle=g; ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-wh, bw, wh, th>0?[0,0,6,6]:6); ctx.fill();
+    ctx.fillStyle=v>0?g:"rgba(128,138,155,.35)"; ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-wh, bw, wh, th>0?[0,0,6,6]:6); ctx.fill();
     if(th>0){ ctx.fillStyle="#f06aa8"; ctx.beginPath(); ctx.roundRect(x-bw/2, topY, bw, th, [6,6,0,0]); ctx.fill(); }
     ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.font="700 10.5px "+f; ctx.fillStyle="#fff";
     if(it.w>0.004 && wh>=18) ctx.fillText("$"+Math.round(it.w), x, H-padB-wh/2);
@@ -538,33 +538,61 @@ function drawChart(){
   $("monNext").disabled=monOff>=0; $("monPrev").disabled=!fk || fk>=keys[0];
   monGeom=Object.assign({keys}, stackedChart($("chart"), keys.map(k=>{ const [mn,yr]=monthLabel(k).split(" "); return {label:mn+(k.endsWith("-01")?" \u2019"+yr.slice(2):""), w:sums[k], t:tipS[k]}; })));
 }
-// week pop-up: seven day bars, left/right to move week by week
+// drill-down pop-up: months -> weeks of a month -> seven days of a week; mode = all | wages | tips
+let dr={mode:"all",level:1,floor:1,mk:null,wk:null,off:0}, drGeom=null;
+const mondayOf=ts=>{ const d=new Date(ts); d.setHours(0,0,0,0); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.getTime(); };
+const shortD=ts=>{ const d=new Date(ts); return MONTHS[d.getMonth()].slice(0,3)+" "+d.getDate(); };
+function drAgg(list){ const m=dr.mode; return {w:m==="tips"?0:list.reduce((t,x)=>t+pay(x),0), t:m==="wages"?0:list.reduce((t,x)=>t+tipOf(x),0), h:list.reduce((t,x)=>t+hrs(x),0), n:list.length}; }
 function renderWeek(){
-  const a=new Date(wkStart), b=new Date(a), e=new Date(a); b.setDate(a.getDate()+7); e.setDate(a.getDate()+6);
-  const names=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], view=S().filter(x=>x.end && x.start>=a.getTime() && x.start<b.getTime());
-  const days=names.map((nm,i)=>{ const d0=new Date(a), d1=new Date(a); d0.setDate(a.getDate()+i); d1.setDate(a.getDate()+i+1); const ss=view.filter(x=>x.start>=d0.getTime()&&x.start<d1.getTime());
-    return {label:nm, w:ss.reduce((t,x)=>t+pay(x),0), t:ss.reduce((t,x)=>t+tipOf(x),0), h:ss.reduce((t,x)=>t+hrs(x),0), n:ss.length}; });
-  const W=days.reduce((t,x)=>t+x.w,0), T=days.reduce((t,x)=>t+x.t,0), Hh=days.reduce((t,x)=>t+x.h,0), N=days.reduce((t,x)=>t+x.n,0);
-  const cur=startOfWeek(Date.now())===a.getTime();
-  $("monTitle").textContent=MONTHS[a.getMonth()]+" "+a.getDate()+" \u2013 "+(e.getMonth()!==a.getMonth()?MONTHS[e.getMonth()]+" ":"")+e.getDate()+(e.getFullYear()!==new Date().getFullYear()?", "+e.getFullYear():"");
-  $("mwLab").textContent=cur?"This week":"Week by week";
-  const st=$("mwStats"); st.innerHTML=""; [["Wages",money(W),"g"],["Tips",money(T),"p"],["Total",money(W+T),""]].forEach(([l,v,c])=>{ const d=document.createElement("div"); d.className="mw-tile "+c; d.innerHTML='<small>'+l+'</small><b>'+v+'</b>'; st.appendChild(d); });
-  $("mwNote").textContent=N?Hh.toFixed(1)+"h \u00b7 "+N+" shift"+(N===1?"":"s"):"No shifts this week";
-  const fs=firstShiftTs(); $("mwPrev").disabled=!Number.isFinite(fs) || startOfWeek(fs)>=a.getTime(); $("mwNext").disabled=cur || a.getTime()>Date.now();
-  stackedChart($("wkChart"), days);
+  const mode=dr.mode, all=S().filter(x=>x.end), nowTs=Date.now(), fs=firstShiftTs(), fk=Number.isFinite(fs)?monthKey(fs):null, noun=mode==="tips"?"Tips":mode==="wages"?"Wages":"Earnings";
+  let items=[], targets=[], list=[], lab="", title="", hint="", prevOff=true, nextOff=true;
+  if(dr.level===0){
+    const keys=[], now=new Date();
+    for(let i=5;i>=0;i--){ keys.push(monthKey(new Date(now.getFullYear(), now.getMonth()+dr.off-i, 1).getTime())); }
+    keys.forEach(k=>{ const ss=all.filter(x=>monthKey(x.start)===k); list=list.concat(ss); const a=drAgg(ss), [mn,yr]=monthLabel(k).split(" "); items.push({label:mn+(k.endsWith("-01")?" ’"+yr.slice(2):""), w:a.w, t:a.t}); targets.push(k); });
+    title=noun+" by month"; lab=monthLabel(keys[0])+" – "+monthLabel(keys[5]); hint="Tap a month to see it week by week";
+    prevOff=!fk||fk>=keys[0]; nextOff=dr.off>=0;
+  } else if(dr.level===1){
+    const [y,m]=dr.mk.split("-").map(Number), f=new Date(y,m-1,1), l=new Date(y,m,0), cur=monthKey(nowTs)===dr.mk;
+    for(let d=new Date(mondayOf(f.getTime())); d<=l; d.setDate(d.getDate()+7)){
+      const w0=d.getTime(), e=new Date(d); e.setDate(e.getDate()+7);
+      const ss=all.filter(x=>monthKey(x.start)===dr.mk && x.start>=w0 && x.start<e.getTime()); list=list.concat(ss); const a=drAgg(ss);
+      items.push({label:shortD(Math.max(w0,f.getTime())), w:a.w, t:a.t}); targets.push(w0); }
+    title=monthLabel(dr.mk); lab=cur?"This month":"Week by week"; hint="Tap a week to see its days";
+    prevOff=!fk||fk>=dr.mk; nextOff=dr.mk>=monthKey(nowTs);
+  } else {
+    const a=new Date(dr.wk), b=new Date(a), e=new Date(a); b.setDate(a.getDate()+7); e.setDate(a.getDate()+6);
+    ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach((nm,i)=>{ const d0=new Date(a), d1=new Date(a); d0.setDate(a.getDate()+i); d1.setDate(a.getDate()+i+1);
+      const ss=all.filter(x=>x.start>=d0.getTime()&&x.start<d1.getTime()); list=list.concat(ss); const g=drAgg(ss); items.push({label:nm, w:g.w, t:g.t}); });
+    const cur=mondayOf(nowTs)===a.getTime();
+    title=MONTHS[a.getMonth()]+" "+a.getDate()+" – "+(e.getMonth()!==a.getMonth()?MONTHS[e.getMonth()]+" ":"")+e.getDate()+(e.getFullYear()!==new Date().getFullYear()?", "+e.getFullYear():"");
+    lab=cur?"This week":"Day by day"; hint=""; prevOff=!Number.isFinite(fs)||mondayOf(fs)>=a.getTime(); nextOff=cur||a.getTime()>nowTs;
+  }
+  const T=drAgg(list);
+  $("monTitle").textContent=title; $("mwLab").textContent=lab; $("mwPrev").disabled=prevOff; $("mwNext").disabled=nextOff;
+  $("mwBack").hidden=dr.level<=dr.floor;
+  const st=$("mwStats"); st.innerHTML="";
+  [["Wages",T.w,"g",mode!=="tips"],["Tips",T.t,"p",mode!=="wages"],["Total",T.w+T.t,"",mode==="all"]].forEach(([l,v,c,show])=>{ if(!show) return; const d=document.createElement("div"); d.className="mw-tile "+c; d.innerHTML='<small>'+l+'</small><b>'+money(v)+'</b>'; st.appendChild(d); });
+  $("mwNote").textContent=T.n?(hint?hint+" · ":"")+T.h.toFixed(1)+"h · "+T.n+" shift"+(T.n===1?"":"s"):"No shifts here";
+  const g=stackedChart($("wkChart"), items); drGeom=Object.assign({targets}, g);
 }
-function openWeekFor(monthKeySel){   // latest week of that month that has shifts, else its first week
-  const [y,m]=monthKeySel.split("-").map(Number), inM=S().filter(x=>x.end && monthKey(x.start)===monthKeySel);
-  const ref=inM.length ? Math.max(...inM.map(x=>x.start)) : new Date(y,m-1,1).getTime();
-  wkStart=startOfWeek(ref); $("monBg").classList.add("open"); renderWeek(); }
-const moveWeek=d=>{ const a=new Date(wkStart); a.setDate(a.getDate()+7*d); wkStart=a.getTime(); renderWeek(); };
+function openDrill(mode, level, mk, wk){ dr={mode, level, floor:level, mk:mk||monthKey(Date.now()), wk:wk||mondayOf(Date.now()), off:0}; $("monBg").classList.add("open"); renderWeek(); }
+function openWeekFor(monthKeySel, mode){ openDrill(mode||"all", 1, monthKeySel); }
+function goDrill(mode, level){ document.querySelector('.tabbar [data-tab="analytics"]').click(); setTimeout(()=>openDrill(mode, level),120); }
+const moveWeek=d=>{
+  if(dr.level===0) dr.off+=d*6;
+  else if(dr.level===1){ const [y,m]=dr.mk.split("-").map(Number); dr.mk=monthKey(new Date(y,m-1+d,1).getTime()); }
+  else { const a=new Date(dr.wk); a.setDate(a.getDate()+7*d); dr.wk=a.getTime(); }
+  renderWeek(); };
 $("mwPrev").onclick=()=>moveWeek(-1); $("mwNext").onclick=()=>moveWeek(1);
+$("mwBack").onclick=()=>{ if(dr.level===2){ dr.mk=monthKey(dr.wk+3*86400000); dr.level=1; } else if(dr.level===1) dr.level=0; renderWeek(); };
+$("wkChart").addEventListener("click",e=>{ if(!drGeom||dr.level>=2) return; const r=$("wkChart").getBoundingClientRect(), i=Math.floor((e.clientX-r.left-drGeom.padL)/drGeom.cw); if(i<0||i>=drGeom.n) return;
+  if(dr.level===0){ dr.mk=drGeom.targets[i]; dr.level=1; } else { dr.wk=drGeom.targets[i]; dr.level=2; } renderWeek(); });
 const closeMon=()=>$("monBg").classList.remove("open");
 $("mwClose").onclick=closeMon; $("monBg").addEventListener("click",e=>{ if(e.target===$("monBg")) closeMon(); }); sheetDrag($("monBg"), closeMon);
-$("monthStat").addEventListener("click",()=>{ document.querySelector('.tabbar [data-tab="analytics"]').click(); setTimeout(()=>openWeekFor(monthKey(Date.now())),120); });
-$("monthStat").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); $("monthStat").click(); } });
+[["monthStat","wages",1],["allStat","wages",0],["tipWeekStat","tips",2],["tipMonthStat","tips",1],["tipTot","tips",0]].forEach(([id,mode,lv])=>{ const el=$(id); el.addEventListener("click",()=>goDrill(mode,lv)); el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); el.click(); } }); });
 $("monPrev").onclick=()=>{ monOff--; drawChart(); }; $("monNext").onclick=()=>{ if(monOff<0){ monOff++; drawChart(); } };
-$("chart").addEventListener("click",e=>{ if(!monGeom) return; const r=$("chart").getBoundingClientRect(), i=Math.floor((e.clientX-r.left-monGeom.padL)/monGeom.cw); if(i>=0&&i<6) openWeekFor(monGeom.keys[i]); });
+$("chart").addEventListener("click",e=>{ if(!monGeom) return; const r=$("chart").getBoundingClientRect(), i=Math.floor((e.clientX-r.left-monGeom.padL)/monGeom.cw); if(i>=0&&i<6) openWeekFor(monGeom.keys[i],"all"); });
 
 // ---------- Analytics ----------
 function startOfWeek(ts){ const d=new Date(ts); const diff=(d.getDay()+6)%7; d.setHours(0,0,0,0); return d.getTime()-diff*86400000; }
@@ -1551,7 +1579,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.23";
+const APP_VERSION="2026.10.18.24";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

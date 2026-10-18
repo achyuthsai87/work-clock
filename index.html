@@ -72,18 +72,18 @@
   </div>
 
 <div class="card tipbox">
-    <div class="tipbox-top"><span class="tipbox-h">Tips</span><span class="tipbox-t">Total <b id="tipAll">$0.00</b></span></div>
+    <div class="tipbox-top"><span class="tipbox-h">Tips</span><span class="tipbox-t tap" id="tipTot" role="button" tabindex="0" aria-label="See tips month by month">Total <b id="tipAll">$0.00</b></span></div>
     <div class="stats tips3">
       <div class="stat"><div class="label">Today</div><div class="val" id="tipDay">$0.00</div></div>
-      <div class="stat"><div class="label">This week</div><div class="val" id="tipWeek">$0.00</div></div>
-      <div class="stat"><div class="label">This month</div><div class="val" id="tipMonth">$0.00</div></div>
+      <div class="stat tap" id="tipWeekStat" role="button" tabindex="0" aria-label="See this week day by day"><div class="label">This week</div><div class="val" id="tipWeek">$0.00</div></div>
+      <div class="stat tap" id="tipMonthStat" role="button" tabindex="0" aria-label="See this month week by week"><div class="label">This month</div><div class="val" id="tipMonth">$0.00</div></div>
     </div>
   </div>
 
 <div class="card"><div class="tipbox-top"><span class="tipbox-h">Wages</span></div><div class="stats flat3">
     <div class="stat"><div class="label">Today</div><div class="val" id="statToday">—</div></div>
     <div class="stat tap" id="monthStat" role="button" tabindex="0" aria-label="See this month week by week"><div class="label" id="monthLabel">This month</div><div class="val" id="statMonth">—</div></div>
-    <div class="stat"><div class="label">All time</div><div class="val" id="statAll">—</div></div>
+    <div class="stat tap" id="allStat" role="button" tabindex="0" aria-label="See all time month by month"><div class="label">All time</div><div class="val" id="statAll">—</div></div>
   </div></div>
   </section>
   <section class="tabpane" id="tab-history">
@@ -366,7 +366,7 @@
     <div class="mw-stats" id="mwStats"></div>
     <canvas id="wkChart" width="600" height="300"></canvas>
     <div class="mon-hint" id="mwNote"></div>
-    <div class="btn-row"><button class="btn ghost" id="mwClose" type="button">Close</button></div>
+    <div class="btn-row"><button class="btn ghost" id="mwBack" type="button" hidden>Back</button><button class="btn ghost" id="mwClose" type="button">Close</button></div>
   </div>
 </div>
 

@@ -867,3 +867,4 @@ body.scroll-lock{position:fixed; left:0; right:0; width:100%; overflow:hidden}
 .modal .grab{touch-action:none}
 .stmt{overscroll-behavior:contain}
 .lock{touch-action:none}
+.tap{cursor:pointer}.tipbox-t.tap:active{opacity:.6}
