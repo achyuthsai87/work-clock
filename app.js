@@ -206,7 +206,7 @@ function otMap(){
 const otPctOn=()=>db.otPct||50;
 function otHrs(s){ const m=otMap(); return (m&&m[s.id])||0; }
 function pay(s){ return hrs(s)*rateOf(s) + otHrs(s)*rateOf(s)*otPctOn()/100; }   // wages only (incl. overtime if turned on); tips are tracked separately
-function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 function openShift(){ return db.shifts.find(s=>!s.end); }
 
@@ -1959,7 +1959,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.42";
+const APP_VERSION="2026.10.18.43";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

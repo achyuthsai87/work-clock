@@ -16,6 +16,14 @@ browser's `localStorage` on your phone, plus your own Google Sheet if sync is on
 - **Sync URL must be a real `script.google.com/.../exec` URL**; secret must be 16+ characters.
 - **Anti-framing**: the app refuses to run inside another site's frame (clickjacking).
 - **Service worker** only caches successful same-origin files and never touches cross-origin traffic.
+- **Location (optional)**: read only at the moment you tap Clock in / Clock out, only for jobs set to "At a place", and
+  never in the background. Stored as rounded text, validated on every path (storage, sheet, backup), written to the sheet as plain
+  text, and never shown on the owner statement.
+- **Profile photo**: resized on your phone, must be a JPEG data URL under a size cap, shown only as an image (never as HTML), and
+  never sent to the sheet or included in backups.
+- **Several sheets**: each backup sheet has its own URL and secret, validated the same way as the main one; a secret is only ever
+  sent to its own URL, in the request body (never in a link), and backups never include any of them.
+- **Undo**: deleted items are held in memory for a few seconds only; nothing extra is written anywhere.
 - **Optional app lock** (Settings → Privacy & security): Face ID / device passcode, covers the app in the
   app switcher. It stops casual snooping on an unlocked phone; it is not a substitute for your phone passcode.
 - **Apps Script backend**: refuses the placeholder/weak secret, constant-time secret check, delays wrong guesses,
