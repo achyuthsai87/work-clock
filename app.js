@@ -286,7 +286,7 @@ function render(){
     const tick=()=>{ const el=(Date.now()-open.start)/1000;
       const h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
       line.innerHTML='<div class="live-row"><span class="live-l"><span class="dot"></span>Shift in progress</span><b class="live-t">'+
-        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+'</b></div><div class="live-s">Clocked in at '+esc(fmtTime(open.start))+" · earnings update live</div>"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':''); };
+        String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+'</b></div><div class="live-s">Clocked in at '+esc(fmtTime(open.start))+" · tap for full screen</div>"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':''); };
     tick(); clearInterval(timer); timer=setInterval(tick,1000);
   } else {
     btn.textContent="Clock In"; btn.classList.remove("out"); cancel.style.display="none"; $("startEdit").style.display="none";
@@ -1501,7 +1501,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.11";
+const APP_VERSION="2026.10.18.12";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
