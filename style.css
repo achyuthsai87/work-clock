@@ -870,3 +870,4 @@ body.scroll-lock{position:fixed; left:0; right:0; width:100%; overflow:hidden}
 .tap{cursor:pointer}.tipbox-t.tap:active{opacity:.6}
 html.kbd .modal{margin-bottom:0; padding-bottom:14px}
 html.kbd .modal-bg{padding-bottom:0}
+html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme:light}

@@ -134,6 +134,8 @@ function applyTheme(){
   const dark = t==="dark" || (t==="auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   const mc = document.querySelector('meta[name="theme-color"]');
   if (mc) mc.setAttribute("content", dark ? "#0c0f16" : "#f4f5f8");
+  const cs=document.querySelector('meta[name="color-scheme"]'); if(cs) cs.setAttribute("content", t==="auto"?"light dark":(dark?"dark":"light"));
+  document.documentElement.style.backgroundColor = dark ? "#0a0c18" : "#f4f5f8";
   document.querySelectorAll("#themeSeg button").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
 }
 const $ = id => document.getElementById(id);
@@ -1579,7 +1581,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.26";
+const APP_VERSION="2026.10.18.27";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1998,8 +2000,12 @@ document.addEventListener("touchmove",e=>{ if(e.touches.length>1) e.preventDefau
     else if(!n && locked){ locked=false; document.body.classList.remove("scroll-lock"); document.body.style.top=""; window.scrollTo(0,savedY); }
   }
   new MutationObserver(sync).observe(document.body,{subtree:true,attributes:true,attributeFilter:["class"]});
-  const vv=window.visualViewport;
-  function vvSet(){ if(!vv) return; const r=document.documentElement.style; const kb=Math.max(0, Math.round(window.innerHeight-vv.height-vv.offsetTop)); r.setProperty("--vvh",vv.height+"px"); r.setProperty("--kb",kb+"px"); document.documentElement.classList.toggle("kbd", kb>80 || (vv.height<window.innerHeight-80)); }
+  const vv=window.visualViewport; let kbMetric=false, kbFocus=false;
+  const textLike=el=>el&&el.closest&&el.closest(".modal-bg")&&(el.tagName==="TEXTAREA"||(el.tagName==="INPUT"&&!/^(date|time|datetime-local|month|checkbox|radio|range|button|submit|color|file)$/.test(el.type)));
+  function setKbd(){ document.documentElement.classList.toggle("kbd", kbFocus||kbMetric); }
+  document.addEventListener("focusin",e=>{ kbFocus=!!textLike(e.target); setKbd(); });
+  document.addEventListener("focusout",()=>{ setTimeout(()=>{ kbFocus=!!textLike(document.activeElement); setKbd(); },120); });
+  function vvSet(){ if(!vv) return; const r=document.documentElement.style; const kb=Math.max(0, Math.round(window.innerHeight-vv.height-vv.offsetTop)); r.setProperty("--vvh",vv.height+"px"); r.setProperty("--kb",kb+"px"); kbMetric=kb>80||(vv.height<window.innerHeight-80); setKbd(); }
   if(vv){ vv.addEventListener("resize",vvSet); vv.addEventListener("scroll",vvSet); vvSet(); }
   document.addEventListener("focusin",e=>{ if(e.target.closest && e.target.closest(".modal-bg")) setTimeout(()=>{ vvSet(); try{ e.target.scrollIntoView({block:"nearest"}); }catch(_){} },300); });
 })();
