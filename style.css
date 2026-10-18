@@ -976,3 +976,17 @@ html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme
 .snd-play.on{background:#2fd08e; color:#04231d; border-color:transparent}
 .snd-del{flex:0 0 auto; background:none; border:0; color:#e0558f; font-size:13.5px; padding:8px 6px; cursor:pointer}
 #sndVol{flex:1; max-width:55%; accent-color:#2fd08e}
+
+/* sheet list + pop-up */
+.sheet-list{margin:2px 0 8px}
+.sheet-list .job-row .sh-n{display:block; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:calc(100vw - 110px)}
+.sheet-list .job-row .sh-s{display:block; font-size:13px; color:var(--muted); margin-top:2px}
+.sheet-list .job-row .sh-s.err{color:var(--red)}
+.sheet-list .job-row i{font-style:normal; color:var(--muted); font-size:20px; padding-left:8px}
+.sheet-list .sh-empty{padding:10px 2px; color:var(--muted); font-size:14px}
+.sheet-add{width:100%}
+.sheet-add[disabled]{opacity:.5}
+.sh-err{color:var(--red); margin:-2px 0 10px; font-size:13.5px}
+.sh-err[hidden]{display:none}
+.sh-more{display:flex; flex-direction:column; align-items:center; gap:2px; margin-top:8px}
+.sh-more[hidden],.sh-more .link[hidden]{display:none}

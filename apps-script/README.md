@@ -4,7 +4,7 @@
 2. Delete the existing code, paste `Code.gs`, change `SECRET` to a long random string (**16+ characters**; the script refuses to run with the placeholder or a short one).
 3. Deploy > New deployment > type **Web app**. Execute as **Me**, access **Anyone**. Authorize.
 4. Copy the **/exec** URL.
-5. In Work Clock: Settings > Google Sheets sync > paste URL + the same secret > **Save & test**.
+5. In Work Clock: Settings > Google Sheets sync > **Add a sheet** > type a name (or leave it blank to use the file's name), paste the URL and the same secret > **Save & connect**.
 
 ## Updating to a newer Code.gs (keeps your data and your /exec URL)
 
@@ -35,3 +35,11 @@ The Shifts tab has a **Rate** column: the hourly rate each shift was worked at. 
 - Payments keep their **Job** (blank = your main job) and **Gross** (if you track take-home pay).
 - Your jobs, planned shifts, days off, expenses and pay options are saved on the **AppData** tab as small JSON entries. Leave it alone; **Restore** reads it.
 - The Summary tab is for you to read. The app never reads it back.
+
+## More than one sheet (extra backups)
+
+Each Google Sheet has its own script, URL and secret. Repeat the setup above for a second sheet (ideally in another Google account or folder), then in Work Clock tap **Add another sheet** and paste that sheet's URL and secret. Up to 5 sheets.
+
+- The first sheet is the **main** sheet: your shifts are restored from it, and Shortcuts clock-ins are read from it. Open any sheet in the list to rename it, restore from it, make it the main sheet, or remove it.
+- Every change goes to all sheets. If one is unreachable its changes wait, and **Sync now** catches it up.
+- Names and URLs must be different for each sheet.

@@ -209,7 +209,7 @@ function doPost(e) {
   try {
     const sh = sheet_();
 
-    if (b.action === "ping") return out_({ ok: true });
+    if (b.action === "ping") { let nm = ""; try { nm = String(SpreadsheetApp.getActiveSpreadsheet().getName() || "").slice(0, 60); } catch (e) {} return out_({ ok: true, sheet: nm }); }
 
     if (b.action === "list") {
       const n = sh.getLastRow() - 1;

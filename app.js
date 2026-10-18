@@ -116,7 +116,15 @@ function cleanLocal(d){  // everything persisted on this device, incl. sync + lo
   const out = cleanCore(d);
   if(d && d.sync && typeof d.sync === "object"){
     const u = String(d.sync.url || ""), good = SYNC_URL_RE.test(u);
-    out.sync = {url: good ? u : "", secret: typeof d.sync.secret === "string" ? d.sync.secret.slice(0,200) : "", enabled: good && !!d.sync.enabled, err: ""};
+    out.sync = {url: good ? u : "", secret: typeof d.sync.secret === "string" ? d.sync.secret.slice(0,200) : "", enabled: good && !!d.sync.enabled, err: "", name: cleanText(d.sync.name, 40).replace(/\s+/g, " "), mirrors: []};
+    const seenN = new Set([out.sync.name.toLowerCase()]), seenU = new Set([u]);
+    (good && Array.isArray(d.sync.mirrors) ? d.sync.mirrors : []).slice(0, 4).forEach(m => {
+      if(!m || typeof m !== "object" || !ID_RE.test(String(m.id)) || !SYNC_URL_RE.test(String(m.url))) return;
+      const nm = cleanText(m.name, 40).replace(/\s+/g, " "); if(!nm || seenN.has(nm.toLowerCase()) || seenU.has(m.url)) return;
+      seenN.add(nm.toLowerCase()); seenU.add(m.url);
+      out.sync.mirrors.push({id:String(m.id), name:nm, url:String(m.url), secret: typeof m.secret === "string" ? m.secret.slice(0,200) : "", err:"", last: Number.isFinite(Number(m.last)) ? Number(m.last) : 0,
+        outbox:(Array.isArray(m.outbox) ? m.outbox : []).slice(0, 5000).map(e => cleanEvent(e, out.rate)).filter(Boolean)});
+    });
   }
   if(d && d.planDone && typeof d.planDone === "object"){ out.planDone = {};
     Object.keys(d.planDone).forEach(k => { const m = /^(?:([A-Za-z0-9_-]{1,64}):)?(\d{4}-\d{2}-\d{2})$/.exec(k); if(!m) return; const key = m[1] ? k : (d.plan && !d.plans ? "plan1:" + k : ""); if(key) out.planDone[key] = true; });
@@ -227,7 +235,7 @@ function applyPlan(){
   if(changed) save(); return changed;
 }
 let histQ="", histMonth="all", histJob="all", jobFilter="all";
-function queueMeta(){ const c=db.sync; if(!c||!c.enabled||!c.url) return; db.outbox=db.outbox||[]; if(!db.outbox.some(e=>e.action==="meta")) db.outbox.push({action:"meta"}); save(); updateSyncStatus(); flushOutbox(); }
+function queueMeta(){ const c=db.sync; if(!c||!c.enabled||!c.url) return; db.outbox=db.outbox||[]; const ev={action:"meta"}; pushEv(db.outbox,ev); mirrors().forEach(m=>pushEv(outboxOf(m),ev)); save(); updateSyncStatus(); flushOutbox(); }
 // jobs, planned shifts, days off, expenses and a few settings travel as small JSON blobs ("core" + one per year of expenses)
 function metaPayloads(){
   const core={jobs:db.jobs||[], jobName:db.jobName||"", plans:db.plans||[], daysOff:Object.keys(db.daysOff||{}).sort().slice(-400), wkndPct:db.wkndPct||0, taxPct:db.taxPct||0, mileRate:db.mileRate||0};
@@ -238,12 +246,12 @@ function metaPayloads(){
   Object.keys(by).forEach(y=>{ out["exp-"+y]=JSON.stringify(by[y].sort((a,b)=>a.ts-b.ts)); });
   return out;
 }
-async function pushMeta(remote){   // writes whatever differs from the sheet's copy
+async function pushMeta(remote, t){   // writes whatever differs from the sheet's copy
   const mine=metaPayloads(); let n=0;
   for(const k of Object.keys(mine)){
     const empty=k==="core" && mine[k]===JSON.stringify({jobs:[],jobName:"",plans:[],daysOff:[],wkndPct:0,taxPct:0,mileRate:0});
     if(remote && remote[k]===mine[k]) continue; if(empty && (!remote||remote[k]==null)) continue;
-    if(mine[k].length>44000) throw new Error("Too much expense data for one year to sync."); await syncCall({action:"kvset", key:k, value:mine[k]}); n++; }
+    if(mine[k].length>44000) throw new Error("Too much expense data for one year to sync."); await syncCall({action:"kvset", key:k, value:mine[k]}, t); n++; }
   return n;
 }
 function mergeMeta(remote){   // sheet -> phone: add anything missing here, never overwrite what's set here
@@ -1055,7 +1063,10 @@ $("anaPrev").onclick=()=>{ anaOff--; renderAnalytics(); };
 $("anaNext").onclick=()=>{ if(anaOff<0){ anaOff++; renderAnalytics(); } };
 
 // ---------- Google Sheets sync (via Apps Script web app) ----------
-function syncCfg(){ return db.sync || (db.sync = {url:"", secret:"", enabled:false}); }
+function syncCfg(){ const c = db.sync || (db.sync = {url:"", secret:"", enabled:false}); if(!Array.isArray(c.mirrors)) c.mirrors = []; return c; }
+const mirrors = () => syncCfg().mirrors;
+const outboxOf = t => t === syncCfg() ? (db.outbox = db.outbox || []) : (t.outbox = t.outbox || []);
+const sheetName = t => t.name || (t === syncCfg() ? "My sheet" : "Backup sheet");
 function shiftPayload(s, rate){
   const h=hrs(s); rate = s.rate!=null ? s.rate : (rate==null ? jobRate(s.job) : rate);
   return {id:s.id, date:fmtDate(s.start), day:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(s.start).getDay()], month:monthKey(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
@@ -1078,13 +1089,12 @@ function cleanSettings(x){
 }
 function queueSettings(){   // only the newest settings matter, so replace any waiting copy
   const c=syncCfg(); if(!c.enabled || !c.url) return;
-  db.outbox=(db.outbox||[]).filter(e=>e.action!=="sset");
   queueSync({action:"sset", settings:settingsPayload()});
 }
 function payPayload(p){ return {id:p.id, date:fmtDate(p.ts), month:monthKey(p.ts), amount:p.amount, note:p.note, ts:p.ts, gross:p.gross, job:p.job||""}; }
 // Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
-async function syncCall(body){
-  const c=syncCfg(); window.__syncStep=body&&body.action;
+async function syncCall(body, t){
+  const c=t||syncCfg(); window.__syncStep=body&&body.action;
   if(!SYNC_URL_RE.test(c.url||"")) throw new Error("That isn't a Google Apps Script web app URL (it should end in /exec).");
   let res; const ac=new AbortController(); const tmo=setTimeout(()=>ac.abort(),30000);
   try{
@@ -1097,43 +1107,56 @@ async function syncCall(body){
   if(!j || !j.ok) throw new Error((j && j.error) || "Script error");
   return j;
 }
+function pushEv(list, ev){
+  if(ev.action==="sset"){ for(let k=list.length-1;k>=0;k--) if(list[k].action==="sset") list.splice(k,1); }
+  else if(ev.action==="meta" && list.some(e=>e.action==="meta")) return;
+  list.push(ev); if(list.length>5000) list.splice(0, list.length-5000);
+}
 function queueSync(ev){
   const c=syncCfg();
   if(!c.enabled || !c.url) return;
   db.outbox=db.outbox||[];
-  db.outbox.push(ev);
+  pushEv(db.outbox, ev); mirrors().forEach(m=>pushEv(outboxOf(m), ev));
   save();
   updateSyncStatus();
   flushOutbox();
 }
 let flushing=false;
+async function flushList(t, list, isMain){
+  let warn="";
+  try{
+    while(list.length){
+      const ev=list[0];
+      try{ if(ev.action==="meta"){ try{ await pushMeta(null,t); }catch(e){ if(e.message==="Unknown action"){ warn="Update the script (Code.gs) to sync jobs, plans and expenses"; } else throw e; } } else await syncCall(ev,t); }
+      catch(e){ if(e.message==="Unknown action" && /^[ps]/.test(ev.action)){ list.shift(); warn="Update the script (Code.gs) to sync payments and settings"; save(); continue; } throw e; }
+      list.shift();
+      if(isMain) db.lastSync=Date.now(); else t.last=Date.now();
+      t.err=""; save();
+    }
+    if(warn){ t.err=warn; save(); }
+  }catch(e){ if(!e.offline) t.err=e.message; save(); }   // remaining events stay queued
+}
 async function flushOutbox(){
   const c=syncCfg();
   db.outbox=db.outbox||[];
   if(flushing) return;
-  if(!c.enabled || !c.url || !db.outbox.length || !navigator.onLine){ updateSyncStatus(); return; }
+  if(!c.enabled || !c.url || !navigator.onLine || !(db.outbox.length || mirrors().some(m=>outboxOf(m).length))){ updateSyncStatus(); return; }
   flushing=true;
   try{
-    let warn="";
-    while(db.outbox.length){
-      const ev=db.outbox[0];
-      try{ if(ev.action==="meta"){ try{ await pushMeta(null); }catch(e){ if(e.message==="Unknown action"){ warn="Update the script (Code.gs) to sync jobs, plans and expenses"; } else throw e; } } else await syncCall(ev); }
-      catch(e){ if(e.message==="Unknown action" && /^[ps]/.test(ev.action)){ db.outbox.shift(); warn="Update the script (Code.gs) to sync payments and settings"; save(); continue; } throw e; }
-      db.outbox.shift();
-      db.lastSync=Date.now(); c.err=""; save();
-    }
-    if(warn){ c.err=warn; save(); }
-  }catch(e){ if(!e.offline) c.err=e.message; save(); }   // remaining events stay queued
-  finally{ flushing=false; }
+    if(db.outbox.length) await flushList(c, db.outbox, true);
+    for(const m of mirrors().slice()) if(outboxOf(m).length) await flushList(m, outboxOf(m), false);
+  } finally{ flushing=false; }
   updateSyncStatus();
+  if(db.outbox.length && !c.err && navigator.onLine) setTimeout(flushOutbox,0);   // something was queued while we were busy
 }
 // Merge shifts that exist in the sheet but not on this device (restore after reinstall).
 let pushedN=0;
-async function syncPull(applySettings){
-  const j=await syncCall({action:"list"});
+async function syncPull(applySettings, t){
+  t=t||syncCfg(); const OB=outboxOf(t);
+  const j=await syncCall({action:"list"},t);
   const have=new Set(db.shifts.map(x=>x.id));
   const sheetIds=new Set((Array.isArray(j.shifts)?j.shifts:[]).map(r=>String(r&&r.id))); let sheetPIds=null; pushedN=0;
-  const pendingDel=new Set((db.outbox||[]).filter(e=>e.action==="delete").map(e=>e.id));
+  const pendingDel=new Set(OB.filter(e=>e.action==="delete").map(e=>e.id));
   let added=0;
   (Array.isArray(j.shifts) ? j.shifts : []).slice(0,50000).forEach(r=>{
     const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip, note:r.note, rate:r.rate, job:r.job, brk:r.brk, brkPaid:r.brkPaid});
@@ -1141,30 +1164,30 @@ async function syncPull(applySettings){
     have.add(c.id); db.shifts.push(c); added++;
   });
   try{
-    const pj=await syncCall({action:"plist"}), haveP=new Set(pays().map(x=>x.id));
+    const pj=await syncCall({action:"plist"},t), haveP=new Set(pays().map(x=>x.id));
     sheetPIds=new Set((Array.isArray(pj.payments)?pj.payments:[]).map(r=>String(r&&r.id)));
-    const pendingPDel=new Set((db.outbox||[]).filter(e=>e.action==="pdelete").map(e=>e.id));
+    const pendingPDel=new Set(OB.filter(e=>e.action==="pdelete").map(e=>e.id));
     (Array.isArray(pj.payments)?pj.payments:[]).slice(0,20000).forEach(r=>{ const c=cleanPayment(r); if(!c||haveP.has(c.id)||pendingPDel.has(c.id)) return; haveP.add(c.id); pays().push(c); added++; });
   }catch(e){ if(e.message!=="Unknown action") throw e; }
-  if(!(db.outbox||[]).some(e=>e.action==="meta")){
-    try{ const kj=await syncCall({action:"kvget"}), remote=kj.data&&typeof kj.data==="object"?kj.data:{};
+  if(!OB.some(e=>e.action==="meta")){
+    try{ const kj=await syncCall({action:"kvget"},t), remote=kj.data&&typeof kj.data==="object"?kj.data:{};
       const m=mergeMeta(remote); added+=m; if(m){ save(); render(); }
-      pushedN+=await pushMeta(remote); }catch(e){ if(e.message!=="Unknown action") throw e; }
+      pushedN+=await pushMeta(remote,t); }catch(e){ if(e.message!=="Unknown action") throw e; }
   }
-  if(applySettings && !(db.outbox||[]).some(e=>e.action==="sset")){
+  if(applySettings && !OB.some(e=>e.action==="sset")){
     try{
-      const sj=await syncCall({action:"sget"}), c=cleanSettings(sj.settings);
+      const sj=await syncCall({action:"sget"},t), c=cleanSettings(sj.settings);
       if(c){ if(c.rate!=null && c.rate!==db.rate){ stampRates(); db.rate=c.rate; } if(c.goal!=null){ if(c.goal>0) db.goal=c.goal; else delete db.goal; } if(c.payday!=null){ if(c.payday>0) db.payday=c.payday; else delete db.payday; }
         if(c.breakMin!=null){ if(c.breakMin>0) db.breakMin=c.breakMin; else delete db.breakMin; } if(c.breakAfter!=null) db.breakAfter=c.breakAfter;
         added+=0; save(); render(); }
     }catch(e){ if(e.message!=="Unknown action") throw e; }
   }
   // two-way: anything finished on this phone that the sheet doesn't have yet goes up now
-  const queued=new Set((db.outbox||[]).map(e=>e.shift&&e.shift.id||e.payment&&e.payment.id));
+  const queued=new Set(OB.map(e=>e.shift&&e.shift.id||e.payment&&e.payment.id));
   const missS=db.shifts.filter(x=>x.end && !sheetIds.has(String(x.id)) && !queued.has(x.id));
-  if(missS.length){ await syncCall({action:"bulk", shifts:missS.map(shiftPayload)}); pushedN+=missS.length; }
-  if(sheetPIds){ const missP=pays().filter(x=>!sheetPIds.has(String(x.id)) && !queued.has(x.id)); if(missP.length){ try{ await syncCall({action:"pbulk", payments:missP.map(payPayload)}); pushedN+=missP.length; }catch(e){ if(e.message!=="Unknown action") throw e; } } }
-  try{ added+=await applyPunches(); }catch(e){ if(!e.offline) throw e; }
+  if(missS.length){ await syncCall({action:"bulk", shifts:missS.map(shiftPayload)},t); pushedN+=missS.length; }
+  if(sheetPIds){ const missP=pays().filter(x=>!sheetPIds.has(String(x.id)) && !queued.has(x.id)); if(missP.length){ try{ await syncCall({action:"pbulk", payments:missP.map(payPayload)},t); pushedN+=missP.length; }catch(e){ if(e.message!=="Unknown action") throw e; } } }
+  if(t===syncCfg()){ try{ added+=await applyPunches(); }catch(e){ if(!e.offline) throw e; } }
   if(added){ save(); render(); }
   return added;
 }
@@ -1186,33 +1209,66 @@ async function applyPunches(){
   if(n) render();
   return n;
 }
-async function syncUploadAll(){
+async function syncUploadAll(t){
+  t=t||syncCfg();
   const list=db.shifts.filter(x=>x.end).map(shiftPayload);
-  await syncCall({action:"bulk", shifts:list});
-  try{ await syncCall({action:"sset", settings:settingsPayload()}); }catch(e){ if(e.message!=="Unknown action") throw e; }
+  await syncCall({action:"bulk", shifts:list},t);
+  try{ await syncCall({action:"sset", settings:settingsPayload()},t); }catch(e){ if(e.message!=="Unknown action") throw e; }
   const pl=pays().map(payPayload);
-  if(pl.length){ try{ await syncCall({action:"pbulk", payments:pl}); }catch(e){ if(e.message==="Unknown action") throw new Error("Shifts uploaded. Update the script (Code.gs) to sync payments too."); throw e; } }
+  if(pl.length){ try{ await syncCall({action:"pbulk", payments:pl},t); }catch(e){ if(e.message==="Unknown action") throw new Error("Shifts uploaded. Update the script (Code.gs) to sync payments too."); throw e; } }
   return list.length;
 }
-async function syncRun(label, fn){
-  const el=$("syncStatus"), c=syncCfg();
-  if(!c.url){ el.textContent="Paste the web app URL first"; el.classList.add("err"); return; }
+// Bring a backup sheet up to date: send whatever it is missing, never read from it.
+async function mirrorSync(m){
+  const j=await syncCall({action:"list"},m), ids=new Set((Array.isArray(j.shifts)?j.shifts:[]).map(r=>String(r&&r.id)));
+  const miss=db.shifts.filter(x=>x.end && !ids.has(String(x.id)));
+  if(miss.length) await syncCall({action:"bulk", shifts:miss.map(shiftPayload)},m);
+  let n=miss.length;
+  try{ const pj=await syncCall({action:"plist"},m), pid=new Set((Array.isArray(pj.payments)?pj.payments:[]).map(r=>String(r&&r.id))), mp=pays().filter(x=>!pid.has(String(x.id)));
+    if(mp.length){ await syncCall({action:"pbulk", payments:mp.map(payPayload)},m); n+=mp.length; } }catch(e){ if(e.message!=="Unknown action") throw e; }
+  try{ await syncCall({action:"sset", settings:settingsPayload()},m); }catch(e){ if(e.message!=="Unknown action") throw e; }
+  try{ const kj=await syncCall({action:"kvget"},m); n+=await pushMeta(kj.data&&typeof kj.data==="object"?kj.data:{},m); }catch(e){ if(e.message!=="Unknown action") throw e; }
+  m.last=Date.now(); m.err=""; save();
+  return n;
+}
+async function syncRun(label, fn, t){
+  const el=$("syncStatus"), c=t||syncCfg();
+  if(!c.url){ el.textContent="Add a sheet first"; el.classList.add("err"); return; }
   el.classList.remove("err"); el.textContent=label+"…";
   try{ const r=await fn(); c.err=""; save(); updateSyncStatus(typeof r==="string"?r:""); }
   catch(e){ c.err=e.message; save(); updateSyncStatus(); }
 }
 function updateSyncStatus(msg){
   const c=syncCfg(), el=$("syncStatus");
+  renderSheetList();
   if(!el) return;
   el.classList.remove("err");
   if(!c.url){ el.textContent="Not set up"; return; }
-  if(c.err){ el.classList.add("err"); el.textContent=c.err; return; }
+  if(c.err){ el.classList.add("err"); el.textContent=mirrors().length?sheetName(c)+": "+c.err:c.err; return; }
+  const bad=mirrors().find(m=>m.err); if(bad){ el.classList.add("err"); el.textContent=sheetName(bad)+": "+bad.err; return; }
   if(msg){ el.textContent=msg; return; }
-  const n=(db.outbox||[]).length;
+  const n=(db.outbox||[]).length+mirrors().reduce((a,m)=>a+outboxOf(m).length,0);
   if(!c.enabled) el.textContent="Auto-sync is off";
   else if(n>0) el.textContent=n+" change"+(n===1?"":"s")+" waiting"+(navigator.onLine?"":" (offline)");
   else if(db.lastSync) el.textContent="Synced · "+fmtTime(db.lastSync);
   else el.textContent="Ready";
+}
+function renderSheetList(){
+  const box=$("sheetList"); if(!box) return; const c=syncCfg(); box.textContent="";
+  const all=c.url?[c].concat(mirrors()):[];
+  if(!all.length){ const e=document.createElement("div"); e.className="sh-empty"; e.textContent="No sheet added yet."; box.appendChild(e); }
+  all.forEach((t,i)=>{
+    const b=document.createElement("button"); b.type="button"; b.className="job-row";
+    const l=document.createElement("span"), n=document.createElement("span"), s=document.createElement("span");
+    n.className="sh-n"; n.textContent=sheetName(t);
+    const q=outboxOf(t).length, last=i===0?db.lastSync:t.last;
+    s.className="sh-s"+(t.err?" err":"");
+    s.textContent=(i===0?"Main":"Backup")+" · "+(t.err?t.err:(!c.enabled?"Auto-sync is off":q?q+" waiting":last?"Synced "+fmtTime(last):"Ready"));
+    l.appendChild(n); l.appendChild(s); b.appendChild(l);
+    const ch=document.createElement("i"); ch.textContent="›"; ch.setAttribute("aria-hidden","true"); b.appendChild(ch);
+    b.onclick=()=>openSheet(t); box.appendChild(b);
+  });
+  const add=$("sheetAdd"); if(add){ const full=all.length>=5; add.disabled=full; add.textContent=full?"5 sheets is the limit":(all.length?"Add another sheet":"Add a sheet"); }
 }
 function updateSyncToggle(){
   const b=$("syncToggle");
@@ -1413,7 +1469,7 @@ $("startSave").onclick=()=>{ const s=openShift(), v=$("startTime").value; if(!s|
 $("histQ").addEventListener("input",e=>{ histQ=e.target.value; render(); });
 $("histMonth").addEventListener("change",e=>{ histMonth=e.target.value; render(); });
 $("nudgeNow").onclick=()=>{ $("jsonBtn").click(); };
-$("nudgeSync").onclick=()=>{ document.querySelector('.tabbar button[data-tab="settings"]').click(); };
+$("nudgeSync").onclick=()=>{ document.querySelector('.tabbar button[data-tab="settings"]').click(); if(!syncCfg().url) setTimeout(()=>openSheet(null),50); };
 $("nudgeLater").onclick=()=>{ db.nudgeAt=Date.now(); save(); updateNudge(); };
 try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
 $("clockBtn").onclick=()=>{
@@ -1614,31 +1670,78 @@ $("importFile").addEventListener("change",e=>{
 });
 $("wipeBtn").onclick=async()=>{ if(await askConfirm("Delete all data?","Every shift and payment on this phone will be erased. This can't be undone. Back up first if you're not sure.","Delete everything",true)){
   const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, sound:db.sound, payCycle:db.payCycle, payAnchor:db.payAnchor, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
-  db=Object.assign({shifts:[], outbox:[]}, keep); save(); render(); updateSyncStatus(); }};
+  db=Object.assign({shifts:[], outbox:[]}, keep); mirrors().forEach(m=>{ m.outbox=[]; }); save(); render(); updateSyncStatus(); }};
 
 // google sheets sync settings
-$("syncUrl").value=syncCfg().url||"";
-$("syncSecret").value=syncCfg().secret||"";
 updateSyncToggle(); updateSyncStatus();
-function readSyncFields(){ const c=syncCfg(); c.url=$("syncUrl").value.trim(); c.secret=$("syncSecret").value; save(); }
-$("syncUrl").addEventListener("change",()=>{ readSyncFields(); syncCfg().err=""; updateSyncStatus(); });
-$("syncSecret").addEventListener("change",()=>{ readSyncFields(); syncCfg().err=""; updateSyncStatus(); });
-$("syncForm").addEventListener("submit",e=>{ e.preventDefault(); readSyncFields(); const c=syncCfg();
-  if(!/^https:\/\/script\.google\.com\/.+\/exec/.test(c.url)){ c.err="URL should look like https://script.google.com/macros/s/…/exec"; save(); updateSyncStatus(); return; }
-  if(!c.secret || c.secret.length<16){ c.err="Use a secret of at least 16 characters (same as in your script)"; save(); updateSyncStatus(); return; }
-  c.enabled=true; save(); updateSyncToggle();
-  syncRun("Connecting", async()=>{ await syncCall({action:"ping"}); const n=await syncPull(true); await flushOutbox();
-    return n ? "Connected · restored "+n+" shift"+(n===1?"":"s") : "Connected ✓"; }); });
+let shT=null;   // the sheet being edited (null = adding a new one)
+const nameKey=s=>String(s||"").replace(/\s+/g," ").trim().toLowerCase();
+function nameTaken(nm, except){ const k=nameKey(nm); return !!k && (syncCfg().url?[syncCfg()].concat(mirrors()):[]).some(t=>t!==except && nameKey(t.name)===k); }
+function shErr(msg){ const e=$("shErr"); e.textContent=msg||""; e.hidden=!msg; }
+function openSheet(t){
+  shT=t||null; const c=syncCfg(), all=c.url?[c].concat(mirrors()):[], isNew=!t;
+  $("shTitle").textContent=isNew?(all.length?"Add another sheet":"Add your sheet"):sheetName(t);
+  $("syncName").value=isNew?"":(t.name||""); $("syncUrl").value=isNew?"":t.url||""; $("syncSecret").value=isNew?"":t.secret||"";
+  $("syncSaveBtn").textContent=isNew?"Save & connect":"Save"; $("syncSaveBtn").disabled=false;
+  $("shMore").hidden=isNew; $("shMain").hidden=isNew||t===c; shErr("");
+  $("shBg").classList.add("open"); }
+function closeSheet(){ $("shBg").classList.remove("open"); shT=null; try{ document.activeElement.blur(); }catch(e){} }
+$("sheetAdd").onclick=()=>openSheet(null);
+$("shClose").onclick=closeSheet; $("shBg").addEventListener("click",e=>{ if(e.target===$("shBg")) closeSheet(); });
+if(typeof sheetDrag==="function") sheetDrag($("shBg"), closeSheet);
+$("syncName").addEventListener("input",()=>{ shErr(nameTaken($("syncName").value, shT)?"You already have a sheet with that name.":""); });
+function uniqueName(base){ let nm=base, k=2; while(nameTaken(nm, shT)) nm=base+" "+(k++); return nm; }
+$("syncForm").addEventListener("submit",async e=>{ e.preventDefault();
+  const c=syncCfg(), isNew=!shT, t=shT, first=isNew && !c.url;
+  let name=cleanText($("syncName").value,40).replace(/\s+/g," "), url=$("syncUrl").value.trim(), secret=$("syncSecret").value;
+  if(name && nameTaken(name,t)) return shErr("You already have a sheet with that name.");
+  if(!SYNC_URL_RE.test(url)) return shErr("The URL should look like https://script.google.com/macros/s/…/exec");
+  if(secret.length<16) return shErr("Use a secret of at least 16 characters (same as in your script).");
+  if((c.url?[c].concat(mirrors()):[]).some(x=>x!==t && x.url===url)) return shErr("That sheet is already added.");
+  const same=t && t.url===url && t.secret===secret;
+  if(same){ if(!name) return shErr("Give the sheet a name."); t.name=name; save(); updateSyncStatus(); closeSheet(); return; }
+  const btn=$("syncSaveBtn"); btn.disabled=true; btn.textContent="Connecting…"; shErr("");
+  try{
+    const probe={url:url, secret:secret}, pj=await syncCall({action:"ping"}, probe);
+    if(!name){ name=uniqueName(cleanText(pj.sheet||"",40).replace(/\s+/g," ")||(first?"My sheet":"Backup sheet")); }
+    if(nameTaken(name,t)) throw new Error("You already have a sheet with that name.");
+    if(first || t===c){
+      c.name=name; c.url=url; c.secret=secret; c.err=""; c.enabled=true; save(); updateSyncToggle(); closeSheet();
+      syncRun("Connecting", async()=>{ const n=await syncPull(true); await flushOutbox(); return n ? "Connected · restored "+n+" shift"+(n===1?"":"s") : "Connected ✓"; });
+    } else {
+      let m=t; if(!m){ if(mirrors().length>=4) throw new Error("You can add up to 5 sheets."); m={id:uid(), name:name, url:url, secret:secret, err:"", outbox:[], last:0}; }
+      else { m.name=name; m.url=url; m.secret=secret; m.err=""; }
+      if(!t) mirrors().push(m); save(); closeSheet(); updateSyncStatus("Backing up to "+name+"…");
+      syncRun("Backing up", async()=>{ const n=await syncUploadAll(m); await pushMeta(null,m); m.last=Date.now(); save(); return "Backed up "+n+" shift"+(n===1?"":"s")+" to "+name+" ✓"; }, m);
+    }
+  }catch(err){ btn.disabled=false; btn.textContent=isNew?"Save & connect":"Save"; shErr(err.message); }
+});
+$("shMain").onclick=async()=>{ const c=syncCfg(), m=shT; if(!m||m===c) return;
+  if(!await askConfirm("Make "+sheetName(m)+" the main sheet?","Your shifts are restored from the main sheet, and Shortcuts clock-ins are read from it. "+sheetName(c)+" becomes a backup.","Make main",false)) return;
+  const tmp={name:c.name,url:c.url,secret:c.secret,err:c.err,outbox:db.outbox,last:db.lastSync};
+  c.name=m.name; c.url=m.url; c.secret=m.secret; c.err=m.err||""; db.outbox=outboxOf(m); db.lastSync=m.last||0;
+  m.name=tmp.name; m.url=tmp.url; m.secret=tmp.secret; m.err=tmp.err||""; m.outbox=tmp.outbox||[]; m.last=tmp.last||0;
+  save(); closeSheet(); updateSyncStatus(); flushOutbox(); };
+$("shRemove").onclick=async()=>{ const c=syncCfg(), t=shT; if(!t) return;
+  if(!await askConfirm("Remove "+sheetName(t)+"?","The app stops syncing with this sheet. Nothing is deleted from the sheet or from this phone.","Remove",true)) return;
+  if(t===c){
+    if(mirrors().length){ const m=mirrors().shift(); c.name=m.name; c.url=m.url; c.secret=m.secret; c.err=m.err||""; db.outbox=outboxOf(m); db.lastSync=m.last||0; }
+    else { c.name=""; c.url=""; c.secret=""; c.err=""; c.enabled=false; db.outbox=[]; updateSyncToggle(); }
+  } else { const i=mirrors().indexOf(t); if(i>=0) mirrors().splice(i,1); }
+  save(); closeSheet(); updateSyncStatus(); };
 $("syncToggle").onclick=()=>{ const c=syncCfg(); c.enabled=!c.enabled; save(); updateSyncToggle(); updateSyncStatus(); if(c.enabled) flushOutbox(); };
-$("syncNowBtn").onclick=()=>syncRun("Syncing", async()=>{ await flushOutbox(); if(syncCfg().err) throw new Error(syncCfg().err); const n=await syncPull(); return n?"Restored "+n+" shift"+(n===1?"":"s"):(pushedN?"Uploaded "+pushedN+" to your sheet ✓":"Up to date ✓"); });
+$("syncNowBtn").onclick=()=>syncRun("Syncing", async()=>{ await flushOutbox(); if(syncCfg().err) throw new Error(syncCfg().err); const n=await syncPull(); let b=0;
+  for(const m of mirrors().slice()){ try{ b+=await mirrorSync(m); }catch(e){ if(!e.offline) m.err=e.message; } } save();
+  return n?"Restored "+n+" shift"+(n===1?"":"s"):((pushedN+b)?"Uploaded "+(pushedN+b)+" to your sheets ✓":"Up to date ✓"); });
 if($("syncUpBtn")) $("syncUpBtn").onclick=()=>syncRun("Uploading", async()=>{ const n=await syncUploadAll(); return "Uploaded "+n+" shift"+(n===1?"":"s")+" ✓"; });
-$("syncDownBtn").onclick=async()=>{ if(!await askConfirm("Restore from your sheet?","Shifts, payments and settings on this phone will be updated to match your Google Sheet.","Restore",false)) return; syncRun("Restoring", async()=>{ const n=await syncPull(true); return n?"Restored "+n+" item"+(n===1?"":"s")+" ✓":"Restored from the sheet ✓"; }); };
+$("syncDownBtn").onclick=async()=>{ const t=shT; if(!t) return; if(!await askConfirm("Restore from "+sheetName(t)+"?","Shifts, payments and settings missing on this phone will be added from this sheet.","Restore",false)) return; closeSheet();
+  syncRun("Restoring", async()=>{ const n=await syncPull(true,t); return n?"Restored "+n+" item"+(n===1?"":"s")+" ✓":"Restored from the sheet ✓"; }, t); };
 // pull on open + whenever the app comes back to the foreground (iOS keeps PWAs alive)
 async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.onLine) return;
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.36";
+const APP_VERSION="2026.10.18.37";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

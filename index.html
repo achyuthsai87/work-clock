@@ -284,18 +284,14 @@
 
 <div class="card">
     <div class="pay-h">Google Sheets sync</div>
-    <div class="sub" style="margin-bottom:8px">Two-way backup to your sheet. Reinstalling the app? Enter the URL + secret and tap Save &amp; connect to get your shifts back.</div>
-    <form id="syncForm" autocomplete="on" action="#">
-      <div class="field"><label for="syncUrl">Web app URL</label><input id="syncUrl" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://script.google.com/.../exec" inputmode="url"></div>
-      <div class="field"><label for="syncSecret">Secret</label><input id="syncSecret" name="password" type="password" autocomplete="current-password" placeholder="Same secret as in the script"></div>
-      <button type="submit" class="btn primary" id="syncSaveBtn" style="width:100%">Save &amp; connect</button>
-    </form>
+    <div class="sub" style="margin-bottom:8px">Back up to your Google Sheet. Add more than one for extra copies. The first one is your main sheet: it is the one your shifts are restored from. Reinstalling the app? Add your sheet again to get your shifts back.</div>
+    <div id="sheetList" class="sheet-list"></div>
+    <button type="button" class="btn ghost sheet-add" id="sheetAdd">Add a sheet</button>
     <div class="settings-row" style="margin-top:10px"><span>Auto-sync</span><button class="ios-switch" id="syncToggle" role="switch" aria-checked="false" aria-label="Auto-sync"></button></div>
-    <div class="settings-row"><span>Sheet data</span><span><button class="icon-btn" id="syncDownBtn">Restore</button></span></div>
     <details class="shortcut-help"><summary>iPhone Shortcuts: clock in and out from the lock screen</summary>
       <div class="shortcut-body">
         <p>Make two Shortcuts (Shortcuts app → +): <b>Clock In</b> and <b>Clock Out</b>. Each has one action, <b>Get Contents of URL</b>:</p>
-        <ol><li>URL: your web app URL from above</li><li>Method: <b>POST</b></li><li>Request Body: <b>JSON</b>, with three Text fields:<br><code>action</code> = <code>punch</code><br><code>kind</code> = <code>in</code> (or <code>out</code>)<br><code>secret</code> = your secret</li></ol>
+        <ol><li>URL: the web app URL of your main sheet (tap it in the list above)</li><li>Method: <b>POST</b></li><li>Request Body: <b>JSON</b>, with three Text fields:<br><code>action</code> = <code>punch</code><br><code>kind</code> = <code>in</code> (or <code>out</code>)<br><code>secret</code> = that sheet's secret</li></ol>
         <p>Then in Shortcuts → Automation, add <b>Arrive</b> at work → run Clock In (and <b>Leave</b> → Clock Out), or put them on the Action Button or a Lock Screen widget. Open Work Clock afterwards and the shift appears with the exact time you tapped. The app has to be open for sync to pull it in, and Auto-sync must be on.</p>
       </div></details>
     <div class="settings-row"><span id="syncStatus">Not set up</span><button class="icon-btn" id="syncNowBtn">Sync now</button></div>
@@ -323,6 +319,24 @@
     <button data-tab="pay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15v-4"/><path d="M21 12v5h-4a2.5 2.5 0 0 1 0-5z"/></svg><span>Pay</span></button>
     <button data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
   </nav>
+</div>
+
+<div class="modal-bg" id="shBg">
+  <div class="modal">
+    <h2 id="shTitle">Add a sheet</h2>
+    <form id="syncForm" autocomplete="on" action="#">
+      <div class="field"><label for="syncName">Sheet file name</label><input id="syncName" type="text" maxlength="40" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="e.g. Work Clock backup"></div>
+      <div class="field"><label for="syncUrl">Web app URL</label><input id="syncUrl" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://script.google.com/.../exec" inputmode="url"></div>
+      <div class="field"><label for="syncSecret">Secret</label><input id="syncSecret" name="password" type="password" autocomplete="current-password" placeholder="Same secret as in the script"></div>
+      <div class="sub sh-err" id="shErr" hidden></div>
+      <div class="btn-row"><button type="button" class="btn ghost" id="shClose">Close</button><button type="submit" class="btn primary" id="syncSaveBtn">Save &amp; connect</button></div>
+    </form>
+    <div class="sh-more" id="shMore">
+      <button type="button" class="link" id="syncDownBtn">Restore from this sheet</button>
+      <button type="button" class="link" id="shMain">Make this the main sheet</button>
+      <button type="button" class="link danger-link" id="shRemove">Remove this sheet</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-bg" id="rateBg">
