@@ -226,7 +226,7 @@ function mergeMeta(remote){   // sheet -> phone: add anything missing here, neve
 function fillJobSelect(sel, val){ sel.innerHTML=""; const add=(v,t)=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); };
   add("", jobName("")); (db.jobs||[]).forEach(j=>{ if(!j.left || j.id===val) add(j.id,j.name+(j.left?" (left)":"")); }); sel.value=(val&&(db.jobs||[]).some(j=>j.id===val))?val:""; }
 const hasJobs=()=>!!(db.jobs&&db.jobs.length);
-const jobOk=(s,f)=>f==="all" || (f==="main" ? !s.job || !(db.jobs||[]).some(j=>j.id===s.job) : s.job===f);
+const jobOk=(s,f)=>f==="all" ? !jobLeft(s.job) : (f==="main" ? !s.job || !(db.jobs||[]).some(j=>j.id===s.job) : s.job===f);
 function S(){ return db.shifts.filter(s=>jobOk(s,jobFilter)); }   // shifts in view for Analytics
 
 function showFs(){ const el=$("fsClock"); if(!openShift()) return; el.hidden=false; document.body.classList.add("fs-open"); tickFs(); clearInterval(fsTimer); fsTimer=setInterval(tickFs,250); }
@@ -339,7 +339,7 @@ function renderCalendar(){
   const now=new Date(), f=new Date(now.getFullYear(), now.getMonth()+calOff, 1), last=new Date(f.getFullYear(), f.getMonth()+1, 0).getDate();
   $("calTitle").textContent=["January","February","March","April","May","June","July","August","September","October","November","December"][f.getMonth()]+" "+f.getFullYear();
   const g=$("calGrid"); g.innerHTML=""; const lead=(f.getDay()+6)%7, today=dayKey(Date.now());
-  const byDay={}; db.shifts.forEach(s=>{ const k=dayKey(s.start); (byDay[k]=byDay[k]||[]).push(s); });
+  const byDay={}; db.shifts.forEach(s=>{ if(jobLeft(s.job)) return; const k=dayKey(s.start); (byDay[k]=byDay[k]||[]).push(s); });
   for(let i=0;i<lead;i++){ g.appendChild(document.createElement("span")); }
   let nS=0,hh=0,ww=0,nOff=0;
   for(let d=1; d<=last; d++){
@@ -371,7 +371,7 @@ function openDay(k){
   $("dayTitle").textContent=fmtDay(d.getTime());
   const B=$("dayBody"); B.innerHTML="";
   const row=(a,b,fn)=>{ const r=document.createElement("button"); r.type="button"; r.className="job-row"; const x=document.createElement("span"); x.textContent=a; const y=document.createElement("span"); y.className="job-rate"; y.textContent=b; r.appendChild(x); r.appendChild(y); if(fn) r.onclick=fn; B.appendChild(r); };
-  db.shifts.filter(s=>dayKey(s.start)===k).sort((a,b)=>a.start-b.start).forEach(s=>row(fmtTime(s.start)+(s.end?" \u2013 "+fmtTime(s.end):" \u2013 now"), s.end?money(pay(s))+(hasJobs()?" \u00b7 "+jobName(s.job):""):"in progress", ()=>{ closeDay(); if(s.end) openModal(s); }));
+  db.shifts.filter(s=>dayKey(s.start)===k && !jobLeft(s.job)).sort((a,b)=>a.start-b.start).forEach(s=>row(fmtTime(s.start)+(s.end?" \u2013 "+fmtTime(s.end):" \u2013 now"), s.end?money(pay(s))+(hasJobs()?" \u00b7 "+jobName(s.job):""):"in progress", ()=>{ closeDay(); if(s.end) openModal(s); }));
   plansOn(d).forEach(p=>{ const {S,E}=planTimes(p,d); row("Planned "+fmtTime(S)+" \u2013 "+fmtTime(E), p.once?"one day":"weekly", ()=>{ closeDay(); openPlan(p,k); }); });
   if(off){ const n=document.createElement("div"); n.className="job-hint"; n.textContent="Marked as a day off. Planned shifts are skipped, and it isn't counted in your daily averages or projection."; B.appendChild(n); }
   if(!B.children.length){ const n=document.createElement("div"); n.className="empty"; n.textContent=isPast?"No shifts this day.":"Nothing planned yet."; B.appendChild(n); }
@@ -1417,7 +1417,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.4";
+const APP_VERSION="2026.10.18.5";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
