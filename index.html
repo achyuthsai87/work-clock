@@ -52,6 +52,7 @@
 <noscript><div style="padding:24px;font-family:sans-serif">Work Clock needs JavaScript enabled.</div></noscript>
 <div class="wrap">
   <section class="tabpane on" id="tab-home">
+<div class="card nudge" id="backupNudge" hidden><div class="nudge-t">Back up your history</div><div class="nudge-s">Nothing has been saved off this phone lately. If iOS clears the app, your shifts would be gone.</div><div class="nudge-b"><button id="nudgeNow" class="btn">Back up now</button><button id="nudgeSync" class="link">Set up sync</button><button id="nudgeLater" class="link">Later</button></div></div>
 <div class="hero">
     <div class="hero-top"><span id="greet">Hello</span><span id="heroDate"></span></div>
     <div class="hero-earn" id="heroEarn">$0.00</div>
@@ -85,7 +86,8 @@
   <section class="tabpane" id="tab-history">
   <div class="page-title">History</div>
 <div class="card">
-    
+    <div class="hfilter"><input id="histQ" type="search" placeholder="Search notes, dates, amounts" autocomplete="off" maxlength="40" aria-label="Search history"><select id="histMonth" aria-label="Jump to month"></select></div>
+    <div id="histSum" class="hsum" hidden></div>
     <div id="history"></div>
   </div>
   </section>
@@ -274,6 +276,7 @@
     </div>
   </div>
 </div>
+<div id="fsClock" class="fs-clock" hidden role="dialog" aria-modal="true" aria-label="Shift timer"><div class="fs-time" id="fsTime">00:00:00</div><button id="fsOut" class="fs-out">Clock Out</button><button id="fsMin" class="fs-min">Minimise</button></div>
 <div id="undoBar" class="toast" hidden><span id="undoTxt"></span><button id="undoBtn" class="link">Undo</button></div>
 
 <div id="toast" class="toast" hidden><span id="toastTxt"></span><button id="toastBtn" class="link">Change time</button></div>

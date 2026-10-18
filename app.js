@@ -74,6 +74,7 @@ function cleanLocal(d){  // everything persisted on this device, incl. sync + lo
   if(d && Array.isArray(d.punchSeen)) out.punchSeen = d.punchSeen.map(String).filter(x => ID_RE.test(x)).slice(-80);
   out.outbox = (d && Array.isArray(d.outbox) ? d.outbox : []).slice(0, 5000).map(e => cleanEvent(e, out.rate)).filter(Boolean);
   if(d && Number.isFinite(Number(d.lastSync))) out.lastSync = Number(d.lastSync);
+  for(const k of ["lastBackup","nudgeAt"]) if(d && Number.isFinite(Number(d[k])) && Number(d[k])>0) out[k] = Number(d[k]);
   if(d && d.lock && typeof d.lock.cred === "string" && /^[A-Za-z0-9_-]{8,2048}$/.test(d.lock.cred)) out.lock = {cred: d.lock.cred};
   return out;
 }
@@ -138,8 +139,21 @@ function applyPlan(){
   }
   if(changed) save(); return changed;
 }
+let histQ="", histMonth="all";
+function showFs(){ const el=$("fsClock"); if(!openShift()) return; el.hidden=false; document.body.classList.add("fs-open"); tickFs(); clearInterval(fsTimer); fsTimer=setInterval(tickFs,250); }
+function hideFs(){ const el=$("fsClock"); if(!el||el.hidden) return; el.hidden=true; document.body.classList.remove("fs-open"); clearInterval(fsTimer); }
+let fsTimer=null;
+function tickFs(){ const o=openShift(); if(!o){ hideFs(); return; } const el=Math.max(0,Date.now()-o.start)/1000, h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
+  $("fsTime").textContent=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0"); }
+// Nudge to back up when history isn't saved anywhere else
+function updateNudge(){ const el=$("backupNudge"); if(!el) return; const DAY=864e5, now=Date.now(), c=db.sync;
+  const synced=c && c.enabled && c.url && db.lastSync && now-db.lastSync<14*DAY;
+  const need=db.shifts.filter(s=>s.end).length>=3 && !synced && now-(db.lastBackup||0)>21*DAY && now-(db.nudgeAt||0)>7*DAY;
+  el.hidden=!need; }
 function render(){
   applyPlan();
+  if(!openShift()) hideFs();
+  updateNudge();
   const btn=$("clockBtn"), line=$("statusLine"), cancel=$("cancelShift");
   const open=openShift();
   if(open){
@@ -190,9 +204,17 @@ function render(){
   renderPay();
 
   // history grouped by day
-  const done=db.shifts.filter(s=>s.end).sort((a,b)=>b.start-a.start);
+  const allDone=db.shifts.filter(s=>s.end).sort((a,b)=>b.start-a.start);
+  const mSel=$("histMonth"); { const keys=[...new Set(allDone.map(s=>monthKey(s.start)))]; if(histMonth!=="all" && !keys.includes(histMonth)) histMonth="all";
+    mSel.innerHTML=""; const o0=document.createElement("option"); o0.value="all"; o0.textContent="All months"; mSel.appendChild(o0);
+    keys.forEach(k=>{ const o=document.createElement("option"); o.value=k; o.textContent=monthLabel(k); mSel.appendChild(o); }); mSel.value=histMonth; }
+  const q=histQ.trim().toLowerCase();
+  const done=allDone.filter(s=>(histMonth==="all"||monthKey(s.start)===histMonth) && (!q || [fmtDate(s.start),fmtDay(s.start),fmtTime(s.start),s.note||"",pay(s).toFixed(2),(s.tip||0)?(s.tip).toFixed(2):""].join(" ").toLowerCase().includes(q)));
+  const hs=$("histSum"); if(allDone.length && (q||histMonth!=="all")){ const hh=done.reduce((t,x)=>t+hrs(x),0), ww=done.reduce((t,x)=>t+pay(x),0), tt2=done.reduce((t,x)=>t+(x.tip||0),0);
+    hs.textContent=done.length+" shift"+(done.length===1?"":"s")+" \u00b7 "+hh.toFixed(1)+"h \u00b7 "+money(ww)+(tt2?" wages \u00b7 "+money(tt2)+" tips":""); hs.hidden=false; } else hs.hidden=true;
   const box=$("history"); box.innerHTML="";
-  if(!done.length){ box.innerHTML='<div class="empty">No shifts yet. Clock in to start tracking.</div>'; }
+  if(!allDone.length){ box.innerHTML='<div class="empty">No shifts yet. Clock in to start tracking.</div>'; }
+  else if(!done.length){ box.innerHTML='<div class="empty">No shifts match.</div>'; }
   let lastDay="";
   done.forEach(s=>{
     const dk=dayKey(s.start);
@@ -935,13 +957,23 @@ $("planSave").onclick=async()=>{
 sheetDrag($("planBg"), closePlan);
 setInterval(()=>{ if(!document.hidden && applyPlan()) render(); }, 20000);
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden && applyPlan()) render(); });
+$("fsOut").onclick=()=>{ hideFs(); $("clockBtn").onclick(); };
+$("fsMin").onclick=hideFs;
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !$("fsClock").hidden) hideFs(); });
+$("statusLine").addEventListener("click",()=>{ if(openShift()) showFs(); });
+$("histQ").addEventListener("input",e=>{ histQ=e.target.value; render(); });
+$("histMonth").addEventListener("change",e=>{ histMonth=e.target.value; render(); });
+$("nudgeNow").onclick=()=>{ $("jsonBtn").click(); };
+$("nudgeSync").onclick=()=>{ document.querySelector('.tabbar button[data-tab="settings"]').click(); };
+$("nudgeLater").onclick=()=>{ db.nudgeAt=Date.now(); save(); updateNudge(); };
+try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
 $("clockBtn").onclick=()=>{
   try{ if(navigator.vibrate) navigator.vibrate(18); }catch(e){}
   { const b=$("clockBtn"); b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); }
   const open=openShift();
   if(open){ const fromTxt=$("heroEarn").textContent; open.end=Date.now(); save(); render(); countUp($("heroEarn"), parseFloat(fromTxt.replace(/[^0-9.]/g,"")), parseFloat($("heroEarn").textContent.replace(/[^0-9.]/g,""))); queueSync({action:"upsert", shift:shiftPayload(open)});
     toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); }
-  else { db.shifts.push({id:uid(), start:Date.now(), end:null, rate:db.rate}); save(); render(); }
+  else { db.shifts.push({id:uid(), start:Date.now(), end:null, rate:db.rate}); save(); render(); showFs(); }
 };
 $("cancelShift").onclick=async()=>{ if(await askConfirm("Discard this shift?","The shift you're clocked into will be thrown away, not saved.","Discard",true)){
   db.shifts=db.shifts.filter(s=>s.end); save(); render(); }};
@@ -1102,7 +1134,7 @@ $("csvBtn").onclick=()=>{
   });
   download("workclock.csv",csv,"text/csv");
 };
-$("jsonBtn").onclick=()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, shifts:db.shifts, payments:db.payments||[]},null,2),"application/json");  // never includes sync URL/secret
+$("jsonBtn").onclick=()=>{ db.lastBackup=Date.now(); save(); updateNudge(); }; $("jsonBtn").addEventListener("click",()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, shifts:db.shifts, payments:db.payments||[]},null,2),"application/json"));  // never includes sync URL/secret
 $("importBtn").onclick=()=>$("importFile").click();
 $("importFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -1143,7 +1175,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.14.24";
+const APP_VERSION="2026.10.18.1";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
