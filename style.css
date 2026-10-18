@@ -828,3 +828,15 @@ html[data-theme] .page-title{ font-size:34px; font-weight:750; letter-spacing:-.
 .wk-bar i{display:block; height:100%; background:linear-gradient(90deg,#6f93f2,#8aa8ff)}
 .wk-bar i.t{background:#46c28b}
 .fs-clock{animation-fill-mode:backwards; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none}
+
+/* monthly chart: wages green, tips pink; weeks of the tapped month */
+.mon-key{font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px}
+.mon-key i{display:inline-block; width:10px; height:10px; border-radius:3px; margin-left:6px}
+.mon-key .kw{background:#1fa971; margin-left:0} .mon-key .kt{background:#f06aa8}
+.mon-hint{font-size:12px; color:var(--muted); text-align:center; margin:2px 0 6px}
+.wk-head{font-size:13px; font-weight:700; margin:4px 0 2px}
+#monWeeks{gap:9px; margin-top:6px; padding-top:8px; border-top:1px solid var(--line, rgba(128,140,160,.2))}
+.wk-v b{font-size:15px; color:var(--green)} .wk-v em{font-style:normal; font-size:13px; font-weight:600; color:#e0558f}
+.wk-top b{font-size:15px}
+.wk-bar{height:5px}
+.wk-bar i{background:linear-gradient(90deg,#1fa971,#4fcf93)} .wk-bar i.t{background:#f06aa8}

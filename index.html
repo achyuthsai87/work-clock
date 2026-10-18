@@ -166,15 +166,11 @@
   </div>
 
 <div class="card" style="margin-top:12px">
-    <div class="card-head"><span class="t">Week by week</span><span class="sub" style="margin:0;font-size:12px">wages and tips</span></div>
-    <div class="ana-nav"><button id="wkPrev" aria-label="Earlier weeks">‹</button><span id="wkRange"></span><button id="wkNext" aria-label="Later weeks">›</button></div>
-    <div id="weekList" class="week-list"></div>
-  </div>
-
-<div class="card" style="margin-top:12px">
-    <div class="card-head"><span class="t">Monthly earnings</span><span class="seg" id="monSeg"><button data-m="wages">Wages</button><button data-m="tips">With tips</button></span></div>
+    <div class="card-head"><span class="t">Monthly earnings</span><span class="mon-key"><i class="kw"></i>Wages <i class="kt"></i>Tips</span></div>
     <div class="ana-nav"><button id="monPrev" aria-label="Earlier months">‹</button><span id="monRange"></span><button id="monNext" aria-label="Later months">›</button></div>
     <canvas id="chart" width="600" height="340"></canvas>
+    <div class="mon-hint" id="monHint">Tap a month to see its weeks</div>
+    <div id="monWeeks" class="week-list"></div>
   </div>
   <div class="card" id="tipYieldCard" hidden>
     <div class="pay-h">Tip yield</div>
