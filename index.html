@@ -360,10 +360,11 @@
 
 <div class="modal-bg" id="monBg">
   <div class="modal">
-    <h2 id="monTitle">Month</h2>
-    <div class="ana-nav"><button id="mwPrev" aria-label="Previous month">‹</button><span id="mwLab"></span><button id="mwNext" aria-label="Next month">›</button></div>
+    <h2 id="monTitle">Week</h2>
+    <div class="ana-nav"><button id="mwPrev" aria-label="Previous week">‹</button><span id="mwLab"></span><button id="mwNext" aria-label="Next week">›</button></div>
     <div class="mw-stats" id="mwStats"></div>
-    <div id="mwList" class="week-list"></div>
+    <canvas id="wkChart" width="600" height="300"></canvas>
+    <div class="mon-hint" id="mwNote"></div>
     <div class="btn-row"><button class="btn ghost" id="mwClose" type="button">Close</button></div>
   </div>
 </div>

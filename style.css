@@ -847,3 +847,8 @@ html[data-theme] .page-title{ font-size:34px; font-weight:750; letter-spacing:-.
 .mw-tile.g b{color:var(--green)} .mw-tile.p b{color:#e0558f}
 .wk-tot{font-size:12.5px; color:var(--muted); font-weight:600}
 #mwList{margin-bottom:8px}
+
+/* timer: swipe hint sits at the very bottom, no blinking colons */
+.fs-clock > .fs-min{position:absolute; left:50%; transform:translateX(-50%); bottom:calc(env(safe-area-inset-bottom) + 18px)}
+.fs-time i{animation:none !important}
+#wkChart{width:100%; height:240px; display:block}
