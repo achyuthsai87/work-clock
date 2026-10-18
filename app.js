@@ -1893,7 +1893,7 @@ function renderLoc(){
     row.appendChild(seg); wrap.appendChild(row);
     if(at){
       const r2=document.createElement("div"); r2.className="settings-row loc-sub"; const l2=document.createElement("span"), sm=document.createElement("small");
-      l2.textContent="Work location"; sm.textContent=w?"Set (\u00b1"+w.ac+" m)":"Not set yet"; l2.appendChild(sm); r2.appendChild(l2);
+      l2.textContent="Job location"; sm.textContent=w?"Saved \u00b7 accurate to about "+w.ac+" m":"Not set yet. Stand there, then tap Set here."; l2.appendChild(sm); r2.appendChild(l2);
       const bs=document.createElement("span"), set=document.createElement("button"), clr=document.createElement("button");
       set.type=clr.type="button"; set.className=clr.className="icon-btn"; set.textContent=w?"Update":"Set here"; clr.textContent="Clear"; clr.hidden=!w;
       set.onclick=async()=>{ $("locMsg").textContent="Getting location\u2026"; const r=await getPos(); if(!r.s){ $("locMsg").textContent=locFail(r.err)+(r.err==="denied"?". Turn it on in iPhone Settings > Privacy & Security > Location Services.":"."); return; }
@@ -1977,7 +1977,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.45";
+const APP_VERSION="2026.10.18.46";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
