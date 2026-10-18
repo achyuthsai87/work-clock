@@ -169,8 +169,7 @@
     <div class="card-head"><span class="t">Monthly earnings</span><span class="mon-key"><i class="kw"></i>Wages <i class="kt"></i>Tips</span></div>
     <div class="ana-nav"><button id="monPrev" aria-label="Earlier months">‹</button><span id="monRange"></span><button id="monNext" aria-label="Later months">›</button></div>
     <canvas id="chart" width="600" height="340"></canvas>
-    <div class="mon-hint" id="monHint">Tap a month to see its weeks</div>
-    <div id="monWeeks" class="week-list"></div>
+    <div class="mon-hint">Tap a month for its week-by-week breakdown</div>
   </div>
   <div class="card" id="tipYieldCard" hidden>
     <div class="pay-h">Tip yield</div>
@@ -355,6 +354,17 @@
       <button class="btn ghost" id="missSkip" type="button">I didn't work it, remove it</button>
       <button class="link" id="missLater" type="button">Decide later</button>
     </div>
+  </div>
+</div>
+
+
+<div class="modal-bg" id="monBg">
+  <div class="modal">
+    <h2 id="monTitle">Month</h2>
+    <div class="ana-nav"><button id="mwPrev" aria-label="Previous month">‹</button><span id="mwLab"></span><button id="mwNext" aria-label="Next month">›</button></div>
+    <div class="mw-stats" id="mwStats"></div>
+    <div id="mwList" class="week-list"></div>
+    <div class="btn-row"><button class="btn ghost" id="mwClose" type="button">Close</button></div>
   </div>
 </div>
 

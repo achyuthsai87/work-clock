@@ -840,3 +840,10 @@ html[data-theme] .page-title{ font-size:34px; font-weight:750; letter-spacing:-.
 .wk-top b{font-size:15px}
 .wk-bar{height:5px}
 .wk-bar i{background:linear-gradient(90deg,#1fa971,#4fcf93)} .wk-bar i.t{background:#f06aa8}
+
+.mw-stats{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:8px 0 12px}
+.mw-tile{border-radius:14px; background:var(--chip); padding:10px 8px; text-align:center}
+.mw-tile small{display:block; font-size:11.5px; color:var(--muted)} .mw-tile b{font-size:16px; font-variant-numeric:tabular-nums}
+.mw-tile.g b{color:var(--green)} .mw-tile.p b{color:#e0558f}
+.wk-tot{font-size:12.5px; color:var(--muted); font-weight:600}
+#mwList{margin-bottom:8px}
