@@ -1531,7 +1531,7 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !$("fsClock").hi
 $("statusLine").addEventListener("click",()=>{ if(openShift()) showFs(); });
 function openStart(){ const s=openShift(); if(!s) return; const d=new Date(s.start); $("startTime").value=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); $("startBg").classList.add("open"); }
 const closeStart=()=>$("startBg").classList.remove("open");
-$("startEdit").onclick=openStart; $("fsStart").onclick=openStart; $("startCancel").onclick=closeStart;
+$("startEdit").onclick=openStart; $("startCancel").onclick=closeStart;
 $("startBg").addEventListener("click",e=>{ if(e.target===$("startBg")) closeStart(); }); sheetDrag($("startBg"), closeStart);
 $("startQuick").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; const s=openShift(); if(!s) return; const d=new Date(s.start-Number(b.dataset.m)*60000);
   $("startTime").value=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); });
@@ -1977,7 +1977,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.48";
+const APP_VERSION="2026.10.18.49";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
