@@ -265,10 +265,12 @@ const jobOk=(s,f)=>f==="all" ? !jobLeft(s.job) : (f==="main" ? !s.job || !(db.jo
 function S(){ return db.shifts.filter(s=>jobOk(s,jobFilter)); }   // shifts in view for Analytics
 
 function showFs(){ const el=$("fsClock"); if(!openShift()) return; el.hidden=false; { const mc=document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute("content","#0b0f1a"); } document.body.classList.add("fs-open"); tickFs(); clearInterval(fsTimer); fsTimer=setInterval(tickFs,250); }
-function hideFs(){ const el=$("fsClock"); if(!el||el.hidden) return; el.hidden=true; applyTheme(); document.body.classList.remove("fs-open"); clearInterval(fsTimer); }
+function hideFs(){ const el=$("fsClock"); if(!el||el.hidden) return; el.hidden=true; el.style.transform=""; el.style.transition=""; el.classList.remove("dragging"); applyTheme(); document.body.classList.remove("fs-open"); clearInterval(fsTimer); }
 let fsTimer=null;
-function tickFs(){ const o=openShift(); if(!o){ hideFs(); return; } const el=Math.max(0,Date.now()-o.start)/1000, h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
-  $("fsTime").textContent=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0"); }
+function tickFs(){ const o=openShift(); if(!o){ hideFs(); return; } const el=Math.max(0,Date.now()-o.start)/1000, h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60), p2=n=>String(n).padStart(2,"0");
+  $("fsH").textContent=p2(h); $("fsM").textContent=p2(m); $("fsS").textContent=p2(s);
+  $("fsFill").style.width=((el%60)/60*100).toFixed(1)+"%";
+  const hh=hrs({start:o.start,end:Date.now()}); $("fsEarn").textContent=money(hh*rateOf(o))+" earned so far"+(hasJobs()?" \u00b7 "+jobName(o.job):""); }
 // Nudge to back up when history isn't saved anywhere else
 function updateNudge(){ const el=$("backupNudge"); if(!el) return; const DAY=864e5, now=Date.now(), c=db.sync;
   const synced=c && c.enabled && c.url && db.lastSync && now-db.lastSync<14*DAY;
@@ -501,32 +503,60 @@ sheetDrag($("jobBg"), closeJob);
 $("jobPick").onchange=e=>{ if(e.target.value) db.activeJob=e.target.value; else delete db.activeJob; save(); };
 $("histJob").onchange=e=>{ histJob=e.target.value; render(); };
 $("anaJob").onchange=e=>{ jobFilter=e.target.value; renderAnalytics(); drawChart(); };
+let monOff=0, monTips=false, wkOff=0;
+function firstShiftTs(){ return S().reduce((m,x)=>Math.min(m,x.start),Infinity); }
 function drawChart(){
   const cv=$("chart"), ctx=cv.getContext("2d");
   const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
   cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
   const now=new Date(); const keys=[];
-  for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); keys.push(monthKey(d.getTime())); }
-  const sums={}; keys.forEach(k=>sums[k]=0);
-  db.shifts.forEach(s=>{ if(!s.end) return; const k=monthKey(s.start); if(k in sums) sums[k]+=pay(s); });
-  const max=Math.max(1,...Object.values(sums));
+  for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(), now.getMonth()+monOff-i, 1); keys.push(monthKey(d.getTime())); }
+  const sums={}, tipS={}; keys.forEach(k=>{ sums[k]=0; tipS[k]=0; });
+  const view=S(); view.forEach(s=>{ if(!s.end) return; const k=monthKey(s.start); if(k in sums){ sums[k]+=pay(s); tipS[k]+=tipOf(s); } });
+  const tot=k=>sums[k]+(monTips?tipS[k]:0), max=Math.max(1,...keys.map(tot));
+  document.querySelectorAll("#monSeg button").forEach(b=>b.classList.toggle("on",(b.dataset.m==="tips")===monTips));
+  $("monRange").textContent=monthLabel(keys[0])+" \u2013 "+monthLabel(keys[5]);
+  const first=firstShiftTs(), fk=Number.isFinite(first)?monthKey(first):null;
+  $("monNext").disabled=monOff>=0; $("monPrev").disabled=!fk || fk>=keys[0];
   const cs=getComputedStyle(document.documentElement);
   const colMuted=(cs.getPropertyValue("--muted")||"#6b7686").trim();
   const colInk=(cs.getPropertyValue("--ink")||"#1b2430").trim();
   const padL=8, padB=26, padT=28, cw=(W-padL)/6, bh=H-padB-padT;
   ctx.font="11px -apple-system, sans-serif"; ctx.textAlign="center";
   keys.forEach((k,i)=>{
-    const v=sums[k], h=Math.max(3,(v/max)*bh), x=padL+i*cw+cw/2;
-    const g=ctx.createLinearGradient(0,H-padB-h,0,H-padB);
-    g.addColorStop(0,"#6f93f2"); g.addColorStop(1,"#c5d3fa");
-    ctx.fillStyle=g;
-    const bw=Math.min(44,cw-18);
-    ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-h, bw, h, 6); ctx.fill();
-    ctx.fillStyle=colMuted;
-    ctx.fillText(monthLabel(k).split(" ")[0], x, H-10);
-    if(v>0){ ctx.fillStyle=colInk; ctx.fillText("$"+Math.round(v), x, H-padB-h-6); }
+    const v=tot(k), h=Math.max(3,(v/max)*bh), x=padL+i*cw+cw/2, bw=Math.min(44,cw-18), top=H-padB-h;
+    const wh=monTips&&v>0 ? h*(sums[k]/v) : h;
+    const g=ctx.createLinearGradient(0,top,0,H-padB); g.addColorStop(0,"#6f93f2"); g.addColorStop(1,"#c5d3fa");
+    ctx.fillStyle=g; ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-wh, bw, wh, monTips&&h>wh?[0,0,6,6]:6); ctx.fill();
+    if(monTips && h>wh+0.5){ ctx.fillStyle="#46c28b"; ctx.beginPath(); ctx.roundRect(x-bw/2, top, bw, h-wh, [6,6,0,0]); ctx.fill(); }
+    ctx.fillStyle=colMuted; const [mn,yr]=monthLabel(k).split(" "); ctx.fillText(mn+(k.endsWith("-01")?" \u2019"+yr.slice(2):""), x, H-10);
+    if(v>0){ ctx.fillStyle=colInk; ctx.fillText("$"+Math.round(v), x, top-6); }
   });
 }
+function renderWeeks(){
+  const L=$("weekList"); if(!L) return; L.innerHTML="";
+  const view=S().filter(x=>x.end), base=startOfWeek(Date.now()), wk=[];
+  for(let j=5;j>=0;j--){ const a=new Date(base); a.setDate(a.getDate()+(wkOff*6-j)*7); const b=new Date(a); b.setDate(a.getDate()+7);
+    const ss=view.filter(x=>x.start>=a.getTime() && x.start<b.getTime());
+    wk.push({a,b,n:ss.length,hrs:ss.reduce((t,x)=>t+hrs(x),0),wages:ss.reduce((t,x)=>t+pay(x),0),tips:ss.reduce((t,x)=>t+tipOf(x),0),cur:wkOff===0&&j===0}); }
+  const lab=(a)=>{ const e=new Date(a); e.setDate(a.getDate()+6); return MONTHS[a.getMonth()]+" "+a.getDate()+" \u2013 "+(e.getMonth()!==a.getMonth()?MONTHS[e.getMonth()]+" ":"")+e.getDate(); };
+  { const e=new Date(wk[5].a); e.setDate(e.getDate()+6); $("wkRange").textContent=MONTHS[wk[0].a.getMonth()]+" "+wk[0].a.getDate()+" \u2013 "+MONTHS[e.getMonth()]+" "+e.getDate()+(e.getFullYear()!==new Date().getFullYear()?", "+e.getFullYear():""); }
+  const first=firstShiftTs(); $("wkNext").disabled=wkOff>=0; $("wkPrev").disabled=!Number.isFinite(first) || first>=wk[0].a.getTime();
+  const mx=Math.max(1,...wk.map(w=>w.wages+w.tips));
+  wk.slice().reverse().forEach(w=>{
+    const r=document.createElement("div"); r.className="wk-row"+(w.cur?" cur":"");
+    const top=document.createElement("div"); top.className="wk-top";
+    const l=document.createElement("span"); l.className="wk-l"; l.textContent=lab(w.a)+(w.cur?"  \u00b7 this week":"");
+    const v=document.createElement("b"); v.textContent=w.n?money(w.wages):"\u2014"; top.appendChild(l); top.appendChild(v); r.appendChild(top);
+    const sub=document.createElement("div"); sub.className="wk-sub";
+    sub.textContent=w.n ? w.hrs.toFixed(1)+"h \u00b7 "+w.n+" shift"+(w.n===1?"":"s")+(w.tips>0?" \u00b7 tips "+money(w.tips)+" \u00b7 total "+money(w.wages+w.tips):" \u00b7 no tips") : "No shifts";
+    r.appendChild(sub);
+    const bar=document.createElement("div"); bar.className="wk-bar"; const bw=document.createElement("i"); bw.style.width=(w.wages/mx*100)+"%"; const bt=document.createElement("i"); bt.className="t"; bt.style.width=(w.tips/mx*100)+"%"; bar.appendChild(bw); bar.appendChild(bt); r.appendChild(bar);
+    L.appendChild(r); });
+}
+$("monPrev").onclick=()=>{ monOff--; drawChart(); }; $("monNext").onclick=()=>{ if(monOff<0){ monOff++; drawChart(); } };
+$("wkPrev").onclick=()=>{ wkOff--; renderWeeks(); }; $("wkNext").onclick=()=>{ if(wkOff<0){ wkOff++; renderWeeks(); } };
+document.querySelectorAll("#monSeg button").forEach(b=>b.onclick=()=>{ monTips=b.dataset.m==="tips"; drawChart(); });
 
 // ---------- Analytics ----------
 function startOfWeek(ts){ const d=new Date(ts); const diff=(d.getDay()+6)%7; d.setHours(0,0,0,0); return d.getTime()-diff*86400000; }
@@ -604,7 +634,7 @@ function renderAnalytics(){
   const g=$("anaStats"); g.innerHTML="";
   tiles.forEach(([l,v])=>{ const d=document.createElement("div"); d.className="ana-tile";
     d.innerHTML='<div class="l">'+l+'</div><div class="v">'+v+'</div>'; g.appendChild(d); });
-  drawAnaChart(days, p);
+  drawAnaChart(days, p); renderWeeks(); if($("tab-analytics").classList.contains("on")) drawChart();
   renderInsights(); renderTipYield();
   renderFun();
 }
@@ -1257,7 +1287,19 @@ sheetDrag($("planBg"), closePlan);
 setInterval(()=>{ if(!document.hidden){ if(applyPlan()) render(); showMissed(); } }, 20000);
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ if(applyPlan()) render(); setTimeout(showMissed,400); } });
 $("fsOut").onclick=()=>{ hideFs(); $("clockBtn").onclick(); };
-$("fsMin").onclick=hideFs;
+function minimiseFs(){ const el=$("fsClock"); if(el.hidden) return; document.body.classList.remove("fs-open"); el.classList.add("dragging"); el.style.transition="transform .32s cubic-bezier(.3,.8,.3,1)"; el.style.transform="translateY(-104%)"; setTimeout(hideFs,320); }
+$("fsMin").onclick=minimiseFs;
+(function(){ const el=$("fsClock"); let y0=null, id=null, dy=0, drag=false, t0=0;
+  el.addEventListener("pointerdown",e=>{ y0=e.clientY; id=e.pointerId; dy=0; drag=false; t0=Date.now(); });
+  el.addEventListener("pointermove",e=>{ if(y0==null||e.pointerId!==id) return; const d=e.clientY-y0;
+    if(!drag){ if(d<-10){ drag=true; try{ el.setPointerCapture(id); }catch(_){ } document.body.classList.remove("fs-open"); el.classList.add("dragging"); el.style.transition="none"; } else return; }
+    dy=Math.min(0,d); el.style.transform="translateY("+dy+"px)"; });
+  const end=()=>{ if(y0==null) return; const was=drag; y0=null; if(!was) return; drag=false;
+    const v=dy/Math.max(1,Date.now()-t0);
+    if(dy<-window.innerHeight*0.22 || v<-0.7){ el.style.transition="transform .28s cubic-bezier(.3,.8,.3,1)"; el.style.transform="translateY(-104%)"; setTimeout(hideFs,280); }
+    else { el.style.transition="transform .42s cubic-bezier(.34,1.5,.5,1)"; el.style.transform="translateY(0)"; setTimeout(()=>{ el.style.transition=""; el.style.transform=""; el.classList.remove("dragging"); if(!el.hidden) document.body.classList.add("fs-open"); },430); } };
+  el.addEventListener("pointerup",end); el.addEventListener("pointercancel",end);
+})();
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !$("fsClock").hidden) hideFs(); });
 $("statusLine").addEventListener("click",()=>{ if(openShift()) showFs(); });
 function openStart(){ const s=openShift(); if(!s) return; const d=new Date(s.start); $("startTime").value=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); $("startBg").classList.add("open"); }
@@ -1501,7 +1543,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.15";
+const APP_VERSION="2026.10.18.16";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

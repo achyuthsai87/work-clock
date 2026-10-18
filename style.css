@@ -790,3 +790,41 @@ html[data-theme] .page-title{ font-size:34px; font-weight:750; letter-spacing:-.
   html[data-theme] .tabbar, html[data-theme] .modal, html[data-theme] .quickrow .link, html[data-theme] .planrow .link{ -webkit-backdrop-filter:none; backdrop-filter:none; background:var(--card); }
 }
 @media (prefers-contrast:more){ html[data-theme]{ --rim:rgba(0,0,0,.55); --spec:rgba(255,255,255,.4); } html[data-theme="dark"]{ --rim:rgba(255,255,255,.4); } }
+
+/* ===== smoother top edge (status bar / Dynamic Island area) ===== */
+.edge-top{height:calc(env(safe-area-inset-top) + 72px); background:linear-gradient(to bottom, var(--bg-base) 0%, color-mix(in srgb,var(--bg-base) 82%,transparent) 28%, color-mix(in srgb,var(--bg-base) 38%,transparent) 62%, transparent 100%);}
+
+/* ===== full-screen timer: ambient motion + swipe-up to minimise ===== */
+.fs-clock{touch-action:none; overflow:hidden; gap:26px; will-change:transform;}
+.fs-clock.dragging{border-radius:0 0 38px 38px; box-shadow:0 24px 60px rgba(0,0,0,.45);}
+.fs-clock > *{position:relative; z-index:1}
+.fs-glow{position:absolute !important; left:50%; top:46%; width:150vw; height:150vw; margin:-75vw 0 0 -75vw; z-index:0 !important; pointer-events:none;
+  background:radial-gradient(circle, rgba(96,140,255,.30) 0%, rgba(96,140,255,.10) 35%, transparent 62%); animation:fsBreathe 7s ease-in-out infinite alternate;}
+@keyframes fsBreathe{from{transform:scale(.82); opacity:.55}to{transform:scale(1.12); opacity:1}}
+.fs-live{display:flex; align-items:center; font-size:15px; font-weight:600; color:rgba(255,255,255,.72); letter-spacing:.2px}
+.fs-time{display:flex; align-items:baseline; justify-content:center; white-space:nowrap}
+.fs-time i{font-style:normal; margin:0 .02em; animation:fsColon 1s steps(1) infinite}
+@keyframes fsColon{0%{opacity:1}50%{opacity:.25}}
+.fs-track{width:min(72vw,300px); height:5px; border-radius:3px; background:rgba(255,255,255,.12); overflow:hidden; box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12)}
+.fs-track i{display:block; height:100%; width:0; border-radius:3px; background:linear-gradient(90deg,#6f93f2,#8fe3c0); transition:width .25s linear; box-shadow:0 0 12px rgba(120,170,255,.7)}
+.fs-earn{font-size:17px; font-weight:600; color:rgba(255,255,255,.85); margin-top:-6px; font-variant-numeric:tabular-nums}
+.fs-sub{margin-top:-6px}
+.fs-min{display:flex; flex-direction:column; align-items:center; gap:6px; z-index:2; color:rgba(255,255,255,.6); font-size:13.5px; letter-spacing:.2px}
+.fs-chev{width:18px; height:18px; position:relative; animation:fsBob 1.8s ease-in-out infinite}
+.fs-chev::before,.fs-chev::after{content:""; position:absolute; left:3px; width:11px; height:11px; border-left:2.5px solid rgba(255,255,255,.8); border-top:2.5px solid rgba(255,255,255,.8); transform:rotate(45deg); border-radius:2px}
+.fs-chev::before{top:7px} .fs-chev::after{top:1px; opacity:.45}
+@keyframes fsBob{0%,100%{transform:translateY(2px); opacity:.45}50%{transform:translateY(-6px); opacity:1}}
+@media (prefers-reduced-motion:reduce){ .fs-glow,.fs-time i,.fs-chev{animation:none} .fs-track i{transition:none} }
+
+/* ===== week by week ===== */
+.week-list{display:flex; flex-direction:column; gap:12px; margin-top:8px}
+.wk-row{padding:2px 0}
+.wk-top{display:flex; justify-content:space-between; align-items:baseline}
+.wk-l{font-size:14px; font-weight:650}
+.wk-row.cur .wk-l{color:var(--accent)}
+.wk-top b{font-size:17px; font-variant-numeric:tabular-nums}
+.wk-sub{font-size:12.5px; color:var(--muted); margin:2px 0 6px}
+.wk-bar{display:flex; height:6px; border-radius:3px; background:var(--chip); overflow:hidden}
+.wk-bar i{display:block; height:100%; background:linear-gradient(90deg,#6f93f2,#8aa8ff)}
+.wk-bar i.t{background:#46c28b}
+.fs-clock{animation-fill-mode:backwards; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none}
