@@ -332,6 +332,23 @@
 </div>
 
 
+<div class="modal-bg" id="brkBg">
+  <div class="modal">
+    <h2>Take a break</h2>
+    <div class="sub" style="margin:0 0 8px">Unpaid. It comes off this shift's hours.</div>
+    <div class="wheels"><div class="wheel-band"></div>
+      <div class="wheel" id="wheelH" aria-label="Hours"></div><span class="wheel-u">hr</span>
+      <div class="wheel" id="wheelM" aria-label="Minutes"></div><span class="wheel-u">min</span>
+    </div>
+    <div class="brk-sum" id="brkSum">No break</div>
+    <div class="btn-row">
+      <button class="btn ghost" id="brkCancel" type="button">Cancel</button>
+      <button class="btn primary" id="brkSave" type="button">Save</button>
+    </div>
+    <button class="link" id="brkClear" type="button" hidden style="display:block;margin:10px auto 0">Remove break</button>
+  </div>
+</div>
+
 <div class="modal-bg" id="startBg">
   <div class="modal">
     <h2>When did you start?</h2>
@@ -361,12 +378,13 @@
 
 <div class="modal-bg" id="monBg">
   <div class="modal">
+    <button class="link mw-up" id="mwBack" type="button" hidden>‹ Months</button>
     <h2 id="monTitle">Week</h2>
     <div class="ana-nav"><button id="mwPrev" aria-label="Previous week">‹</button><span id="mwLab"></span><button id="mwNext" aria-label="Next week">›</button></div>
     <div class="mw-stats" id="mwStats"></div>
     <canvas id="wkChart" width="600" height="300"></canvas>
     <div class="mon-hint" id="mwNote"></div>
-    <div class="btn-row"><button class="btn ghost" id="mwBack" type="button" hidden>Back</button><button class="btn ghost" id="mwClose" type="button">Close</button></div>
+    <div class="btn-row"><button class="btn ghost" id="mwHome" type="button" hidden>Back</button><button class="btn ghost" id="mwClose" type="button">Close</button></div>
   </div>
 </div>
 
@@ -387,6 +405,7 @@
   <div class="fs-track" aria-hidden="true"><i id="fsFill"></i></div>
   <div class="fs-earn" id="fsEarn"></div>
   <button id="fsOut" class="fs-out">Clock Out</button>
+  <button id="fsBreak" class="fs-sub fs-brk" type="button">Break</button>
   <button id="fsStart" class="fs-sub">Started late? Change start time</button>
   <button id="fsMin" class="fs-min" aria-label="Minimise timer"><span class="fs-chev" aria-hidden="true"></span><span>Swipe up to minimise</span></button>
 </div>
@@ -504,6 +523,7 @@
     <div class="field"><label>Clock out</label><input type="time" id="fOut"><div style="font-size:12px;color:var(--muted);margin-top:5px">Working past midnight? If clock-out is earlier than clock-in, it counts as the next day.</div></div>
     <div class="field"><label>Tips (optional)</label><input type="number" id="fTip" inputmode="decimal" min="0" max="100000" step="0.01" placeholder="0.00"></div>
     <div class="field"><label>Hourly rate for this shift ($)</label><input type="number" id="fRate" inputmode="decimal" min="0" step="0.25"></div>
+    <div class="field"><label>Unpaid break (minutes, optional)</label><input type="number" id="fBrk" inputmode="numeric" min="0" max="720" step="1" placeholder="0"></div>
     <div class="field"><label>Note (private, optional)</label><input type="text" id="fNote" maxlength="80" placeholder="e.g. closed alone"></div>
     <div class="btn-row">
       <button class="btn ghost" id="modalCancel">Cancel</button>

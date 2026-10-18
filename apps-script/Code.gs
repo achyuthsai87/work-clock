@@ -7,7 +7,7 @@
  */
 const SECRET = "CHANGE-ME-TO-SOMETHING-LONG";   // use 24+ random characters; never share or commit it
 const SHEET_NAME = "Shifts";
-const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end", "Note", "Rate", "Job", "jobId"];
+const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end", "Note", "Rate", "Job", "jobId", "Break"];
 const COL = { START: 10, END: 11, TIP: 8 };   // 1-based columns the app reads back
 const MAX_BULK = 5000;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -165,7 +165,8 @@ function clean_(s) {
   return [String(s.id), txt(s.date), txt(s.day), txt(s.month), txt(s.in), txt(s.out),
           Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end, note,
           (s.rate === "" || s.rate == null || !isFinite(Number(s.rate)) || Number(s.rate) < 0 || Number(s.rate) > 100000) ? "" : Number(s.rate),
-          txt(s.jobName).slice(0, 24), ID_RE.test(String(s.job || "")) ? String(s.job) : ""];
+          txt(s.jobName).slice(0, 24), ID_RE.test(String(s.job || "")) ? String(s.job) : "",
+          (s.brk === "" || s.brk == null || !isFinite(Number(s.brk)) || Number(s.brk) < 0 || Number(s.brk) > 720) ? "" : Math.round(Number(s.brk))];
 }
 
 // Payments the owner made to you.
@@ -210,7 +211,7 @@ function doPost(e) {
       const n = sh.getLastRow() - 1;
       const rows = n > 0 ? sh.getRange(2, 1, n, HEADERS.length).getValues() : [];
       return out_({ ok: true, shifts: rows.filter(r => r[0] && r[9] && r[10])
-        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0, note: String(r[11] || ""), rate: r[12] === "" || r[12] == null ? null : Number(r[12]), job: String(r[14] || "") })) });
+        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0, note: String(r[11] || ""), rate: r[12] === "" || r[12] == null ? null : Number(r[12]), job: String(r[14] || ""), brk: r[15] === "" || r[15] == null ? null : Number(r[15]) })) });
     }
 
     if (b.action === "sget") {

@@ -727,7 +727,7 @@ body.fs-open{overflow:hidden}
 .miss-btns .btn{width:100%}
 .miss-btns .link{align-self:center; margin-top:4px}
 .fs-sub{background:none; border:0; color:rgba(255,255,255,.6); font-size:15px; padding:8px 12px; cursor:pointer; margin-top:-24px}
-#startBg,#cfmBg{z-index:130}
+#startBg,#cfmBg,#brkBg{z-index:130}
 
 /* the full-screen timer covers the tab bar; use Minimise to leave it */
 body.fs-open .tabbar{display:none}
@@ -871,3 +871,15 @@ body.scroll-lock{position:fixed; left:0; right:0; width:100%; overflow:hidden}
 html.kbd .modal{margin-bottom:0; padding-bottom:14px}
 html.kbd .modal-bg{padding-bottom:0}
 html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme:light}
+
+.mw-up{display:block; margin:0 0 2px -4px; padding:4px 6px; font-size:14px}
+.wheels{position:relative; display:flex; justify-content:center; align-items:center; gap:6px; height:180px; margin:6px 0 4px}
+.wheel-band{position:absolute; left:14%; right:14%; top:72px; height:36px; border-radius:10px; background:var(--chip); pointer-events:none}
+.wheel{position:relative; z-index:1; width:84px; height:180px; overflow-y:auto; scroll-snap-type:y mandatory; padding:72px 0; box-sizing:border-box; scrollbar-width:none; overscroll-behavior:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch;
+  -webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent); mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent)}
+.wheel::-webkit-scrollbar{display:none}
+.wheel-i{height:36px; line-height:36px; text-align:center; scroll-snap-align:center; font-size:21px; font-variant-numeric:tabular-nums; color:var(--muted); transition:color .12s}
+.wheel-i.sel{color:var(--ink); font-weight:650}
+.wheel-u{position:relative; z-index:1; font-size:15px; color:var(--muted); margin-right:10px}
+.brk-sum{text-align:center; font-weight:600; margin:2px 0 12px; font-variant-numeric:tabular-nums}
+.mw-up[hidden]{display:none}
