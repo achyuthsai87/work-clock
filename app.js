@@ -249,6 +249,14 @@ function applyPlan(){
   if(changed) save(); return changed;
 }
 let histQ="", histMonth="all", histJob="all", jobFilter="all";
+const histF={hMin:null,hMax:null,aMin:null,aMax:null};
+const hfActive=()=>Object.values(histF).filter(v=>v!=null).length;
+function histSearchOk(s,q){   // notes, dates and months only; never the time of day or the amount
+  const d=new Date(s.start), toks=(String(s.note||"")+" "+fmtDay(s.start)+" "+fmtDate(s.start)+" "+monthLabel(monthKey(s.start))).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean), note=String(s.note||"").toLowerCase();
+  return q.split(/\s+/).filter(Boolean).every(w=>/^\d+$/.test(w)?toks.includes(w):(toks.some(t=>!/^\d+$/.test(t)&&t.includes(w))||note.includes(w)));
+}
+function histRangeOk(s){ const h=Math.round(hrs(s)*100)/100, a=Math.round(pay(s)*100)/100;
+  return (histF.hMin==null||h>=histF.hMin) && (histF.hMax==null||h<=histF.hMax) && (histF.aMin==null||a>=histF.aMin) && (histF.aMax==null||a<=histF.aMax); }
 function queueMeta(){ const c=db.sync; if(!c||!c.enabled||!c.url) return; db.outbox=db.outbox||[]; const ev={action:"meta"}; pushEv(db.outbox,ev); mirrors().forEach(m=>pushEv(outboxOf(m),ev)); save(); updateSyncStatus(); flushOutbox(); }
 // jobs, planned shifts, days off, expenses and a few settings travel as small JSON blobs ("core" + one per year of expenses)
 function metaPayloads(){
@@ -395,9 +403,10 @@ function render(){
     mSel.innerHTML=""; const o0=document.createElement("option"); o0.value="all"; o0.textContent="All months"; mSel.appendChild(o0);
     keys.forEach(k=>{ const o=document.createElement("option"); o.value=k; o.textContent=monthLabel(k); mSel.appendChild(o); }); mSel.value=histMonth; }
   const q=histQ.trim().toLowerCase();
-  const done=allDone.filter(s=>jobOk(s,histJob) && (histMonth==="all"||monthKey(s.start)===histMonth) && (!q || [fmtDate(s.start),fmtDay(s.start),fmtTime(s.start),s.note||"",pay(s).toFixed(2),(s.tip||0)?(s.tip).toFixed(2):""].join(" ").toLowerCase().includes(q)));
-  const hs=$("histSum"); if(allDone.length && (q||histMonth!=="all")){ const hh=done.reduce((t,x)=>t+hrs(x),0), ww=done.reduce((t,x)=>t+pay(x),0), tt2=done.reduce((t,x)=>t+(x.tip||0),0);
+  const done=allDone.filter(s=>jobOk(s,histJob) && (histMonth==="all"||monthKey(s.start)===histMonth) && (!q || histSearchOk(s,q)) && histRangeOk(s));
+  const hs=$("histSum"); if(allDone.length && (q||histMonth!=="all"||hfActive())){ const hh=done.reduce((t,x)=>t+hrs(x),0), ww=done.reduce((t,x)=>t+pay(x),0), tt2=done.reduce((t,x)=>t+(x.tip||0),0);
     hs.textContent=done.length+" shift"+(done.length===1?"":"s")+" \u00b7 "+hh.toFixed(1)+"h \u00b7 "+money(ww)+(tt2?" wages \u00b7 "+money(tt2)+" tips":""); hs.hidden=false; } else hs.hidden=true;
+  if(typeof hfPaint==="function") hfPaint();
   const box=$("history"); box.innerHTML="";
   if(!allDone.length){ box.innerHTML='<div class="empty">No shifts yet. Clock in to start tracking.</div>'; }
   else if(!done.length){ box.innerHTML='<div class="empty">No shifts match.</div>'; }
@@ -1537,7 +1546,18 @@ $("startSave").onclick=()=>{ const s=openShift(), v=$("startTime").value; if(!s|
   if(dayKey(cand)!==dayKey(s.start)) s.rate=rateAt(s.job,cand);
   s.start=cand; save(); closeStart(); render(); tickFs(); };
 $("histQ").addEventListener("input",e=>{ histQ=e.target.value; render(); });
-$("histMonth").addEventListener("change",e=>{ histMonth=e.target.value; render(); });
+// hours / amount filter pop-up
+function hfRead(){ const n=id=>{ const v=parseFloat($(id).value); return Number.isFinite(v)&&v>=0?v:null; };
+  histF.hMin=n("hfHMin"); histF.hMax=n("hfHMax"); histF.aMin=n("hfAMin"); histF.aMax=n("hfAMax"); }
+function hfPaint(){ const n=hfActive(), b=$("histFilterN"); b.hidden=!n; b.textContent=n; $("histFilterBtn").classList.toggle("on",!!n);
+  const c=db.shifts.filter(s=>s.end&&jobOk(s,histJob)&&(histMonth==="all"||monthKey(s.start)===histMonth)&&(!histQ.trim()||histSearchOk(s,histQ.trim().toLowerCase()))&&histRangeOk(s)).length;
+  $("hfCount").textContent=c+" shift"+(c===1?"":"s")+" match"+(n?"":" (no filters on)"); }
+$("histFilterBtn").onclick=()=>{ $("hfHMin").value=histF.hMin??""; $("hfHMax").value=histF.hMax??""; $("hfAMin").value=histF.aMin??""; $("hfAMax").value=histF.aMax??""; hfPaint(); $("hfBg").classList.add("open"); };
+["hfHMin","hfHMax","hfAMin","hfAMax"].forEach(id=>$(id).addEventListener("input",()=>{ hfRead(); hfPaint(); render(); }));
+$("hfReset").onclick=()=>{ ["hfHMin","hfHMax","hfAMin","hfAMax"].forEach(id=>$(id).value=""); hfRead(); hfPaint(); render(); };
+const hfClose=()=>{ $("hfBg").classList.remove("open"); try{ document.activeElement.blur(); }catch(e){} };
+$("hfClose").onclick=hfClose; $("hfBg").addEventListener("click",e=>{ if(e.target===$("hfBg")) hfClose(); }); if(typeof sheetDrag==="function") sheetDrag($("hfBg"), hfClose);
+$("histMonth").addEventListener("change",e=>{ histMonth=e.target.value; render(); hfPaint(); });
 $("nudgeNow").onclick=()=>{ $("jsonBtn").click(); };
 $("nudgeSync").onclick=()=>{ document.querySelector('[data-tab="settings"]').click(); if(!syncCfg().url) setTimeout(()=>openSheet(null),50); };
 $("nudgeLater").onclick=()=>{ db.nudgeAt=Date.now(); save(); updateNudge(); };
@@ -1939,7 +1959,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.41";
+const APP_VERSION="2026.10.18.42";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
