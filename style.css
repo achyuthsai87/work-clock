@@ -728,3 +728,7 @@ body.fs-open{overflow:hidden}
 .miss-btns .link{align-self:center; margin-top:4px}
 .fs-sub{background:none; border:0; color:rgba(255,255,255,.6); font-size:15px; padding:8px 12px; cursor:pointer; margin-top:-24px}
 #startBg,#cfmBg{z-index:130}
+
+body.fs-open .tabbar{z-index:120}
+.fs-clock{padding-bottom:calc(env(safe-area-inset-bottom) + 96px)}
+.fs-min{bottom:calc(env(safe-area-inset-bottom) + 92px)}
