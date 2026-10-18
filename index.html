@@ -63,6 +63,7 @@
     <div class="jobpick" id="jobPickRow" hidden><label for="jobPick">Working at</label><select id="jobPick"></select></div>
     <button id="clockBtn" class="big-btn">Clock In</button>
     <div id="statusLine" class="status-line"></div>
+    <button type="button" id="startEdit" class="link" style="display:none;margin:2px auto 8px">Started late? Change start time</button>
     <button id="cancelShift" class="cancel-shift" style="display:none">Discard this shift</button>
     <span id="tipToday" hidden></span>
     <div class="quickrow"><button id="tipBtn" class="link">Add tip</button><i></i><button id="manualBtn" class="link">Add shift</button></div>
@@ -180,6 +181,7 @@
     <div class="pay-h">Owed to you</div>
     <div class="pay-big" id="payOwed">$0.00</div>
     <div class="pay-sub" id="payOwedSub">Log what you're paid and it shows here.</div>
+    <div class="pay-sub" id="payHeld" hidden></div>
     <div class="pbar"><i id="payBar"></i></div>
     <div class="stats pay2">
       <div class="stat"><div class="label">Earned</div><div class="val" id="payEarned">$0.00</div></div>
@@ -225,11 +227,23 @@
     <div class="settings-row"><span>Pay rate<small>$ per hour, for new shifts</small></span><input id="rateInput" type="number" min="0" step="0.25" inputmode="decimal"></div>
     <div class="settings-row"><span>Unpaid break</span><select id="breakInput" aria-label="Unpaid break"></select></div>
     <div class="settings-row" id="breakAfterRow" style="display:none"><span>Only on shifts of</span><select id="breakAfterInput" aria-label="Only on shifts of"></select></div>
-    <div class="settings-row"><span>Payday<small>day of each month</small></span><select id="paydayInput" aria-label="Payday"></select></div>
+    <div class="settings-row"><span>Pay cycle<small>how often you're paid</small></span><select id="cycleInput" aria-label="Pay cycle"><option value="">Not set</option><option value="weekly">Every week</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly, on a date</option></select></div>
+    <div class="settings-row" id="paydayRow"><span>Payday<small>day of each month</small></span><select id="paydayInput" aria-label="Payday"></select></div>
+    <div class="settings-row" id="anchorRow" style="display:none"><span>A payday<small>any past or upcoming one</small></span><input id="anchorInput" type="date" aria-label="A payday"></div>
     <div class="settings-row"><span>Weekly goal</span><select id="goalInput" aria-label="Weekly goal"></select></div>
     <div class="settings-row"><span>Weekend premium<small>extra % on Sat and Sun, new shifts</small></span><input id="wkndInput" type="number" min="0" max="300" step="1" inputmode="decimal" placeholder="0"></div>
     <div class="settings-row"><span>Tax set-aside<small>% of wages and tips to keep aside</small></span><input id="taxInput" type="number" min="0" max="60" step="0.5" inputmode="decimal" placeholder="0"></div>
     <div class="settings-row"><span>Mileage rate<small>$ per mile, used for mileage</small></span><input id="mileInput" type="number" min="0" max="10" step="0.005" inputmode="decimal" placeholder="0"></div>
+  </div>
+
+<div class="card">
+    <div class="pay-h">Optional pay rules</div>
+    <div class="job-hint">All off until you turn them on. Leave blank if they don't apply to your job.</div>
+    <div class="settings-row"><span>Overtime after<small>hours per week</small></span><input id="otWeekInput" type="number" min="0" max="168" step="0.5" inputmode="decimal" placeholder="Off"></div>
+    <div class="settings-row"><span>Overtime after<small>hours per day</small></span><input id="otDayInput" type="number" min="0" max="24" step="0.5" inputmode="decimal" placeholder="Off"></div>
+    <div class="settings-row" id="otPctRow" style="display:none"><span>Overtime pay<small>extra % on those hours</small></span><input id="otPctInput" type="number" min="0" max="300" step="1" inputmode="decimal" placeholder="50"></div>
+    <div class="settings-row"><span>Holiday pay<small>extra % on days you mark as holidays in the Calendar</small></span><input id="holInput" type="number" min="0" max="300" step="1" inputmode="decimal" placeholder="Off"></div>
+    <div class="settings-row"><span>Gross and take-home<small>log gross wages next to what you received</small></span><select id="netInput" aria-label="Gross and take-home"><option value="">Off</option><option value="1">On</option></select></div>
   </div>
 
 <div class="card">
@@ -313,6 +327,33 @@
   </div>
 </div>
 
+
+<div class="modal-bg" id="startBg">
+  <div class="modal">
+    <h2>When did you start?</h2>
+    <div class="chips" id="startQuick"><button type="button" data-m="5">5 min earlier</button><button type="button" data-m="10">10 min earlier</button><button type="button" data-m="15">15 min earlier</button><button type="button" data-m="30">30 min earlier</button></div>
+    <div class="field"><label>Clock-in time</label><input type="time" id="startTime"></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="startCancel">Cancel</button>
+      <button class="btn primary" id="startSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="missBg" role="dialog" aria-modal="true" aria-labelledby="missTitle">
+  <div class="modal">
+    <h2 id="missTitle">Did you work this shift?</h2>
+    <div class="cfm-msg" id="missMsg"></div>
+    <div class="miss-btns">
+      <button class="btn primary" id="missYes" type="button">Yes, log it as planned</button>
+      <button class="btn ghost" id="missDiff" type="button">I worked different hours</button>
+      <button class="btn ghost" id="missOff" type="button">I was off that day</button>
+      <button class="btn ghost" id="missSkip" type="button">I didn't work it, remove it</button>
+      <button class="link" id="missLater" type="button">Decide later</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="cfmBg" role="dialog" aria-modal="true" aria-labelledby="cfmTitle">
   <div class="modal cfm">
     <h2 id="cfmTitle">Are you sure?</h2>
@@ -323,7 +364,7 @@
     </div>
   </div>
 </div>
-<div id="fsClock" class="fs-clock" hidden role="dialog" aria-modal="true" aria-label="Shift timer"><div class="fs-time" id="fsTime">00:00:00</div><button id="fsOut" class="fs-out">Clock Out</button><button id="fsMin" class="fs-min">Minimise</button></div>
+<div id="fsClock" class="fs-clock" hidden role="dialog" aria-modal="true" aria-label="Shift timer"><div class="fs-time" id="fsTime">00:00:00</div><button id="fsOut" class="fs-out">Clock Out</button><button id="fsStart" class="fs-sub">Started late? Change start time</button><button id="fsMin" class="fs-min">Minimise</button></div>
 <div id="undoBar" class="toast" hidden><span id="undoTxt"></span><button id="undoBtn" class="link">Undo</button></div>
 
 <div id="toast" class="toast" hidden><span id="toastTxt"></span><button id="toastBtn" class="link">Change time</button></div>
@@ -350,6 +391,7 @@
   <div class="modal">
     <h2 id="payTitle">Log payment</h2>
     <div class="field"><label>Amount received</label><input type="number" id="payAmt" inputmode="decimal" min="0" max="10000000" step="0.01" placeholder="0.00"></div>
+    <div class="field" id="payGrossF" hidden><label>Gross wages this payment covers (optional)</label><input type="number" id="payGross" inputmode="decimal" min="0" max="10000000" step="0.01" placeholder="Same as above if left empty"></div>
     <button type="button" class="link" id="payFill" style="margin:-6px 0 10px">Use the amount still owed</button>
     <div class="field"><label>Date</label><input type="date" id="payDate"></div>
     <div class="field"><label>Note (optional)</label><input type="text" id="payNote" maxlength="60" placeholder="e.g. cash, Zelle, week 2"></div>
@@ -385,6 +427,7 @@
       <button class="btn primary" id="dayAdd">Add a shift</button>
       <button class="btn ghost" id="dayPlan">Plan a shift</button>
       <button class="btn ghost" id="dayOff">Mark as day off</button>
+      <button class="btn ghost" id="dayHol" style="display:none">Mark as holiday</button>
     </div>
   </div>
 </div>

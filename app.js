@@ -28,7 +28,8 @@ function cleanPayment(p){
   if(!p || typeof p !== "object") return null;
   const id = String(p.id == null ? "" : p.id), ts = Number(p.ts), amt = Math.round(Number(p.amount) * 100) / 100;
   if(!ID_RE.test(id) || !Number.isFinite(ts) || ts < MIN_TS || ts > MAX_TS || !Number.isFinite(amt) || amt <= 0 || amt > 10000000) return null;
-  return {id, ts, amount: amt, note: cleanText(p.note, 60)};
+  const out = {id, ts, amount: amt, note: cleanText(p.note, 60)}; const g = Math.round(Number(p.gross) * 100) / 100; if(p.gross != null && p.gross !== "" && Number.isFinite(g) && g >= amt && g <= 10000000) out.gross = g;
+  return out;
 }
 const HM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DAY_RE = /^20\d\d-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
@@ -51,6 +52,7 @@ function cleanPlan(p){   // today's/auto schedule: start+end as HH:MM, optional 
   if(!p || typeof p !== "object" || !HM_RE.test(String(p.start)) || !HM_RE.test(String(p.end)) || p.start === p.end) return null;
   const o = {id: (p.id != null && ID_RE.test(String(p.id))) ? String(p.id) : ("p" + Date.now().toString(36) + Math.random().toString(36).slice(2,5)), start: String(p.start), end: String(p.end)};
   if(p.job != null && ID_RE.test(String(p.job))) o.job = String(p.job);
+  if(typeof p.since === "string" && DAY_RE.test(p.since)) o.since = p.since;
   const days = Array.isArray(p.days) ? Array.from(new Set(p.days.map(Number).filter(n => Number.isInteger(n) && n >= 0 && n <= 6))).sort() : [];
   if(days.length) o.days = days; else if(DAY_RE.test(String(p.once))) o.once = String(p.once); else return null;
   return o;
@@ -68,6 +70,14 @@ function cleanCore(d){   // the user's data only (shifts + display prefs)
   const tp = Number(d.taxPct); if(Number.isFinite(tp) && tp > 0 && tp <= 60) out.taxPct = Math.round(tp * 10) / 10;
   const mr = Number(d.mileRate); if(Number.isFinite(mr) && mr > 0 && mr <= 10) out.mileRate = Math.round(mr * 1000) / 1000;
   const wp = Number(d.wkndPct); if(Number.isFinite(wp) && wp > 0 && wp <= 300) out.wkndPct = Math.round(wp * 10) / 10;
+  const ow = Number(d.otWeek); if(Number.isFinite(ow) && ow > 0 && ow <= 168) out.otWeek = Math.round(ow * 10) / 10;
+  const od = Number(d.otDay); if(Number.isFinite(od) && od > 0 && od <= 24) out.otDay = Math.round(od * 10) / 10;
+  const op = Number(d.otPct); if(Number.isFinite(op) && op > 0 && op <= 300) out.otPct = Math.round(op * 10) / 10;
+  const hp = Number(d.holPct); if(Number.isFinite(hp) && hp > 0 && hp <= 300) out.holPct = Math.round(hp * 10) / 10;
+  if(d.holidays && typeof d.holidays === "object"){ out.holidays = {}; Object.keys(d.holidays).filter(k => DAY_RE.test(k)).sort().slice(-400).forEach(k => { out.holidays[k] = 1; }); if(!Object.keys(out.holidays).length) delete out.holidays; }
+  if(d.netTrack) out.netTrack = 1;
+  if(["weekly","biweekly","monthly"].includes(d.payCycle)) out.payCycle = d.payCycle;
+  if(typeof d.payAnchor === "string" && DAY_RE.test(d.payAnchor)) out.payAnchor = d.payAnchor;
   const jn = cleanText(d.jobName, 24); if(jn) out.jobName = jn;
   const jb = new Set(); out.jobs = [];
   (Array.isArray(d.jobs) ? d.jobs : []).slice(0, 8).forEach(x => { const c = cleanJob(x); if(c && !jb.has(c.id)){ jb.add(c.id); out.jobs.push(c); } });
@@ -113,9 +123,10 @@ function cleanLocal(d){  // everything persisted on this device, incl. sync + lo
   if(d && d.lock && typeof d.lock.cred === "string" && /^[A-Za-z0-9_-]{8,2048}$/.test(d.lock.cred)) out.lock = {cred: d.lock.cred};
   return out;
 }
+let otCache = null;
 let db = {rate: 14, theme: "auto", shifts: []};
 try { const raw = localStorage.getItem(KEY); if (raw) db = cleanLocal(JSON.parse(raw)); } catch(e){}
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} }
+function save(){ otCache=null; try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} }
 
 function applyTheme(){
   const t = db.theme || "auto";
@@ -142,21 +153,54 @@ function tipOf(s){ return s.tip||0; }
 const jobLeft=id=>{ const j=id && (db.jobs||[]).find(x=>x.id===id); return !!(j&&j.left); };
 function jobRate(id){ const j=id && (db.jobs||[]).find(x=>x.id===id); return j ? j.rate : db.rate; }
 function jobName(id){ const j=id && (db.jobs||[]).find(x=>x.id===id); return j ? j.name : (db.jobName||"Main job"); }
-function rateAt(job, ts){ let r=jobRate(job); const w=db.wkndPct||0; if(w>0){ const dw=new Date(ts).getDay(); if(dw===0||dw===6) r=Math.round(r*(1+w/100)*100)/100; } return r; }   // weekend premium applies to new shifts
+function rateAt(job, ts){ let r=jobRate(job); const w=db.wkndPct||0, hol=db.holPct>0 && db.holidays && db.holidays[dayKey(ts)];
+  if(hol) r=Math.round(r*(1+db.holPct/100)*100)/100;   // a holiday rate replaces the weekend premium
+  else if(w>0){ const dw=new Date(ts).getDay(); if(dw===0||dw===6) r=Math.round(r*(1+w/100)*100)/100; } return r; }   // weekend premium applies to new shifts
 function mkShift(start, end, job){ const s={id:uid(), start, end, rate:rateAt(job,start)}; if(job) s.job=job; return s; }
 const rateOf=s=>s.rate!=null?s.rate:jobRate(s.job);   // each shift keeps the rate it was worked at
-function pay(s){ return hrs(s)*rateOf(s); }   // wages only; tips are tracked separately
+// overtime (optional, off unless set in Settings): hours past a daily and/or weekly limit are paid at an extra %, worked out per job
+function otMap(){
+  if(!(db.otWeek>0 || db.otDay>0)) return null;
+  if(otCache) return otCache;
+  const map={}, groups={};
+  db.shifts.filter(s=>s.end).forEach(s=>{ (groups[s.job||""]=groups[s.job||""]||[]).push(s); });
+  Object.keys(groups).forEach(g=>{
+    const dayTot={}, wkReg={};
+    groups[g].sort((a,b)=>a.start-b.start).forEach(s=>{
+      const h=hrs(s), d=new Date(s.start), dk=dayKey(s.start), mon=new Date(d.getFullYear(),d.getMonth(),d.getDate()-((d.getDay()+6)%7)), wk=dayKey(mon.getTime());
+      let ot=0, reg=h;
+      if(db.otDay>0){ const room=Math.max(0, db.otDay-(dayTot[dk]||0)); ot=Math.max(0,h-room); reg=h-ot; }
+      if(db.otWeek>0){ const room=Math.max(0, db.otWeek-(wkReg[wk]||0)), o2=Math.max(0,reg-room); ot+=o2; reg-=o2; }
+      dayTot[dk]=(dayTot[dk]||0)+h; wkReg[wk]=(wkReg[wk]||0)+reg; if(ot>0) map[s.id]=ot; }); });
+  return otCache=map;
+}
+const otPctOn=()=>db.otPct||50;
+function otHrs(s){ const m=otMap(); return (m&&m[s.id])||0; }
+function pay(s){ return hrs(s)*rateOf(s) + otHrs(s)*rateOf(s)*otPctOn()/100; }   // wages only (incl. overtime if turned on); tips are tracked separately
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function openShift(){ return db.shifts.find(s=>!s.end); }
 
 let timer=null, liveTimer=null;
-// ---- planned shift: starts and ends by itself at the set times (applied whenever the app is open) ----
+// ---- planned shift: a reminder on the calendar; when its time has passed and nothing was logged, the app asks what happened ----
 function planTimes(plan, base){   // base = local midnight of the day the plan starts on
   const [sh,sm]=plan.start.split(":").map(Number), [eh,em]=plan.end.split(":").map(Number);
   const S=new Date(base); S.setHours(sh,sm,0,0); const E=new Date(base); E.setHours(eh,em,0,0);
   if(E<=S) E.setDate(E.getDate()+1);
   return {S:S.getTime(), E:E.getTime()};
+}
+function missedList(){   // planned shifts whose time has passed with nothing logged and no answer yet (last 14 days)
+  const out=[], now=Date.now(), today=new Date(); today.setHours(0,0,0,0);
+  (db.plans||[]).forEach(plan=>{
+    if(jobLeft(plan.job)) return;
+    if(!plan.since){ plan.since=dayKey(today.getTime()-86400000); save(); }   // plans from before this feature only ask about yesterday onward
+    for(let back=14; back>=0; back--){
+      const base=new Date(today); base.setDate(base.getDate()-back); const dk=dayKey(base.getTime()); if(dk<plan.since) continue;
+      const k=plan.id+":"+dk; if((db.planDone&&db.planDone[k]) || (db.daysOff&&db.daysOff[dk]) || !planApplies(plan,base)) continue;
+      const {S,E}=planTimes(plan,base); if(E>now) continue;
+      if(db.shifts.some(x=>x.start<E && (x.end==null?now:x.end)>S && x.start>=S-2*3600000)) continue;   // you already logged it
+      out.push({plan,dk,k,S,E}); } });
+  return out.sort((a,b)=>a.S-b.S);
 }
 function planApplies(plan, d){ if(plan.job && jobLeft(plan.job)) return false; return plan.once ? plan.once===dayKey(d.getTime()) : (plan.days||[]).includes(d.getDay()); }
 function nextPlanned(days){   // soonest planned shift that hasn't started (looks ahead, skips days off)
@@ -169,23 +213,8 @@ function nextPlanned(days){   // soonest planned shift that hasn't started (look
 function applyPlan(){
   let changed=false; const now=Date.now();
   db.shifts.forEach(s=>{ if(s.end==null && s.autoEnd && now>=s.autoEnd){ s.end=s.autoEnd; delete s.autoEnd; changed=true; queueSync({action:"upsert", shift:shiftPayload(s)}); } });
-  const plans=db.plans||[]; if(plans.length){
-    db.planDone=db.planDone||{}; const drop=[];
-    plans.forEach(plan=>{
-      for(let back=1; back>=0; back--){
-        const base=new Date(); base.setHours(0,0,0,0); base.setDate(base.getDate()-back);
-        const dk=dayKey(base.getTime()), k=plan.id+":"+dk; if(db.planDone[k] || !planApplies(plan, base)) continue;
-        const {S,E}=planTimes(plan, base); if(now<S) continue;
-        db.planDone[k]=true; changed=true;
-        if(db.daysOff && db.daysOff[dk]) continue;
-        if(db.shifts.some(s=>s.start<E && (s.end==null ? true : s.end>S) && s.start>=S-2*3600000)) continue;   // already clocked something in that window
-        if(db.shifts.some(s=>s.end==null)) continue;
-        const sh=mkShift(S, null, plan.job);
-        if(now>=E){ sh.end=E; queueSync({action:"upsert", shift:shiftPayload(sh)}); } else sh.autoEnd=E;
-        db.shifts.push(sh);
-      }
-      if(plan.once && plan.once<dayKey(now) && db.planDone[plan.id+":"+plan.once]) drop.push(plan.id);
-    });
+  const plans=db.plans||[]; if(plans.length){   // planned shifts never start the clock by themselves; finished one-day plans are tidied away once you've answered for them
+    const drop=plans.filter(p=>p.once && p.once<dayKey(now) && db.planDone && db.planDone[p.id+":"+p.once]).map(p=>p.id);
     if(drop.length){ db.plans=plans.filter(p=>!drop.includes(p.id)); if(!db.plans.length) delete db.plans; changed=true; }
   }
   if(changed) save(); return changed;
@@ -195,6 +224,8 @@ function queueMeta(){ const c=db.sync; if(!c||!c.enabled||!c.url) return; db.out
 // jobs, planned shifts, days off, expenses and a few settings travel as small JSON blobs ("core" + one per year of expenses)
 function metaPayloads(){
   const core={jobs:db.jobs||[], jobName:db.jobName||"", plans:db.plans||[], daysOff:Object.keys(db.daysOff||{}).sort().slice(-400), wkndPct:db.wkndPct||0, taxPct:db.taxPct||0, mileRate:db.mileRate||0};
+  for(const k of ["otWeek","otDay","otPct","holPct","payCycle","payAnchor"]) if(db[k]) core[k]=db[k];
+  if(db.netTrack) core.netTrack=1; if(db.holidays && Object.keys(db.holidays).length) core.holidays=Object.keys(db.holidays).sort().slice(-400);
   const out={core:JSON.stringify(core)}, by={};
   (db.expenses||[]).forEach(x=>{ const y=new Date(x.ts).getFullYear(); (by[y]=by[y]||[]).push(x); });
   Object.keys(by).forEach(y=>{ out["exp-"+y]=JSON.stringify(by[y].sort((a,b)=>a.ts-b.ts)); });
@@ -217,6 +248,10 @@ function mergeMeta(remote){   // sheet -> phone: add anything missing here, neve
     (Array.isArray(core.daysOff)?core.daysOff:[]).slice(0,800).forEach(k=>{ if(DAY_RE.test(String(k)) && !(db.daysOff&&db.daysOff[k])){ (db.daysOff=db.daysOff||{})[k]=1; n++; } });
     const num=(v,max)=>{ v=Number(v); return Number.isFinite(v)&&v>0&&v<=max?v:0; };
     if(!db.wkndPct && num(core.wkndPct,300)){ db.wkndPct=num(core.wkndPct,300); n++; } if(!db.taxPct && num(core.taxPct,60)){ db.taxPct=num(core.taxPct,60); n++; } if(!db.mileRate && num(core.mileRate,10)){ db.mileRate=num(core.mileRate,10); n++; }
+    for(const [k,max] of [["otWeek",168],["otDay",24],["otPct",300],["holPct",300]]) if(!db[k] && num(core[k],max)){ db[k]=num(core[k],max); n++; }
+    if(!db.payCycle && ["weekly","biweekly","monthly"].includes(core.payCycle)){ db.payCycle=core.payCycle; n++; } if(!db.payAnchor && typeof core.payAnchor==="string" && DAY_RE.test(core.payAnchor)){ db.payAnchor=core.payAnchor; n++; }
+    if(!db.netTrack && core.netTrack){ db.netTrack=1; n++; }
+    (Array.isArray(core.holidays)?core.holidays:[]).slice(0,400).forEach(k=>{ if(DAY_RE.test(String(k)) && !(db.holidays&&db.holidays[k])){ (db.holidays=db.holidays||{})[k]=1; n++; } });
     if(!db.jobName){ const jn=cleanText(core.jobName,24); if(jn){ db.jobName=jn; n++; } }
   }
   const eb=new Set((db.expenses||[]).map(x=>x.id));
@@ -246,7 +281,7 @@ function render(){
   const btn=$("clockBtn"), line=$("statusLine"), cancel=$("cancelShift");
   const open=openShift();
   if(open){
-    btn.textContent="Clock Out"; btn.classList.add("out");
+    btn.textContent="Clock Out"; btn.classList.add("out"); $("startEdit").style.display="block";
     cancel.style.display="block";
     const tick=()=>{ const el=(Date.now()-open.start)/1000;
       const h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
@@ -254,7 +289,7 @@ function render(){
         String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+'</b></div><div class="live-s">Clocked in at '+esc(fmtTime(open.start))+" · earnings update live</div>"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':''); };
     tick(); clearInterval(timer); timer=setInterval(tick,1000);
   } else {
-    btn.textContent="Clock In"; btn.classList.remove("out"); cancel.style.display="none";
+    btn.textContent="Clock In"; btn.classList.remove("out"); cancel.style.display="none"; $("startEdit").style.display="none";
     clearInterval(timer);
     line.innerHTML = db.shifts.length ? '<div class="live-row"><span class="live-l idle"><span class="dot off"></span>Not clocked in</span></div><div class="live-s">Ready for your next shift</div>' : "Tap <b>Clock In</b> when your shift starts.";
   }
@@ -282,7 +317,7 @@ function render(){
   { const line=$("planLine"), pls=db.plans||[]; const dn=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
     const f=t=>{ const [hh,mm]=t.split(":").map(Number); const d=new Date(); d.setHours(hh,mm,0,0); return fmtTime(d.getTime()); };
     if(pls.length===1){ const pl=pls[0];
-      line.textContent="Auto: "+f(pl.start)+" – "+f(pl.end)+" · "+(pl.once?(pl.once===dayKey(Date.now())?"today":fmtDay(new Date(pl.once+"T12:00:00").getTime())):[1,2,3,4,5,6,0].filter(x=>pl.days.includes(x)).map(x=>dn[x]).join(" "));
+      line.textContent="Planned: "+f(pl.start)+" – "+f(pl.end)+" · "+(pl.once?(pl.once===dayKey(Date.now())?"today":fmtDay(new Date(pl.once+"T12:00:00").getTime())):[1,2,3,4,5,6,0].filter(x=>pl.days.includes(x)).map(x=>dn[x]).join(" "));
       line.style.display=""; $("planBtn").textContent="Edit"; }
     else if(pls.length>1){ const nx=nextPlanned(); line.textContent=pls.length+" planned shifts"+(nx?" · next "+(nx.today?"today ":fmtDay(nx.day)+" ")+f(nx.plan.start):""); line.style.display=""; $("planBtn").textContent="Calendar"; }
     else { line.textContent=""; line.style.display="none"; $("planBtn").textContent="Plan a shift"; } }
@@ -328,6 +363,9 @@ function render(){
 
   drawChart();
   applyTheme();
+  { const c=cycleOf(); $("cycleInput").value=c; $("paydayRow").style.display=c==="monthly"?"":"none"; $("anchorRow").style.display=(c==="weekly"||c==="biweekly")?"":"none"; if(document.activeElement!==$("anchorInput")) $("anchorInput").value=db.payAnchor||"";
+  for(const [id,k] of [["otWeekInput","otWeek"],["otDayInput","otDay"],["otPctInput","otPct"],["holInput","holPct"]]) if(document.activeElement!==$(id)) $(id).value=db[k]||"";
+  $("otPctRow").style.display=(db.otWeek>0||db.otDay>0)?"":"none"; $("netInput").value=db.netTrack?"1":""; }
   $("rateInput").value=db.rate; $("wkndInput").value=db.wkndPct||""; $("taxInput").value=db.taxPct||""; $("mileInput").value=db.mileRate||""; fillSettingsPickers();
 }
 
@@ -345,7 +383,7 @@ function renderCalendar(){
   for(let d=1; d<=last; d++){
     const date=new Date(f.getFullYear(), f.getMonth(), d), k=dayKey(date.getTime()), list=byDay[k]||[], off=!!(db.daysOff&&db.daysOff[k]);
     const planned=!list.length && date.getTime()>=new Date(new Date().setHours(0,0,0,0)).getTime() && plansOn(date).length>0;
-    const b=document.createElement("button"); b.type="button"; b.className="cal-day"+(k===today?" today":"")+(list.length?" worked":"")+(planned?" planned":"")+(off?" off":""); b.dataset.day=k;
+    const b=document.createElement("button"); b.type="button"; b.className="cal-day"+(k===today?" today":"")+(list.length?" worked":"")+(planned?" planned":"")+(off?" off":"")+(db.holPct>0&&db.holidays&&db.holidays[k]?" hol":""); b.dataset.day=k;
     const n=document.createElement("b"); n.textContent=String(d); b.appendChild(n);
     const t=document.createElement("small");
     if(list.length){ const h=list.reduce((a,x)=>a+(x.end?hrs(x):0),0); t.textContent=h>0?h.toFixed(h%1?1:0)+"h":"\u2022"; }
@@ -375,12 +413,16 @@ function openDay(k){
   plansOn(d).forEach(p=>{ const {S,E}=planTimes(p,d); row("Planned "+fmtTime(S)+" \u2013 "+fmtTime(E), p.once?"one day":"weekly", ()=>{ closeDay(); openPlan(p,k); }); });
   if(off){ const n=document.createElement("div"); n.className="job-hint"; n.textContent="Marked as a day off. Planned shifts are skipped, and it isn't counted in your daily averages or projection."; B.appendChild(n); }
   if(!B.children.length){ const n=document.createElement("div"); n.className="empty"; n.textContent=isPast?"No shifts this day.":"Nothing planned yet."; B.appendChild(n); }
-  $("dayPlan").style.display=isPast?"none":""; $("dayOff").textContent=off?"Remove day off":"Mark as day off";
+  $("dayHol").style.display=db.holPct>0?"":"none"; $("dayHol").textContent=(db.holidays&&db.holidays[k])?"Remove holiday":"Mark as holiday"; $("dayPlan").style.display=isPast?"none":""; $("dayOff").textContent=off?"Remove day off":"Mark as day off";
   $("dayBg").classList.add("open"); }
 function closeDay(){ $("dayBg").classList.remove("open"); }
 $("dayBg").addEventListener("click",e=>{ if(e.target===$("dayBg")) closeDay(); });
 $("dayAdd").onclick=()=>{ const k=dayKeySel; closeDay(); openModal(null); $("fDate").value=k; };
 $("dayPlan").onclick=()=>{ const k=dayKeySel; closeDay(); openPlan(null,k); };
+$("dayHol").onclick=()=>{ const k=dayKeySel; db.holidays=db.holidays||{}; if(db.holidays[k]) delete db.holidays[k]; else db.holidays[k]=1; if(!Object.keys(db.holidays).length) delete db.holidays;
+  const ch=[]; db.shifts.forEach(s=>{ if(dayKey(s.start)===k && s.end){ const nr=rateAt(s.job,s.start); if(nr!==s.rate){ s.rate=nr; ch.push(shiftPayload(s)); } } });
+  if(ch.length) queueSync({action:"bulk", shifts:ch});
+  save(); closeDay(); render(); queueMeta(); };
 $("dayOff").onclick=()=>{ const k=dayKeySel; db.daysOff=db.daysOff||{};
   if(db.daysOff[k]) delete db.daysOff[k]; else { if(db.shifts.some(s=>dayKey(s.start)===k && s.end)){ alert("There are shifts on this day, so it can't be a day off."); return; } db.daysOff[k]=1; }
   if(!Object.keys(db.daysOff).length) delete db.daysOff; save(); closeDay(); render(); queueMeta(); };
@@ -801,7 +843,7 @@ function fillSettingsPickers(){
 fillSettingsPickers();
 $("breakInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>0) db.breakMin=Math.min(v,120); else delete db.breakMin; e.target.value=db.breakMin||""; save(); render(); queueSettings(); });
 $("breakAfterInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); if(Number.isFinite(v)&&v>=1) db.breakAfter=Math.min(v,24); else delete db.breakAfter; e.target.value=db.breakAfter||""; save(); render(); queueSettings(); });
-$("paydayInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>=1&&v<=28) db.payday=v; else delete db.payday; e.target.value=db.payday||""; save(); renderPay(); queueSettings(); });
+$("paydayInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>=1&&v<=28){ db.payday=v; db.payCycle="monthly"; } else delete db.payday; e.target.value=db.payday||""; save(); render(); queueMeta(); queueSettings(); });
 $("goalInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); db.goal=(Number.isFinite(v)&&v>0)?Math.min(v,1000000):0; if(!db.goal) delete db.goal; save(); renderAnalytics(); queueSettings(); });
 $("goalSet").addEventListener("click",()=>{ document.querySelector('.tabbar [data-tab="settings"]').click(); setTimeout(()=>$("goalInput").focus(),350); });
 
@@ -915,7 +957,7 @@ function queueSettings(){   // only the newest settings matter, so replace any w
   db.outbox=(db.outbox||[]).filter(e=>e.action!=="sset");
   queueSync({action:"sset", settings:settingsPayload()});
 }
-function payPayload(p){ return {id:p.id, date:fmtDate(p.ts), month:monthKey(p.ts), amount:p.amount, note:p.note, ts:p.ts}; }
+function payPayload(p){ return {id:p.id, date:fmtDate(p.ts), month:monthKey(p.ts), amount:p.amount, note:p.note, ts:p.ts, gross:p.gross}; }
 // Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
 async function syncCall(body){
   const c=syncCfg(); window.__syncStep=body&&body.action;
@@ -1056,6 +1098,22 @@ function updateSyncToggle(){
 
 // modal
 let editingId=null;
+let missLater=new Set(), missCur=null, missCtx=null;
+const markPlanDone=k=>{ (db.planDone=db.planDone||{})[k]=true; };
+function showMissed(){
+  if($("missBg").classList.contains("open") || document.querySelector(".modal-bg.open") || !$("lockScreen").hidden || document.body.classList.contains("fs-open")) return;
+  const q=missedList().filter(m=>!missLater.has(m.k)); if(!q.length) return;
+  missCur=q[0]; const m=missCur;
+  $("missMsg").textContent=fmtDay(m.S)+" \u00b7 "+fmtTime(m.S)+" \u2013 "+fmtTime(m.E)+(hasJobs()?" \u00b7 "+jobName(m.plan.job):"")+(q.length>1?"   ("+q.length+" to check)":"");
+  $("missBg").classList.add("open"); }
+function closeMiss(){ $("missBg").classList.remove("open"); setTimeout(showMissed,200); }
+$("missYes").onclick=()=>{ const m=missCur; if(!m) return; const ns=mkShift(m.S,m.E,m.plan.job); db.shifts.push(ns); markPlanDone(m.k); save(); queueSync({action:"upsert", shift:shiftPayload(ns)}); render(); closeMiss(); };
+$("missOff").onclick=()=>{ const m=missCur; if(!m) return; (db.daysOff=db.daysOff||{})[m.dk]=1; save(); render(); queueMeta(); closeMiss(); };
+$("missSkip").onclick=()=>{ const m=missCur; if(!m) return; markPlanDone(m.k); save(); render(); closeMiss(); };
+$("missLater").onclick=()=>{ missedList().forEach(m=>missLater.add(m.k)); $("missBg").classList.remove("open"); };
+$("missDiff").onclick=()=>{ const m=missCur; if(!m) return; $("missBg").classList.remove("open"); missCtx=m.k; openModal(null);
+  const t2=ts=>{ const x=new Date(ts); return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0"); };
+  $("fDate").value=m.dk; $("fIn").value=t2(m.S); $("fOut").value=t2(m.E); if(!$("fJobF").hidden) $("fJob").value=m.plan.job||""; $("fRate").value=rateAt(m.plan.job,m.S); };
 function openModal(shift){
   editingId = shift ? shift.id : null;
   $("modalTitle").textContent = shift ? "Edit shift" : "Add shift";
@@ -1075,7 +1133,7 @@ $("modalDelete").onclick=async()=>{
   closeModal(); db.shifts=db.shifts.filter(s=>s.id!==id); save(); render(); queueSync({action:"delete", id:id});
   showUndo("Shift deleted.", ()=>{ db.shifts.push(gone); save(); render(); if(gone.end) queueSync({action:"upsert", shift:shiftPayload(gone)}); });
 };
-function closeModal(){ $("modalBg").classList.remove("open"); editingId=null; }
+function closeModal(){ $("modalBg").classList.remove("open"); editingId=null; if(missCtx){ missLater.add(missCtx); missCtx=null; } }
 $("modalCancel").onclick=closeModal;
 $("modalBg").addEventListener("click",e=>{ if(e.target===$("modalBg")) closeModal(); });
 $("modalSave").onclick=()=>{
@@ -1090,7 +1148,8 @@ $("modalSave").onclick=()=>{
   const noteV=cleanText($("fNote").value,80);
   if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; if(noteV) s.note=noteV; else delete s.note; s.rate=rateV; if(!$("fJobF").hidden){ if(jobV) s.job=jobV; else delete s.job; } queueSync({action:"upsert", shift:shiftPayload(s)}); }
   else { const ns={id:uid(), start, end}; if(tipV) ns.tip=tipV; if(noteV) ns.note=noteV; ns.rate=rateV; if(jobV) ns.job=jobV; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
-  save(); closeModal(); render();
+  if(missCtx){ markPlanDone(missCtx); missCtx=null; }
+  save(); closeModal(); render(); setTimeout(showMissed,300);
 };
 $("manualBtn").onclick=()=>openModal(null);
 
@@ -1180,7 +1239,7 @@ $("planBtn").onclick=()=>{ const pls=db.plans||[];
 document.querySelectorAll("#planDays button").forEach(b=>b.onclick=()=>b.classList.toggle("on"));
 $("planCancel").onclick=closePlan;
 $("planBg").addEventListener("click",e=>{ if(e.target===$("planBg")) closePlan(); });
-$("planRemove").onclick=async()=>{ if(!await askConfirm("Remove this planned shift?","It will no longer clock you in and out automatically. Shifts already logged stay.","Remove",true)) return;
+$("planRemove").onclick=async()=>{ if(!await askConfirm("Remove this planned shift?","It will no longer show on your calendar or ask about this shift. Shifts already logged stay.","Remove",true)) return;
   db.plans=(db.plans||[]).filter(p=>p.id!==planEditId); if(!db.plans.length) delete db.plans; save(); closePlan(); render(); queueMeta(); };
 $("planSave").onclick=async()=>{
   const days=[...document.querySelectorAll("#planDays button.on")].map(b=>Number(b.dataset.d));
@@ -1189,20 +1248,32 @@ $("planSave").onclick=async()=>{
   if(!plan){ alert("Pick a start and an end time that are different."); return; }
   const todayK=dayKey(Date.now());
   if(!days.length && planDate<todayK){ alert("Pick today or a day in the future."); return; }
-  if(!days.length && planDate===todayK){ const {E}=planTimes(plan, new Date(new Date().setHours(0,0,0,0)));
-    if(E<=Date.now() && !await askConfirm("That time has already passed","Today's plan will be added right away as a finished shift.","Add it",false)) return; }
   db.planDone=db.planDone||{};
-  if(planEditId) Object.keys(db.planDone).forEach(k=>{ if(k.startsWith(planEditId+":")) delete db.planDone[k]; });
-  if(days.length){ const {S}=planTimes(plan, new Date(new Date().setHours(0,0,0,0))); if(plan.days.includes(new Date().getDay()) && Date.now()>S) db.planDone[plan.id+":"+todayK]=true; }
+  const prev=(db.plans||[]).find(p=>p.id===planEditId); plan.since=(prev&&prev.since)||todayK;
+  if(planEditId) Object.keys(db.planDone).forEach(k=>{ if(k.startsWith(planEditId+":") && k.split(":").pop()>=todayK) delete db.planDone[k]; });
   db.plans=(db.plans||[]).filter(p=>p.id!==plan.id); db.plans.push(plan);
   save(); closePlan(); render(); queueMeta(); };
 sheetDrag($("planBg"), closePlan);
-setInterval(()=>{ if(!document.hidden && applyPlan()) render(); }, 20000);
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden && applyPlan()) render(); });
+setInterval(()=>{ if(!document.hidden){ if(applyPlan()) render(); showMissed(); } }, 20000);
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ if(applyPlan()) render(); setTimeout(showMissed,400); } });
 $("fsOut").onclick=()=>{ hideFs(); $("clockBtn").onclick(); };
 $("fsMin").onclick=hideFs;
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !$("fsClock").hidden) hideFs(); });
 $("statusLine").addEventListener("click",()=>{ if(openShift()) showFs(); });
+function openStart(){ const s=openShift(); if(!s) return; const d=new Date(s.start); $("startTime").value=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); $("startBg").classList.add("open"); }
+const closeStart=()=>$("startBg").classList.remove("open");
+$("startEdit").onclick=openStart; $("fsStart").onclick=openStart; $("startCancel").onclick=closeStart;
+$("startBg").addEventListener("click",e=>{ if(e.target===$("startBg")) closeStart(); }); sheetDrag($("startBg"), closeStart);
+$("startQuick").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; const s=openShift(); if(!s) return; const d=new Date(s.start-Number(b.dataset.m)*60000);
+  $("startTime").value=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); });
+$("startSave").onclick=()=>{ const s=openShift(), v=$("startTime").value; if(!s||!HM_RE.test(v)){ closeStart(); return; }
+  const o=new Date(s.start), [hh,mm]=v.split(":").map(Number), c=new Date(o); c.setHours(hh,mm,0,0); let cand=c.getTime();
+  if(cand>Date.now()) cand-=86400000;
+  if(cand>=Date.now()){ alert("The start time has to be before now."); return; }
+  if(Date.now()-cand>24*3600000){ alert("That's more than 24 hours ago. Use Add shift for older work."); return; }
+  if(db.shifts.some(x=>x!==s && x.end && x.end>cand && x.start<Date.now())){ alert("That overlaps another shift you logged."); return; }
+  if(dayKey(cand)!==dayKey(s.start)) s.rate=rateAt(s.job,cand);
+  s.start=cand; save(); closeStart(); render(); tickFs(); };
 $("histQ").addEventListener("input",e=>{ histQ=e.target.value; render(); });
 $("histMonth").addEventListener("change",e=>{ histMonth=e.target.value; render(); });
 $("nudgeNow").onclick=()=>{ $("jsonBtn").click(); };
@@ -1232,6 +1303,14 @@ $("rateInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value)
   pendingRate=Math.min(v,100000); $("rateMsg").textContent=money(db.rate)+"/hr \u2192 "+money(pendingRate)+"/hr";
   const t=dayKey(Date.now()); $("rateFrom").value=t; $("rateFrom").max=t; $("rateBg").classList.add("open"); });
 let pendingRate=null;
+for(const [id,key,max,dp] of [["otWeekInput","otWeek",168,1],["otDayInput","otDay",24,1],["otPctInput","otPct",300,1],["holInput","holPct",300,1]]){
+  $(id).addEventListener("change",e=>{ const v=parseFloat(e.target.value), k=Math.pow(10,dp);
+    if(v>0){ db[key]=Math.round(Math.min(v,max)*k)/k; } else delete db[key];
+    save(); render(); queueMeta(); }); }
+$("netInput").addEventListener("change",e=>{ if(e.target.value) db.netTrack=1; else delete db.netTrack; save(); render(); queueMeta(); });
+$("cycleInput").addEventListener("change",e=>{ const v=e.target.value; if(v) db.payCycle=v; else { delete db.payCycle; delete db.payday; delete db.payAnchor; }
+  if(v==="weekly"||v==="biweekly") delete db.payday; save(); render(); queueMeta(); queueSettings(); });
+$("anchorInput").addEventListener("change",e=>{ const v=e.target.value; if(DAY_RE.test(v)) db.payAnchor=v; else delete db.payAnchor; save(); render(); queueMeta(); });
 for(const [id,key,max,dp] of [["wkndInput","wkndPct",300,1],["taxInput","taxPct",60,1],["mileInput","mileRate",10,3]]){
   $(id).addEventListener("change",e=>{ const v=parseFloat(e.target.value), k=Math.pow(10,dp);
     if(v>0){ db[key]=Math.round(Math.min(v,max)*k)/k; } else delete db[key]; save(); render(); queueMeta(); }); }
@@ -1381,7 +1460,7 @@ $("csvBtn").onclick=()=>{
   });
   download("workclock.csv",csv,"text/csv");
 };
-$("jsonBtn").onclick=()=>{ db.lastBackup=Date.now(); save(); updateNudge(); }; $("jsonBtn").addEventListener("click",()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, shifts:db.shifts, payments:db.payments||[], jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, plans:db.plans, daysOff:db.daysOff, expenses:db.expenses},null,2),"application/json"));  // never includes sync URL/secret
+$("jsonBtn").onclick=()=>{ db.lastBackup=Date.now(); save(); updateNudge(); }; $("jsonBtn").addEventListener("click",()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, shifts:db.shifts, payments:db.payments||[], jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, payCycle:db.payCycle, payAnchor:db.payAnchor, plans:db.plans, daysOff:db.daysOff, expenses:db.expenses},null,2),"application/json"));  // never includes sync URL/secret
 $("importBtn").onclick=()=>$("importFile").click();
 $("importFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -1397,7 +1476,7 @@ $("importFile").addEventListener("change",e=>{
   r.readAsText(f); e.target.value="";
 });
 $("wipeBtn").onclick=async()=>{ if(await askConfirm("Delete all data?","Every shift and payment on this phone will be erased. This can't be undone. Back up first if you're not sure.","Delete everything",true)){
-  const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
+  const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, payCycle:db.payCycle, payAnchor:db.payAnchor, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
   db=Object.assign({shifts:[], outbox:[]}, keep); save(); render(); updateSyncStatus(); }};
 
 // google sheets sync settings
@@ -1422,7 +1501,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.8";
+const APP_VERSION="2026.10.18.10";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1576,6 +1655,18 @@ window.addEventListener("resize",()=>{ drawChart(); if(document.getElementById("
 
 // ---------- Pay: what the owner has actually paid you vs what you've earned ----------
 const pays=()=>db.payments||(db.payments=[]);
+const credit=p=>(db.netTrack && p.gross!=null) ? p.gross : p.amount;   // what a payment settles: the gross wages it covers, if you track that
+const cycleOf=()=>db.payCycle || (db.payday ? "monthly" : "");
+function paydays(){   // {prev, next}: the latest payday on or before today and the next one after it
+  const now=new Date(), c=cycleOf();
+  if(c==="weekly"||c==="biweekly"){ if(!db.payAnchor) return null;
+    const P=c==="weekly"?7:14, a=new Date(db.payAnchor+"T00:00:00"), t0=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    const k=Math.floor(Math.round((t0-a)/864e5)/P), prev=new Date(a), next=new Date(a); prev.setDate(a.getDate()+k*P); next.setDate(a.getDate()+(k+1)*P); return {prev,next}; }
+  if(!db.payday) return null;
+  const nd=new Date(now.getFullYear(), now.getMonth(), db.payday), pd=new Date(nd);
+  if(pd.getTime()>now.getTime()) pd.setMonth(pd.getMonth()-1); if(nd.getTime()<=now.getTime()) nd.setMonth(nd.getMonth()+1);
+  return {prev:pd, next:nd};
+}
 // ---------- Expenses and mileage ----------
 let expEditId=null, expKind="expense";
 function renderExpenses(done, mk){
@@ -1606,15 +1697,16 @@ $("expDelete").onclick=async()=>{ const id=expEditId; if(!await askConfirm("Dele
 sheetDrag($("expBg"), closeExp);
 function renderPay(){
   const done=db.shifts.filter(s=>s.end), P=pays();
-  const earned=done.reduce((a,s)=>a+pay(s),0), recv=P.reduce((a,p)=>a+p.amount,0), owed=Math.round((earned-recv)*100)/100;
+  const earned=done.reduce((a,s)=>a+pay(s),0), recv=P.reduce((a,p)=>a+credit(p),0), owed=Math.round((earned-recv)*100)/100, took=P.reduce((a,p)=>a+p.amount,0), held=Math.round((recv-took)*100)/100;
   $("payEarned").textContent=money(earned); $("payRecv").textContent=money(recv);
+  { const h=$("payHeld"); h.hidden=!(db.netTrack && held>0.004); if(!h.hidden) h.textContent="Take-home so far "+money(took)+" \u00b7 "+money(held)+" held back before it reached you"; }
   const big=$("payOwed"); big.textContent=money(Math.abs(owed)); big.className="pay-big "+(owed>0.004?"owe":"ok");
   $("payOwedSub").textContent = !done.length && !P.length ? "Log what you're paid and it shows here." :
     owed>0.004 ? (earned>0 ? "You've been paid "+Math.round(Math.min(100,recv/earned*100))+"% of what you've earned" : "Still owed") : owed<-0.004 ? "Paid ahead of what you've worked" : "All paid up \u2713";
   $("payBar").style.width=(earned>0?Math.min(100,recv/earned*100):(recv>0?100:0))+"%";
   // this month
   const mk=monthKey(Date.now()); let me=0, mr=0;
-  done.forEach(s=>{ if(monthKey(s.start)===mk) me+=pay(s); }); P.forEach(p=>{ if(monthKey(p.ts)===mk) mr+=p.amount; });
+  done.forEach(s=>{ if(monthKey(s.start)===mk) me+=pay(s); }); P.forEach(p=>{ if(monthKey(p.ts)===mk) mr+=credit(p); });
   { const pc=db.taxPct||0; $("taxCard").hidden=!pc; if(pc){ const k=pc/100; let tm=0,ta=0; done.forEach(s=>{ const v=(pay(s)+tipOf(s))*k; ta+=v; if(monthKey(s.start)===mk) tm+=v; });
       $("taxH").textContent="Set aside for tax ("+pc+"%)"; $("taxML").textContent=monthLabel(mk); $("taxM").textContent=money(tm); $("taxA").textContent=money(ta); } }
   renderExpenses(done, mk);
@@ -1625,7 +1717,7 @@ function renderPay(){
   $("payMBal").className="val "+(sh>0.004?"bad":"good");
   // month by month, with a running balance (late payments for last month's work are handled naturally)
   const M={}; const slot=k=>M[k]||(M[k]={e:0,r:0});
-  done.forEach(s=>{ slot(monthKey(s.start)).e+=pay(s); }); P.forEach(p=>{ slot(monthKey(p.ts)).r+=p.amount; });
+  done.forEach(s=>{ slot(monthKey(s.start)).e+=pay(s); }); P.forEach(p=>{ slot(monthKey(p.ts)).r+=credit(p); });
   const keys=Object.keys(M).sort(); let run=0; const rows=keys.map(k=>{ run+=M[k].e-M[k].r; return {k, e:M[k].e, r:M[k].r, bal:Math.round(run*100)/100}; }).reverse();
   const box=$("payMonths"); box.textContent="";
   if(!rows.length){ const d=document.createElement("div"); d.className="empty"; d.textContent="Nothing yet."; box.appendChild(d); }
@@ -1658,8 +1750,9 @@ function payRow(id, title, sub, amt){
 function renderPayExtras(done, P, recv){
   // next payday: what you're owed now, plus a projection at your recent pace (last 28 days)
   const nx=$("payNext"); nx.style.display="none";
-  if(db.payday){
-    const now=new Date(), nd=new Date(now.getFullYear(), now.getMonth(), db.payday); if(nd.getTime()<=now.getTime()) nd.setMonth(nd.getMonth()+1);
+  const PD=paydays();
+  if(PD){
+    const nd=PD.next;
     const owedNow=Math.max(0, done.reduce((a,s)=>a+pay(s),0)-recv), since=Date.now()-28*86400000;
     const pace=done.filter(s=>s.start>=since).reduce((a,s)=>a+pay(s),0)/28, days=Math.max(0,Math.ceil((nd.getTime()-Date.now())/86400000));
     const proj=owedNow+pace*days;
@@ -1669,9 +1762,8 @@ function renderPayExtras(done, P, recv){
   }
   // overdue: wages for work done before the most recent payday, minus everything received so far
   const due=$("payDue"); due.style.display="none";
-  if(db.payday){
-    const now=new Date(), pd=new Date(now.getFullYear(), now.getMonth(), db.payday);
-    if(pd.getTime()>now.getTime()) pd.setMonth(pd.getMonth()-1);
+  if(PD){
+    const pd=PD.prev;
     const cut=pd.getTime(), wages=done.filter(s=>s.start<cut).reduce((a,s)=>a+pay(s),0), over=Math.round((wages-recv)*100)/100;
     if(over>0.004){ const days=Math.floor((Date.now()-cut)/86400000);
       payRow("payDueTxt","Overdue",(days>0?"since "+fmtDay(cut)+" \u00b7 "+days+" day"+(days===1?"":"s")+" late":"due today"),money(over)); due.style.display="block"; }
@@ -1680,20 +1772,21 @@ function renderPayExtras(done, P, recv){
 let payEditing=null;
 function openPay(p){
   payEditing=p?p.id:null; $("payTitle").textContent=p?"Edit payment":"Log payment";
-  $("payAmt").value=p?p.amount:""; $("payDate").value=dayKey(p?p.ts:Date.now()); $("payNote").value=p?p.note:"";
+  $("payAmt").value=p?p.amount:""; $("payGrossF").hidden=!db.netTrack; $("payGross").value=(p&&p.gross!=null)?p.gross:""; $("payDate").value=dayKey(p?p.ts:Date.now()); $("payNote").value=p?p.note:"";
   $("payBg").classList.add("open");
 }
 function closePay(){ $("payBg").classList.remove("open"); payEditing=null; }
 $("payAdd").onclick=()=>openPay(null);
 $("payCancel").onclick=closePay;
 $("payBg").addEventListener("click",e=>{ if(e.target===$("payBg")) closePay(); });
-$("payFill").onclick=()=>{ const earned=db.shifts.filter(s=>s.end).reduce((a,s)=>a+pay(s),0), recv=pays().reduce((a,p)=>a+p.amount,0), o=Math.round((earned-recv)*100)/100; if(o>0) $("payAmt").value=o; };
+$("payFill").onclick=()=>{ const earned=db.shifts.filter(s=>s.end).reduce((a,s)=>a+pay(s),0), recv=pays().reduce((a,p)=>a+credit(p),0), o=Math.round((earned-recv)*100)/100; if(o>0){ if(db.netTrack){ $("payGross").value=o; } else $("payAmt").value=o; } };
 $("paySave").onclick=()=>{
   const amt=Math.round(parseFloat($("payAmt").value)*100)/100, dv=$("payDate").value;
   if(!Number.isFinite(amt)||amt<=0||amt>10000000){ alert("Enter the amount you received."); return; }
   if(!dv){ alert("Pick the date you were paid."); return; }
   const ts=new Date(dv+"T12:00:00").getTime(), note=$("payNote").value;
-  const c=cleanPayment({id:payEditing||uid(), ts, amount:amt, note}); if(!c){ alert("That payment doesn't look right."); return; }
+  const gv=db.netTrack&&$("payGross").value!==""?parseFloat($("payGross").value):undefined; if(gv!==undefined&&!(gv>=amt)){ alert("Gross wages can't be less than what you received."); return; }
+  const c=cleanPayment({id:payEditing||uid(), ts, amount:amt, note, gross:gv}); if(!c){ alert("That payment doesn't look right."); return; }
   if(payEditing){ const i=pays().findIndex(x=>x.id===payEditing); if(i>=0) db.payments[i]=c; else pays().push(c); } else pays().push(c);
   save(); closePay(); render(); queueSync({action:"pupsert", payment:payPayload(c)});
 };
@@ -1704,7 +1797,7 @@ function buildStatement(fromTs, toTs){
   const inR=done.filter(s=>s.start>=fromTs && s.start<=toTs);
   const hours=inR.reduce((a,s)=>a+hrs(s),0), wages=inR.reduce((a,s)=>a+pay(s),0);
   const earnedTo=done.filter(s=>s.start<=toTs).reduce((a,s)=>a+pay(s),0);
-  const paidTo=pays().filter(p=>p.ts<=toTs).reduce((a,p)=>a+p.amount,0);
+  const paidTo=pays().filter(p=>p.ts<=toTs).reduce((a,p)=>a+credit(p),0);
   const payIn=pays().filter(p=>p.ts>=fromTs && p.ts<=toTs).sort((a,b)=>a.ts-b.ts);
   return {inR, hours, wages, earnedTo, paidTo, owed:Math.round((earnedTo-paidTo)*100)/100, payIn, fromTs, toTs};
 }
@@ -1712,7 +1805,7 @@ function statementText(S){
   const L=["Pay statement "+fmtDate(S.fromTs)+" to "+fmtDate(S.toTs), ""];
   S.inR.forEach(s=>L.push(fmtDate(s.start)+"  "+fmtTime(s.start)+" - "+fmtTime(s.end)+"  "+hrs(s).toFixed(2)+"h @ "+money(rateOf(s))+"  "+money(pay(s))));
   L.push("", "Hours: "+S.hours.toFixed(2), "Wages: "+money(S.wages));
-  if(S.payIn.length){ L.push("", "Payments received:"); S.payIn.forEach(p=>L.push(fmtDate(p.ts)+"  "+money(p.amount)+(p.note?"  "+p.note:""))); }
+  if(S.payIn.length){ L.push("", "Payments received:"); S.payIn.forEach(p=>L.push(fmtDate(p.ts)+"  "+money(credit(p))+(db.netTrack&&p.gross!=null?" (take-home "+money(p.amount)+")":"")+(p.note?"  "+p.note:""))); }
   L.push("", "Wages earned through "+fmtDate(S.toTs)+": "+money(S.earnedTo), "Paid through "+fmtDate(S.toTs)+": "+money(S.paidTo), S.owed>0.004?"Balance owed: "+money(S.owed):S.owed<-0.004?"Paid ahead: "+money(-S.owed):"Balance: paid in full");
   return L.join("\n");
 }
@@ -1729,19 +1822,19 @@ function showStatement(S){
   pg.appendChild(tb);
   const sum=(l,v,b)=>{ const r=el("div",null,"srow"+(b?" b":"")); r.appendChild(el("span",l)); r.appendChild(el("span",v)); pg.appendChild(r); };
   sum("Hours",S.hours.toFixed(2)); sum("Wages",money(S.wages));
-  if(S.payIn.length){ pg.appendChild(el("h2","Payments received")); S.payIn.forEach(p=>sum(fmtDate(p.ts)+(p.note?" \u00b7 "+p.note:""),money(p.amount))); }
+  if(S.payIn.length){ pg.appendChild(el("h2","Payments received")); S.payIn.forEach(p=>sum(fmtDate(p.ts)+(db.netTrack&&p.gross!=null?" \u00b7 take-home "+money(p.amount):"")+(p.note?" \u00b7 "+p.note:""),money(credit(p)))); }
   pg.appendChild(el("h2","Balance as of "+fmtDate(S.toTs)));
   sum("Wages earned (all shifts through this date)",money(S.earnedTo)); sum("Paid (all payments through this date)",money(S.paidTo));
   sum(S.owed>0.004?"Balance owed":S.owed<-0.004?"Paid ahead":"Balance", S.owed>0.004?money(S.owed):S.owed<-0.004?money(-S.owed):"Paid in full \u2713", true);
   $("stmt").hidden=false; document.body.classList.add("stmt-open");
 }
 function closeStmt(){ $("stmt").hidden=true; document.body.classList.remove("stmt-open"); }
-$("stmtBtn").onclick=()=>{ $("stmtPd").style.display=db.payday?"":"none"; const n=new Date(); $("stmtFrom").value=dayKey(new Date(n.getFullYear(),n.getMonth(),1).getTime()); $("stmtTo").value=dayKey(Date.now()); $("stmtBg").classList.add("open"); };
+$("stmtBtn").onclick=()=>{ $("stmtPd").style.display=paydays()?"":"none"; const n=new Date(); $("stmtFrom").value=dayKey(new Date(n.getFullYear(),n.getMonth(),1).getTime()); $("stmtTo").value=dayKey(Date.now()); $("stmtBg").classList.add("open"); };
 $("stmtQuick").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return;
   const n=new Date(), y=n.getFullYear(), m=n.getMonth(), K=d=>dayKey(d.getTime()); let a,z=new Date(n);
   if(b.dataset.q==="month") a=new Date(y,m,1);
   else if(b.dataset.q==="last"){ a=new Date(y,m-1,1); z=new Date(y,m,0); }
-  else if(b.dataset.q==="payday"){ const pd=new Date(y,m,db.payday||1); if(pd.getTime()>n.getTime()) pd.setMonth(pd.getMonth()-1); a=pd; }
+  else if(b.dataset.q==="payday"){ const P2=paydays(); a=P2?P2.prev:new Date(y,m,1); }
   else { const f=db.shifts.reduce((mn,s)=>Math.min(mn,s.start),Date.now()); a=new Date(f); }
   $("stmtFrom").value=K(a); $("stmtTo").value=K(z); });
 $("stmtCancel").onclick=()=>$("stmtBg").classList.remove("open");
@@ -1789,6 +1882,7 @@ document.querySelectorAll(".tabbar button").forEach(b=>b.onclick=()=>{
 render();
 function replayActive(){ const on=document.querySelector(".tabpane.on"); if(!on) return; const t=on.id.replace("tab-",""); if(t==="home"||t==="pay"){ counted[t]=1; countUpAll(t); } }
 setTimeout(replayActive,80);
+setTimeout(showMissed,1200);
 let hidAt=0;
 document.addEventListener("visibilitychange",()=>{ if(document.hidden){ hidAt=Date.now(); } else if(Date.now()-hidAt>4000){ for(const k in counted) delete counted[k]; setTimeout(replayActive,150); } });
 })();

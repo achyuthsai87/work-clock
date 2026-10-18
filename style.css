@@ -719,3 +719,12 @@ body.fs-open{overflow:hidden}
 
 .job-row.job-left{opacity:.5}
 .job-row.job-left span:first-child{text-decoration:line-through;text-decoration-thickness:1px}
+
+.cal-day.hol::after{content:""; position:absolute; top:5px; right:6px; width:6px; height:6px; border-radius:50%; background:#af52de}
+.cal-day{position:relative}
+
+.miss-btns{display:flex; flex-direction:column; gap:8px; margin-top:6px}
+.miss-btns .btn{width:100%}
+.miss-btns .link{align-self:center; margin-top:4px}
+.fs-sub{background:none; border:0; color:rgba(255,255,255,.6); font-size:15px; padding:8px 12px; cursor:pointer; margin-top:-24px}
+#startBg,#cfmBg{z-index:130}
