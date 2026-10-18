@@ -735,3 +735,58 @@ body.fs-open .tabbar{display:none}
 /* full-screen timer: blend into the status bar area so there is no visible band at the top */
 .fs-clock{background:radial-gradient(110% 60% at 50% 42%, #18274a 0%, #0b0f1a 62%, #06080f 100%)}
 html:has(body.fs-open), body.fs-open{background:#0b0f1a}
+
+/* ===== iOS 27 refinement: deeper, more legible Liquid Glass ===== */
+:root{ --spec:rgba(255,255,255,.95); --rim:rgba(25,35,70,.12); --tint-g:#15915f; --tint-r:#d9433d; }
+html[data-theme="dark"]{ --spec:rgba(255,255,255,.2); --rim:rgba(0,0,0,.6); }
+@media (prefers-color-scheme:dark){ html[data-theme="auto"]{ --spec:rgba(255,255,255,.2); --rim:rgba(0,0,0,.6); } }
+
+/* material: brighter specular top edge, darker outer rim for depth */
+html[data-theme] .card, html[data-theme] .hero{
+  box-shadow:inset 0 1px 0 var(--spec), 0 0 0 .5px var(--rim), 0 1px 2px rgba(0,0,0,.05), 0 14px 34px rgba(10,20,50,.10);}
+html[data-theme="dark"] .card{ box-shadow:inset 0 1px 0 var(--spec), inset 0 0 36px rgba(110,130,255,.05), 0 0 0 .5px var(--rim), 0 14px 34px rgba(0,0,0,.34); }
+
+/* tab bar: more diffusion so content never fights the labels */
+html[data-theme] .tabbar{ background:color-mix(in srgb,var(--bg-base) 64%,transparent);
+  -webkit-backdrop-filter:blur(46px) saturate(190%); backdrop-filter:blur(46px) saturate(190%);
+  box-shadow:inset 0 1px 0 var(--spec), 0 0 0 .5px var(--rim), 0 12px 32px rgba(10,20,50,.22); border:0; }
+
+/* scroll edges: content softly fades out under the status bar and the tab bar */
+.edge{position:fixed; left:0; right:0; z-index:39; pointer-events:none;}
+.edge-top{top:0; height:calc(env(safe-area-inset-top) + 22px); background:linear-gradient(to bottom, color-mix(in srgb,var(--bg-base) 94%,transparent), transparent);}
+.edge-bot{bottom:0; height:calc(env(safe-area-inset-bottom) + 112px); background:linear-gradient(to top, color-mix(in srgb,var(--bg-base) 96%,transparent) 10%, color-mix(in srgb,var(--bg-base) 70%,transparent) 55%, transparent);}
+body.fs-open .edge{display:none}
+
+/* prominent glass buttons: capsule, tinted, white label */
+html[data-theme] .big-btn{ border-radius:999px; padding:19px 24px; color:#fff; font-weight:650; letter-spacing:.2px; text-shadow:0 1px 1px rgba(0,0,0,.22);
+  background:linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,0) 58%), var(--tint-g);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6), inset 0 -1px 1px rgba(0,0,0,.16), 0 0 0 .5px rgba(0,50,25,.4), 0 12px 26px color-mix(in srgb,var(--tint-g) 38%,transparent); border:0;}
+html[data-theme] .big-btn.out{ background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 58%), var(--tint-r);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 1px rgba(0,0,0,.18), 0 0 0 .5px rgba(70,10,10,.4), 0 12px 26px color-mix(in srgb,var(--tint-r) 36%,transparent);}
+html[data-theme] .big-btn:active{ transform:scale(.97); filter:brightness(.96); }
+
+/* secondary actions: glass capsules instead of loose text links */
+.quickrow{gap:10px; margin-top:16px;} .quickrow i{display:none}
+.planrow{justify-content:center;}
+html[data-theme] .quickrow .link, html[data-theme] .planrow .link{ padding:10px 18px; border-radius:999px; font-size:15px; background:var(--glass);
+  box-shadow:inset 0 1px 0 var(--spec), 0 0 0 .5px var(--rim); -webkit-backdrop-filter:blur(18px) saturate(160%); backdrop-filter:blur(18px) saturate(160%);}
+html[data-theme] .quickrow .link:active, html[data-theme] .planrow .link:active{ transform:scale(.96); }
+
+/* sheets: larger glass panel with a grabber */
+html[data-theme] .modal{ border-radius:32px 32px 0 0; position:relative; padding-top:26px;
+  box-shadow:inset 0 1px 0 var(--spec), 0 0 0 .5px var(--rim), 0 -14px 48px rgba(10,20,50,.24);
+  -webkit-backdrop-filter:blur(44px) saturate(170%); backdrop-filter:blur(44px) saturate(170%);}
+.modal::before{content:""; position:absolute; top:8px; left:50%; width:38px; height:5px; margin-left:-19px; border-radius:3px; background:var(--muted); opacity:.35;}
+html[data-theme] .field input, html[data-theme] .field select, html[data-theme] .settings-row input{ border-radius:14px; }
+html[data-theme] .btn{ border-radius:999px; }
+
+/* type: bolder large titles, steady numerals */
+html[data-theme] .page-title{ font-size:34px; font-weight:750; letter-spacing:-.03em; margin:8px 4px 16px; }
+#heroEarn, .stat .val, .pay-big, .live-t, #statMonth, #statAll{ font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+
+/* accessibility: honour reduced transparency and higher contrast */
+@media (prefers-reduced-transparency:reduce){
+  .edge{display:none}
+  html[data-theme] .tabbar, html[data-theme] .modal, html[data-theme] .quickrow .link, html[data-theme] .planrow .link{ -webkit-backdrop-filter:none; backdrop-filter:none; background:var(--card); }
+}
+@media (prefers-contrast:more){ html[data-theme]{ --rim:rgba(0,0,0,.55); --spec:rgba(255,255,255,.4); } html[data-theme="dark"]{ --rim:rgba(255,255,255,.4); } }
