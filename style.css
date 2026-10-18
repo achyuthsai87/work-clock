@@ -855,3 +855,7 @@ html[data-theme] .page-title{ font-size:34px; font-weight:750; letter-spacing:-.
 
 .stat.tap{cursor:pointer}
 .stat.tap:active{transform:scale(.97)}
+
+/* top edge: start from the exact colour iPhone paints in the status bar area (measured from a real screenshot), then melt into the page */
+html[data-theme="dark"] .edge-top{ background:linear-gradient(to bottom, #05080f 0%, #05080f calc(env(safe-area-inset-top)), color-mix(in srgb,#05080f 70%,transparent) calc(env(safe-area-inset-top) + 14px), color-mix(in srgb,#05080f 28%,transparent) calc(env(safe-area-inset-top) + 40px), transparent 100%); height:calc(env(safe-area-inset-top) + 76px); }
+@media (prefers-color-scheme:dark){ html[data-theme="auto"] .edge-top{ background:linear-gradient(to bottom, #05080f 0%, #05080f calc(env(safe-area-inset-top)), color-mix(in srgb,#05080f 70%,transparent) calc(env(safe-area-inset-top) + 14px), color-mix(in srgb,#05080f 28%,transparent) calc(env(safe-area-inset-top) + 40px), transparent 100%); height:calc(env(safe-area-inset-top) + 76px); } }
