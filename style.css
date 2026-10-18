@@ -886,3 +886,8 @@ html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme
 .brk-type{display:flex; gap:10px; margin:4px 0}
 .brk-type button{flex:1; padding:12px; border-radius:999px; border:1px solid var(--glass-edge,rgba(128,138,155,.3)); background:var(--chip); color:var(--muted); font-weight:600; font-size:15px}
 .brk-type button.on{background:linear-gradient(135deg,#2fd08e,#16a5a5); color:#04231d; border-color:transparent}
+.fs-track{position:relative}
+.fs-track i{position:absolute; left:0; top:0}
+.fs-track i.x{background:linear-gradient(90deg,#ffd36e,#ff9b5e); box-shadow:0 0 12px rgba(255,170,90,.75); transition:width .25s linear}
+.fs-track[hidden],.fs-plan[hidden]{display:none}
+.fs-plan{font-size:13.5px; color:rgba(255,255,255,.65); margin-top:-20px; font-variant-numeric:tabular-nums}

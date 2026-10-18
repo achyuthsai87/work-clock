@@ -270,9 +270,17 @@ function S(){ return db.shifts.filter(s=>jobOk(s,jobFilter)); }   // shifts in v
 function showFs(){ const el=$("fsClock"); if(!openShift()) return; el.hidden=false; { const mc=document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute("content","#0b0f1a"); } document.body.classList.add("fs-open"); tickFs(); clearInterval(fsTimer); fsTimer=setInterval(tickFs,250); }
 function hideFs(){ const el=$("fsClock"); if(!el||el.hidden) return; el.hidden=true; el.style.transform=""; el.style.transition=""; el.classList.remove("dragging"); applyTheme(); document.body.classList.remove("fs-open"); clearInterval(fsTimer); }
 let fsTimer=null;
+function planOf(o){   // the planned shift this clock-in belongs to, if any
+  const d0=new Date(o.start); d0.setHours(0,0,0,0);
+  for(const back of [0,1]){ const base=new Date(d0); base.setDate(base.getDate()-back);
+    for(const p of (db.plans||[])){ if(!planApplies(p,base) || (p.job||"")!==(o.job||"")) continue; const t=planTimes(p,base); if(o.start>=t.S-2*3600000 && o.start<t.E) return t; } }
+  return null; }
 function tickFs(){ const o=openShift(); if(!o){ hideFs(); return; } const el=Math.max(0,Date.now()-o.start)/1000, h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60), p2=n=>String(n).padStart(2,"0");
   $("fsH").textContent=p2(h); $("fsM").textContent=p2(m); $("fsS").textContent=p2(s);
-  $("fsFill").style.width=((el%60)/60*100).toFixed(1)+"%";
+  const pl=planOf(o), tr=$("fsTrack"), cap=$("fsPlan"); tr.hidden=!pl; cap.hidden=!pl;
+  if(pl){ const len=pl.E-pl.S, worked=hrs({start:o.start,end:Date.now(),brk:o.brk,bp:o.bp})*3600000, f=worked/len, ex=Math.max(0,worked-len)/60000;
+    $("fsFill").style.width=(Math.min(f,1)*100).toFixed(1)+"%"; $("fsExtra").style.width=(f>1?Math.min(f-1,1)*100:0).toFixed(1)+"%";
+    cap.textContent=f<1 ? Math.floor(f*100)+"% of your planned shift \u00b7 until "+fmtTime(pl.E) : "Planned shift done"+(ex>=1?" \u00b7 +"+brkText(Math.round(ex))+" extra":""); }
   const hh=hrs({start:o.start,end:Date.now(),brk:o.brk,bp:o.bp}); $("fsEarn").textContent=money(hh*rateOf(o))+" earned so far"+(hasJobs()?" \u00b7 "+jobName(o.job):"");
   $("fsBreak").textContent=o.brk>0?"Break \u00b7 "+brkText(o.brk)+(o.bp?" (paid)":""):"Break"; }
 // Nudge to back up when history isn't saved anywhere else
@@ -1589,7 +1597,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.30";
+const APP_VERSION="2026.10.18.31";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
