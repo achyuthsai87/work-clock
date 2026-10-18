@@ -7,7 +7,7 @@
  */
 const SECRET = "CHANGE-ME-TO-SOMETHING-LONG";   // use 24+ random characters; never share or commit it
 const SHEET_NAME = "Shifts";
-const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end", "Note", "Rate"];
+const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end", "Note", "Rate", "Job", "jobId"];
 const COL = { START: 10, END: 11, TIP: 8 };   // 1-based columns the app reads back
 const MAX_BULK = 5000;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -22,7 +22,7 @@ function style_(sh) {
     sh.getRange("G:G").setNumberFormat("0.00");
     sh.getRange("H:I").setNumberFormat("$#,##0.00");
     sh.hideColumns(1); sh.hideColumns(10, 2);             // id, start, end stay in the sheet but out of sight
-    sh.setColumnWidth(2, 110); sh.setColumnWidth(12, 200); sh.getRange("M:M").setNumberFormat("$#,##0.00"); sh.setColumnWidths(5, 2, 90); sh.setColumnWidths(7, 3, 95);
+    sh.setColumnWidth(2, 110); sh.setColumnWidth(12, 200); sh.getRange("N:N").setNumberFormat("@"); sh.getRange("O:O").setNumberFormat("@"); sh.hideColumns(15); sh.getRange("M:M").setNumberFormat("$#,##0.00"); sh.setColumnWidths(5, 2, 90); sh.setColumnWidths(7, 3, 95);
   } catch (_) {}
 }
 
@@ -56,6 +56,16 @@ function punchSheet_(ss) {
   if (p.getLastRow() === 0) { p.appendRow(PUNCH_HEADERS); try { p.getRange(1, 1, 1, 4).setFontWeight("bold"); p.setFrozenRows(1); p.hideColumns(1); p.hideColumns(3); } catch (_) {} }
   return p;
 }
+
+// App data that isn't a shift or a payment (jobs, planned shifts, days off, expenses, a few settings), stored as small JSON blobs.
+const DATA_SHEET = "AppData";
+function dataSheet_(ss) {
+  let d = ss.getSheetByName(DATA_SHEET);
+  if (!d) d = ss.insertSheet(DATA_SHEET);
+  if (d.getLastRow() === 0) { d.appendRow(["key", "json", "updated"]); try { d.getRange("A:B").setNumberFormat("@"); d.getRange("A1:C1").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff"); d.setFrozenRows(1); d.setColumnWidth(2, 300); } catch (_) {} }
+  return d;
+}
+const KV_KEY_RE = /^[a-z0-9-]{1,24}$/, KV_MAX = 45000;
 
 // A live "Summary" tab: per month hours / tips / earned / received / balance, plus all-time totals. Formulas only.
 // Rebuilt automatically when the layout version below changes.
@@ -115,7 +125,7 @@ function sheet_() {
     const hdr = sh.getRange(1, 1, 1, HEADERS.length).getValues()[0];
     if (hdr.slice(0, BASE).join("|") === HEADERS.slice(0, BASE).join("|")) {
       for (let i = BASE; i < HEADERS.length; i++) if (!hdr[i]) sh.getRange(1, i + 1).setValue(HEADERS[i]);   // add newer columns in place
-      try { sh.getRange("L:L").setNumberFormat("@"); sh.getRange("M:M").setNumberFormat("$#,##0.00"); } catch (_) {}
+      try { sh.getRange("L:L").setNumberFormat("@"); sh.getRange("M:M").setNumberFormat("$#,##0.00"); sh.getRange("N:O").setNumberFormat("@"); sh.hideColumns(15); } catch (_) {}
     }
   }
   if (sh && sh.getLastRow() > 0 && sh.getRange(1, 1, 1, BASE).getValues()[0].join("|") !== HEADERS.slice(0, BASE).join("|")) {
@@ -153,7 +163,8 @@ function clean_(s) {
   const tips = Math.round(Math.min(Math.max(Number(s.tips) || 0, 0), 100000) * 100) / 100;
   return [String(s.id), txt(s.date), txt(s.day), txt(s.month), txt(s.in), txt(s.out),
           Math.round((Number(s.hours) || 0) * 100) / 100, tips, Math.round((Number(s.earned) || 0) * 100) / 100, start, end, note,
-          (s.rate === "" || s.rate == null || !isFinite(Number(s.rate)) || Number(s.rate) < 0 || Number(s.rate) > 100000) ? "" : Number(s.rate)];
+          (s.rate === "" || s.rate == null || !isFinite(Number(s.rate)) || Number(s.rate) < 0 || Number(s.rate) > 100000) ? "" : Number(s.rate),
+          txt(s.jobName).slice(0, 24), ID_RE.test(String(s.job || "")) ? String(s.job) : ""];
 }
 
 // Payments the owner made to you.
@@ -197,7 +208,7 @@ function doPost(e) {
       const n = sh.getLastRow() - 1;
       const rows = n > 0 ? sh.getRange(2, 1, n, HEADERS.length).getValues() : [];
       return out_({ ok: true, shifts: rows.filter(r => r[0] && r[9] && r[10])
-        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0, note: String(r[11] || ""), rate: r[12] === "" || r[12] == null ? null : Number(r[12]) })) });
+        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0, note: String(r[11] || ""), rate: r[12] === "" || r[12] == null ? null : Number(r[12]), job: String(r[14] || "") })) });
     }
 
     if (b.action === "sget") {
@@ -215,6 +226,25 @@ function doPost(e) {
       const bm = Math.round(Number(x.breakMin)), ba = Number(x.breakAfter);
       if (isFinite(bm) && bm >= 0 && bm <= 120) s.getRange(5, 1, 1, 2).setValues([["breakMin", bm]]);
       if (isFinite(ba) && ba >= 1 && ba <= 24) s.getRange(6, 1, 1, 2).setValues([["breakAfter", ba]]);
+      return out_({ ok: true });
+    }
+
+    if (b.action === "kvget") {
+      const d = dataSheet_(SpreadsheetApp.getActiveSpreadsheet()), n = d.getLastRow() - 1, out = {};
+      (n > 0 ? d.getRange(2, 1, n, 2).getValues() : []).forEach(r => { if (KV_KEY_RE.test(String(r[0])) && String(r[1]).length <= KV_MAX) out[String(r[0])] = String(r[1]); });
+      return out_({ ok: true, data: out });
+    }
+
+    if (b.action === "kvset") {
+      const key = String(b.key), val = typeof b.value === "string" ? b.value : "";
+      if (!KV_KEY_RE.test(key) || val.length > KV_MAX) return out_({ ok: false, error: "Bad request" });
+      try { JSON.parse(val); } catch (_) { return out_({ ok: false, error: "Bad request" }); }
+      const d = dataSheet_(SpreadsheetApp.getActiveSpreadsheet()), n = d.getLastRow() - 1;
+      const keys = n > 0 ? d.getRange(2, 1, n, 1).getValues().map(r => String(r[0])) : [];
+      const at = keys.indexOf(key), row = [key, val, Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss")];
+      if (at >= 0) d.getRange(at + 2, 1, 1, 3).setValues([row]);
+      else if (keys.length >= 60) return out_({ ok: false, error: "Bad request" });
+      else d.getRange(d.getLastRow() + 1, 1, 1, 3).setValues([row]);
       return out_({ ok: true });
     }
 

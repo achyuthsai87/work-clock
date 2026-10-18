@@ -52,7 +52,7 @@
 <noscript><div style="padding:24px;font-family:sans-serif">Work Clock needs JavaScript enabled.</div></noscript>
 <div class="wrap">
   <section class="tabpane on" id="tab-home">
-<div class="card nudge" id="backupNudge" hidden><div class="nudge-t">Back up your history</div><div class="nudge-s">Nothing has been saved off this phone lately. If iOS clears the app, your shifts would be gone.</div><div class="nudge-b"><button id="nudgeNow" class="btn">Back up now</button><button id="nudgeSync" class="link">Set up sync</button><button id="nudgeLater" class="link">Later</button></div></div>
+<div class="card nudge" id="backupNudge" hidden><div class="nudge-t">Back up your history</div><div class="nudge-s">Nothing has been saved off this phone lately. If iOS clears the app, your shifts would be gone.</div><div class="nudge-b"><button id="nudgeNow" class="btn primary">Back up now</button><button id="nudgeSync" class="link">Set up sync</button><button id="nudgeLater" class="link">Later</button></div></div>
 <div class="hero">
     <div class="hero-top"><span id="greet">Hello</span><span id="heroDate"></span></div>
     <div class="hero-earn" id="heroEarn">$0.00</div>
@@ -60,6 +60,7 @@
   </div>
 
 <div class="card">
+    <div class="jobpick" id="jobPickRow" hidden><label for="jobPick">Working at</label><select id="jobPick"></select></div>
     <button id="clockBtn" class="big-btn">Clock In</button>
     <div id="statusLine" class="status-line"></div>
     <button id="cancelShift" class="cancel-shift" style="display:none">Discard this shift</button>
@@ -86,13 +87,25 @@
   <section class="tabpane" id="tab-history">
   <div class="page-title">History</div>
 <div class="card">
-    <div class="hfilter"><input id="histQ" type="search" placeholder="Search notes, dates, amounts" autocomplete="off" maxlength="40" aria-label="Search history"><select id="histMonth" aria-label="Jump to month"></select></div>
+    <div class="hfilter"><select id="histJob" aria-label="Filter by job" hidden></select><input id="histQ" type="search" placeholder="Search notes, dates, amounts" autocomplete="off" maxlength="40" aria-label="Search history"><select id="histMonth" aria-label="Jump to month"></select></div>
     <div id="histSum" class="hsum" hidden></div>
     <div id="history"></div>
   </div>
   </section>
+  <section class="tabpane" id="tab-calendar">
+  <div class="page-title">Calendar</div>
+  <div class="card">
+    <div class="cal-head"><button id="calPrev" class="icon-btn" aria-label="Previous month">&#8249;</button><div class="cal-title" id="calTitle"></div><button id="calNext" class="icon-btn" aria-label="Next month">&#8250;</button></div>
+    <div class="cal-grid cal-dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-legend"><span><i class="lg lg-w"></i>Worked</span><span><i class="lg lg-p"></i>Planned</span><span><i class="lg lg-o"></i>Day off</span></div>
+    <div class="hsum" id="calSum"></div>
+  </div>
+  <div class="card"><div class="pay-h">Coming up</div><div id="calNextList"></div></div>
+  </section>
   <section class="tabpane" id="tab-analytics">
   <div class="page-title">Analytics</div>
+  <div class="anajob-row" id="anaJobRow" hidden><select id="anaJob" aria-label="Job"></select></div>
 <div class="card goal-card" style="margin-top:12px">
     <div class="ring-wrap">
       <svg viewBox="0 0 120 120" class="ring" aria-hidden="true"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3ee6b0"/><stop offset="1" stop-color="#4aa8ff"/></linearGradient></defs><circle class="ring-bg" cx="60" cy="60" r="48"/><circle class="ring-fg" id="goalRing" cx="60" cy="60" r="48" stroke-dasharray="301.59" stroke-dashoffset="301.59" transform="rotate(-90 60 60)"/></svg>
@@ -154,6 +167,12 @@
     <div style="font-weight:700; margin-bottom:8px">Monthly earnings</div>
     <canvas id="chart" width="600" height="340"></canvas>
   </div>
+  <div class="card" id="tipYieldCard" hidden>
+    <div class="pay-h">Tip yield</div>
+    <div class="job-hint" id="tyNote" style="margin:-4px 0 10px"></div>
+    <div class="ty-h">By weekday</div><div id="tyWeekday"></div>
+    <div class="ty-h">By time of day</div><div id="tyDaypart"></div>
+  </div>
   </section>
   <section class="tabpane" id="tab-pay">
   <div class="page-title">Pay</div>
@@ -179,6 +198,23 @@
       <div class="stat"><div class="label">Short by</div><div class="val" id="payMBal">$0.00</div></div>
     </div>
   </div>
+  <div class="card" id="taxCard" hidden>
+    <div class="pay-h" id="taxH">Set aside for tax</div>
+    <div class="stats pay2">
+      <div class="stat"><div class="label" id="taxML">This month</div><div class="val" id="taxM">$0.00</div></div>
+      <div class="stat"><div class="label">All time</div><div class="val" id="taxA">$0.00</div></div>
+    </div>
+    <div class="job-hint">An estimate of wages plus tips, so you know how much to keep aside. Change the percentage in Settings.</div>
+  </div>
+  <div class="card" id="expCard">
+    <div class="tipbox-top"><span class="tipbox-h">Expenses</span><button id="expAdd" class="link">+ Add</button></div>
+    <div class="stats pay2">
+      <div class="stat"><div class="label" id="expML">This month</div><div class="val" id="expM">$0.00</div></div>
+      <div class="stat"><div class="label">All time</div><div class="val" id="expA">$0.00</div></div>
+    </div>
+    <div class="job-hint" id="expNet" hidden></div>
+    <div id="expList"></div>
+  </div>
   <div class="card"><div class="pay-h">Month by month</div><div id="payMonths"></div></div>
   <div class="card"><div class="pay-h">Payments received</div><div id="payList"></div></div>
   </section>
@@ -191,6 +227,16 @@
     <div class="settings-row" id="breakAfterRow" style="display:none"><span>Only on shifts of</span><select id="breakAfterInput" aria-label="Only on shifts of"></select></div>
     <div class="settings-row"><span>Payday<small>day of each month</small></span><select id="paydayInput" aria-label="Payday"></select></div>
     <div class="settings-row"><span>Weekly goal</span><select id="goalInput" aria-label="Weekly goal"></select></div>
+    <div class="settings-row"><span>Weekend premium<small>extra % on Sat and Sun, new shifts</small></span><input id="wkndInput" type="number" min="0" max="300" step="1" inputmode="decimal" placeholder="0"></div>
+    <div class="settings-row"><span>Tax set-aside<small>% of wages and tips to keep aside</small></span><input id="taxInput" type="number" min="0" max="60" step="0.5" inputmode="decimal" placeholder="0"></div>
+    <div class="settings-row"><span>Mileage rate<small>$ per mile, used for mileage</small></span><input id="mileInput" type="number" min="0" max="10" step="0.005" inputmode="decimal" placeholder="0"></div>
+  </div>
+
+<div class="card">
+    <div class="pay-h">Jobs</div>
+    <div id="jobList"></div>
+    <div class="job-hint">Your main job uses the pay rate above. Other jobs have their own rate.</div>
+    <button id="jobAdd" class="link" style="margin-top:6px">+ Add a job</button>
   </div>
 
 <div class="card">
@@ -237,6 +283,7 @@
   <nav class="tabbar">
     <button data-tab="home" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg><span>Home</span></button>
     <button data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>History</span></button>
+    <button data-tab="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Calendar</span></button>
     <button data-tab="analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>
     <button data-tab="pay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15v-4"/><path d="M21 12v5h-4a2.5 2.5 0 0 1 0-5z"/></svg><span>Pay</span></button>
     <button data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Settings</span></button>
@@ -315,17 +362,54 @@
 
 <div class="modal-bg" id="planBg">
   <div class="modal">
-    <h2>Plan a shift</h2>
+    <h2 id="planTitle">Plan a shift</h2>
     <div class="cfm-msg" style="margin-bottom:12px">Clocks you in and out at these times. The app can't run while it's closed, so it fills the shift in the next time you open it, with hours counted from the exact times. You can still edit it in History.</div>
+    <div class="field" id="planJobF" hidden><label>Job</label><select id="planJob"></select></div>
     <div class="field"><label>Starts</label><input type="time" id="planStart" value="15:00"></div>
     <div class="field"><label>Ends</label><input type="time" id="planEnd" value="23:00"></div>
-    <div class="field"><label>Repeat on (leave empty for today only)</label>
+    <div class="field"><label id="planRepeatL">Repeat weekly on (leave empty for one day only)</label>
       <div class="daychips" id="planDays"><button type="button" data-d="1">Mon</button><button type="button" data-d="2">Tue</button><button type="button" data-d="3">Wed</button><button type="button" data-d="4">Thu</button><button type="button" data-d="5">Fri</button><button type="button" data-d="6">Sat</button><button type="button" data-d="0">Sun</button></div></div>
     <button type="button" class="link danger-link" id="planRemove" style="display:none">Remove plan</button>
     <div class="btn-row">
       <button class="btn ghost" id="planCancel">Cancel</button>
       <button class="btn primary" id="planSave">Save plan</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="dayBg">
+  <div class="modal">
+    <h2 id="dayTitle"></h2>
+    <div id="dayBody"></div>
+    <div class="day-actions">
+      <button class="btn primary" id="dayAdd">Add a shift</button>
+      <button class="btn ghost" id="dayPlan">Plan a shift</button>
+      <button class="btn ghost" id="dayOff">Mark as day off</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="expBg">
+  <div class="modal">
+    <h2 id="expTitle">Add expense</h2>
+    <div class="field"><span class="seg" id="expSeg"><button type="button" data-k="expense" class="on">Expense</button><button type="button" data-k="mileage">Mileage</button></span></div>
+    <div class="field"><label>Date</label><input type="date" id="expDate"></div>
+    <div class="field" id="expAmtF"><label>Amount ($)</label><input type="number" id="expAmt" inputmode="decimal" min="0" max="10000000" step="0.01" placeholder="0.00"></div>
+    <div class="field" id="expMilesF" hidden><label>Miles</label><input type="number" id="expMiles" inputmode="decimal" min="0" max="100000" step="0.1" placeholder="0"><div id="expMileHint" style="font-size:12px;color:var(--muted);margin-top:5px"></div></div>
+    <div class="field"><label>Note (optional)</label><input type="text" id="expNote" maxlength="60" placeholder="e.g. gas, parking"></div>
+    <button type="button" class="link danger-link" id="expDelete" style="display:none">Delete this entry</button>
+    <div class="btn-row"><button class="btn ghost" id="expCancel">Cancel</button><button class="btn primary" id="expSave">Save</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="jobBg">
+  <div class="modal">
+    <h2 id="jobTitle">Add a job</h2>
+    <div class="field"><label>Name</label><input type="text" id="jobNameIn" maxlength="24" placeholder="e.g. Weekend cafe"></div>
+    <div class="field" id="jobRateF"><label>Hourly rate ($)</label><input type="number" id="jobRateIn" inputmode="decimal" min="0" max="100000" step="0.25"></div>
+    <div id="jobMainNote" class="cfm-msg" style="display:none">The main job's rate is the Pay rate above.</div>
+    <button type="button" class="link danger-link" id="jobDelete" style="display:none">Delete this job</button>
+    <div class="btn-row"><button class="btn ghost" id="jobCancel">Cancel</button><button class="btn primary" id="jobSave">Save</button></div>
   </div>
 </div>
 
@@ -345,6 +429,7 @@
 <div class="modal-bg" id="modalBg">
   <div class="modal">
     <h2 id="modalTitle">Add shift</h2>
+    <div class="field" id="fJobF" hidden><label>Job</label><select id="fJob"></select></div>
     <div class="field"><label>Date</label><input type="date" id="fDate"></div>
     <div class="field"><label>Clock in</label><input type="time" id="fIn"></div>
     <div class="field"><label>Clock out</label><input type="time" id="fOut"><div style="font-size:12px;color:var(--muted);margin-top:5px">Working past midnight? If clock-out is earlier than clock-in, it counts as the next day.</div></div>

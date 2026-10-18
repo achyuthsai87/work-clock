@@ -12,6 +12,16 @@ All data stays on your device (localStorage). Works fully offline once installed
 ## Deploy
 Static site. Push to `main`; GitHub Pages serves the repo root. Bump `CACHE` in `sw.js` when changing cached assets.
 
+## What's in the app
+- **Clock:** tap Clock In and a full-screen timer opens (Clock Out, or Minimise to get back to Home).
+- **Calendar:** tap a day to add a shift, plan one (one day, or repeating weekly) or mark a day off. Planned shifts clock you in and out by themselves when you open the app. Days off are left out of averages and the on-pace projection.
+- **Jobs:** extra jobs with their own hourly rate. The main job uses the Pay rate. Pick the job on Home before clocking in; History and Analytics can filter by job.
+- **Premium rates:** a weekend % on new shifts, and a per-shift rate for holidays (edit the shift).
+- **History:** search notes, dates and amounts, and filter by month or job.
+- **Analytics:** tip yield (tips per hour by weekday and time of day).
+- **Pay:** tax set-aside (a % of wages and tips) and expenses / mileage. Both stay at zero until you use them.
+- **Backup:** every change syncs to your sheet; the app also asks iOS to keep its storage and reminds you to back up if sync is off.
+
 ## Google Sheets sync
 Two-way backup (device ⇄ your sheet). One-time setup in [`apps-script/README.md`](apps-script/README.md).
 After a reinstall: Settings → enter URL + secret → **Save & connect** restores every shift.
