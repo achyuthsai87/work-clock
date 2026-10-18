@@ -508,7 +508,7 @@ $("anaJob").onchange=e=>{ jobFilter=e.target.value; renderAnalytics(); drawChart
 let monOff=0, monGeom=null, wkStart=null;
 function firstShiftTs(){ return S().reduce((m,x)=>Math.min(m,x.start),Infinity); }
 // stacked bars: green = wages, pink = tips, numbers inside each part and the total on top
-function stackedChart(cv, items){
+function stackedChart(cv, items, solo){
   const ctx=cv.getContext("2d"), dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
   cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
   const cs=getComputedStyle(document.documentElement), colMuted=(cs.getPropertyValue("--muted")||"#6b7686").trim(), colInk=(cs.getPropertyValue("--ink")||"#1b2430").trim();
@@ -523,8 +523,8 @@ function stackedChart(cv, items){
     ctx.fillStyle=v>0?g:"rgba(128,138,155,.35)"; ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-wh, bw, wh, th>0?[0,0,6,6]:6); ctx.fill();
     if(th>0){ ctx.fillStyle="#f06aa8"; ctx.beginPath(); ctx.roundRect(x-bw/2, topY, bw, th, [6,6,0,0]); ctx.fill(); }
     ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.font="700 10.5px "+f; ctx.fillStyle="#fff";
-    if(it.w>0.004 && wh>=18) ctx.fillText("$"+Math.round(it.w), x, H-padB-wh/2);
-    if(hasT && th>=16) ctx.fillText("$"+Math.round(it.t), x, topY+th/2);
+    if(!solo && it.w>0.004 && wh>=18) ctx.fillText("$"+Math.round(it.w), x, H-padB-wh/2);
+    if(!solo && hasT && th>=16) ctx.fillText("$"+Math.round(it.t), x, topY+th/2);
     ctx.textBaseline="alphabetic"; ctx.fillStyle=colMuted; ctx.font="11px "+f; ctx.fillText(it.label, x, H-10);
     if(v>0){ ctx.fillStyle=colInk; ctx.font="700 12px "+f; ctx.fillText("$"+Math.round(v), x, topY-6); }
   });
@@ -576,7 +576,7 @@ function renderWeek(){
   const st=$("mwStats"); st.innerHTML="";
   [["Wages",T.w,"g",mode!=="tips"],["Tips",T.t,"p",mode!=="wages"],["Total",T.w+T.t,"",mode==="all"]].forEach(([l,v,c,show])=>{ if(!show) return; const d=document.createElement("div"); d.className="mw-tile "+c; d.innerHTML='<small>'+l+'</small><b>'+money(v)+'</b>'; st.appendChild(d); });
   $("mwNote").textContent=T.n?(hint?hint+" · ":"")+T.h.toFixed(1)+"h · "+T.n+" shift"+(T.n===1?"":"s"):"No shifts here";
-  const g=stackedChart($("wkChart"), items); drGeom=Object.assign({targets}, g);
+  const g=stackedChart($("wkChart"), items, mode!=="all"); drGeom=Object.assign({targets}, g);
 }
 function openDrill(mode, level, mk, wk){ dr={mode, level, floor:level, mk:mk||monthKey(Date.now()), wk:wk||mondayOf(Date.now()), off:0}; $("monBg").classList.add("open"); renderWeek(); }
 function openWeekFor(monthKeySel, mode){ openDrill(mode||"all", 1, monthKeySel); }
@@ -1581,7 +1581,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.27";
+const APP_VERSION="2026.10.18.28";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
