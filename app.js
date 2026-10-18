@@ -1132,6 +1132,7 @@ async function syncCall(body, t){
   clearTimeout(tmo);
   let j; try{ j=await res.json(); }catch(e){ throw new Error("Script didn't answer properly. Replace it with the latest Code.gs and redeploy."); }
   if(!j || !j.ok) throw new Error((j && j.error) || "Script error");
+  progStep();
   return j;
 }
 function pushEv(list, ev){
@@ -1168,11 +1169,11 @@ async function flushOutbox(){
   db.outbox=db.outbox||[];
   if(flushing) return;
   if(!c.enabled || !c.url || !navigator.onLine || !(db.outbox.length || mirrors().some(m=>outboxOf(m).length))){ updateSyncStatus(); return; }
-  flushing=true;
+  flushing=true; progBegin(db.outbox.length+mirrors().reduce((a,m)=>a+outboxOf(m).length,0)+1,"Syncing");
   try{
     if(db.outbox.length) await flushList(c, db.outbox, true);
     for(const m of mirrors().slice()) if(outboxOf(m).length) await flushList(m, outboxOf(m), false);
-  } finally{ flushing=false; }
+  } finally{ flushing=false; progFinish(); }
   updateSyncStatus();
   if(db.outbox.length && !c.err && navigator.onLine) setTimeout(flushOutbox,0);   // something was queued while we were busy
 }
@@ -1258,27 +1259,57 @@ async function mirrorSync(m){
   m.last=Date.now(); m.err=""; save();
   return n;
 }
+// live sync progress: a bar that fills as each request to the sheet finishes, then vanishes
+const prog={on:false, depth:0, total:1, done:0, label:"Syncing"};
+function paintProg(final){
+  const bar=$("syncBar"); if(!bar) return; const i=bar.firstElementChild;
+  const pct=final?100:Math.min(95, Math.round(prog.done/Math.max(prog.total,1)*100));
+  bar.hidden=false; bar.classList.remove("fade"); i.style.width=pct+"%"; bar.setAttribute("aria-valuenow",String(pct));
+}
+function progBegin(est,label){
+  if(prog.on){ prog.depth++; prog.total+=est; return; }
+  prog.on=true; prog.depth=1; prog.total=Math.max(est,2); prog.done=0; prog.label=label||"Syncing"; clearTimeout(progBegin.t); paintProg(); updateSyncStatus();
+}
+function progStep(){ if(!prog.on) return; prog.done++; if(prog.done>=prog.total) prog.total=prog.done+1; paintProg(); }
+function progFinish(){
+  if(!prog.on) return; if(--prog.depth>0) return;
+  paintProg(true); prog.on=false;
+  const bar=$("syncBar"); setTimeout(()=>{ if(!prog.on&&bar) bar.classList.add("fade"); },380);
+  progBegin.t=setTimeout(()=>{ if(!prog.on&&bar){ bar.hidden=true; bar.classList.remove("fade"); bar.firstElementChild.style.width="0"; } },900);
+}
+function setStatus(text, dots){
+  const el=$("syncStatus"); if(!el) return; el.textContent="";
+  const s=String(text), more=/\u2026$/.test(s); el.appendChild(document.createTextNode(more?s.slice(0,-1):s));
+  if(dots||more){ const d=document.createElement("span"); d.className="sdots"; d.setAttribute("aria-hidden","true"); d.innerHTML="<i></i><i></i><i></i>"; el.appendChild(d); }
+}
 async function syncRun(label, fn, t){
-  const el=$("syncStatus"), c=t||syncCfg();
-  if(!c.url){ el.textContent="Add a sheet first"; el.classList.add("err"); return; }
-  el.classList.remove("err"); el.textContent=label+"…";
-  try{ const r=await fn(); c.err=""; save(); updateSyncStatus(typeof r==="string"?r:""); }
-  catch(e){ c.err=e.message; save(); updateSyncStatus(); }
+  const c=t||syncCfg();
+  if(!c.url){ const el=$("syncStatus"); setStatus("Add a sheet first"); el.classList.add("err"); return; }
+  const queued=(db.outbox||[]).length+mirrors().reduce((a,m)=>a+outboxOf(m).length,0);
+  const est={Syncing:7+queued+4*mirrors().length, Connecting:10, Restoring:8, "Backing up":6}[label]||8;
+  progBegin(est,label);
+  let ok=false, info="";
+  try{ const r=await fn(); c.err=""; if(c===syncCfg()) db.lastSync=Date.now(); save(); ok=true; info=typeof r==="string"?r:""; }
+  catch(e){ c.err=e.message; save(); }
+  progFinish();
+  if(ok && info && label!=="Syncing" && !/^(Up to date|Connected \u2713|Restored from the sheet)/.test(info)){ updateSyncStatus(info); setTimeout(()=>{ if(!prog.on) updateSyncStatus(); },3500); }
+  else updateSyncStatus();
 }
 function updateSyncStatus(msg){
   const c=syncCfg(), el=$("syncStatus");
   renderSheetList();
   if(!el) return;
-  el.classList.remove("err");
-  if(!c.url){ el.textContent="Not set up"; return; }
-  if(c.err){ el.classList.add("err"); el.textContent=mirrors().length?sheetName(c)+": "+c.err:c.err; return; }
-  const bad=mirrors().find(m=>m.err); if(bad){ el.classList.add("err"); el.textContent=sheetName(bad)+": "+bad.err; return; }
-  if(msg){ el.textContent=msg; return; }
+  el.classList.remove("err"); el.classList.toggle("busy",prog.on);
+  if(!c.url){ setStatus("Not set up"); return; }
+  if(prog.on){ setStatus(prog.label,true); return; }
+  if(c.err){ el.classList.add("err"); setStatus(mirrors().length?sheetName(c)+": "+c.err:c.err); return; }
+  const bad=mirrors().find(m=>m.err); if(bad){ el.classList.add("err"); setStatus(sheetName(bad)+": "+bad.err); return; }
+  if(msg){ setStatus(msg); return; }
   const n=(db.outbox||[]).length+mirrors().reduce((a,m)=>a+outboxOf(m).length,0);
-  if(!c.enabled) el.textContent="Auto-sync is off";
-  else if(n>0) el.textContent=n+" change"+(n===1?"":"s")+" waiting"+(navigator.onLine?"":" (offline)");
-  else if(db.lastSync) el.textContent="Synced · "+fmtTime(db.lastSync);
-  else el.textContent="Ready";
+  if(!c.enabled) setStatus("Auto-sync is off");
+  else if(n>0) setStatus(n+" change"+(n===1?"":"s")+" waiting"+(navigator.onLine?"":" (offline)"),true);
+  else if(db.lastSync) setStatus("Synced \u00b7 "+fmtTime(db.lastSync));
+  else setStatus("Ready");
 }
 function renderSheetList(){
   const box=$("sheetList"); if(!box) return; const c=syncCfg(); box.textContent="";
@@ -1785,6 +1816,7 @@ function updateAvatar(){
 function renderProfile(){
   const pf=profile(), kind=effKind(pf), grid=$("avGrid"); grid.textContent="";
   if(document.activeElement!==$("profName")) $("profName").value=pf.name;
+  { const t=$("nameText"); t.textContent=pf.name||"Add your name"; t.classList.toggle("empty",!pf.name); }
   paintFace($("profPrev").firstElementChild, kind, pf);
   const tile=(label, on, paint, fn)=>{ const b=document.createElement("button"); b.type="button"; b.className="av-tile"+(on?" on":""); b.setAttribute("aria-label",label); b.setAttribute("aria-pressed",on?"true":"false");
     const f=document.createElement("span"); f.className="av-face still"; paint(f); b.appendChild(f); const t=document.createElement("small"); t.textContent=label; b.appendChild(t); b.onclick=fn; grid.appendChild(b); };
@@ -1795,6 +1827,10 @@ function renderProfile(){
 }
 function setProfile(patch){ db.profile=Object.assign({name:"",kind:"initials",animal:"lion"}, db.profile||{}, patch); save(); updateAvatar(); renderProfile(); }
 $("profName").addEventListener("input",e=>{ const v=cleanText(e.target.value,30).replace(/\s+/g," "); db.profile=Object.assign({name:"",kind:"initials",animal:"lion"}, db.profile||{}, {name:v}); save(); updateAvatar(); paintFace($("profPrev").firstElementChild, effKind(profile()), profile()); renderProfileTilesOnly(); });
+function nameEditing(on){ $("nameBox").hidden=!on; $("nameView").hidden=on; if(on){ $("profName").value=profile().name; try{ $("profName").focus(); }catch(e){} } else { renderProfile(); } }
+$("nameEdit").onclick=()=>nameEditing(true); $("nameText").onclick=()=>nameEditing(true);
+$("nameDone").onclick=()=>nameEditing(false);
+$("profName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); nameEditing(false); } });
 function renderProfileTilesOnly(){ const t=$("avGrid").firstElementChild; if(t){ paintFace(t.querySelector(".av-face"),"initials",{name:profile().name}); } }
 function readPhoto(file){ return new Promise((res,rej)=>{ if(!file||!/^image\//.test(file.type)||file.size>20e6) return rej(new Error("Choose a picture file."));
   const r=new FileReader(); r.onerror=()=>rej(new Error("Couldn’t read that picture.")); r.onload=()=>{ const im=new Image(); im.onerror=()=>rej(new Error("Couldn’t open that picture.")); im.onload=()=>{
@@ -1898,10 +1934,12 @@ $("syncDownBtn").onclick=async()=>{ const t=shT; if(!t) return; if(!await askCon
   syncRun("Restoring", async()=>{ const n=await syncPull(true,t); return n?"Restored "+n+" item"+(n===1?"":"s")+" ✓":"Restored from the sheet ✓"; }, t); };
 // pull on open + whenever the app comes back to the foreground (iOS keeps PWAs alive)
 async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.onLine) return;
-  try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
+  progBegin(7,"Syncing");
+  try{ await flushOutbox(); if(!c.err){ await syncPull(); db.lastSync=Date.now(); save(); } }catch(e){ if(!e.offline){ c.err=e.message; save(); } }
+  progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.40";
+const APP_VERSION="2026.10.18.41";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

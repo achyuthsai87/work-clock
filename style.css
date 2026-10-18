@@ -1066,3 +1066,28 @@ html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme
 
 .fs-av{position:absolute; top:calc(env(safe-area-inset-top,0px) + 16px); right:18px; z-index:2; pointer-events:none}
 .fs-av .av-type{background:#1b2540; border-color:rgba(255,255,255,.18)}
+
+/* sync: animated dots + live progress bar */
+.sdots{display:inline-flex; align-items:flex-end; gap:3px; margin-left:5px; height:.9em}
+.sdots i{width:4px; height:4px; border-radius:50%; background:currentColor; animation:avDot 1.05s ease-in-out infinite}
+.sdots i:nth-child(2){animation-delay:.15s} .sdots i:nth-child(3){animation-delay:.3s}
+#syncStatus.busy::before{animation:pulse 1.2s ease-out infinite}
+.sync-bar{height:5px; border-radius:4px; background:color-mix(in srgb,var(--ink) 9%,transparent); overflow:hidden; margin:2px 2px 8px; transition:opacity .45s ease}
+.sync-bar[hidden]{display:none}
+.sync-bar.fade{opacity:0}
+.sync-bar i{display:block; height:100%; width:0; border-radius:4px; background:linear-gradient(90deg,var(--accent),#34c759); transition:width .4s cubic-bezier(.3,.9,.3,1); position:relative; overflow:hidden}
+.sync-bar i::after{content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent); transform:translateX(-100%); animation:sbShine 1.15s linear infinite}
+@keyframes sbShine{to{transform:translateX(100%)}}
+@media (prefers-reduced-motion:reduce){.sdots i,.sync-bar i::after,#syncStatus.busy::before{animation:none}.sync-bar i{transition:none}}
+/* name with a pencil */
+.prof-name{flex:1; min-width:0; display:flex; align-items:center; gap:8px}
+.prof-name[hidden],.prof-edit[hidden]{display:none}
+.prof-name .nm{font-size:20px; font-weight:700; letter-spacing:-.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer}
+.prof-name .nm.empty{color:var(--muted); font-weight:500; font-size:17px}
+.pencil{flex:none; width:30px; height:30px; border:0; border-radius:50%; background:var(--chip); color:var(--accent); display:grid; place-items:center; cursor:pointer; padding:0}
+.pencil svg{width:15px; height:15px}
+.prof-edit{flex:1; min-width:0; display:flex; align-items:center; gap:8px}
+.prof-edit input{flex:1; min-width:0; font-size:16px; padding:10px 12px; border-radius:14px; border:1px solid var(--field-bd); background:var(--input-bg); color:var(--ink); font-family:inherit}
+/* photos fill the circle */
+.av-face img,.av-face svg{border-radius:50%; clip-path:circle(50% at 50% 50%); object-fit:cover}
+.av-face{-webkit-mask-image:none}

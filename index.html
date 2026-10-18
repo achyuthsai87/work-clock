@@ -236,7 +236,8 @@
 <div class="card" id="profileCard">
     <div class="pay-h">Profile</div>
     <div class="prof-top"><div class="av big still" id="profPrev"><span class="av-face"></span></div>
-      <div class="field" style="flex:1;margin:0"><label for="profName">Your name</label><input id="profName" type="text" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="e.g. Mohindra Prakash"></div></div>
+      <div class="prof-name" id="nameView"><span id="nameText" class="nm">Add your name</span><button type="button" class="pencil" id="nameEdit" aria-label="Edit name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button></div>
+      <div class="prof-edit" id="nameBox" hidden><input id="profName" type="text" maxlength="30" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Your name" aria-label="Your name"><button type="button" class="icon-btn" id="nameDone">Done</button></div></div>
     <div class="sub" style="margin:12px 2px 8px">Picture</div>
     <div class="av-grid" id="avGrid"></div>
     <div class="prof-links"><button type="button" class="link" id="avUpload">Upload a photo</button><button type="button" class="link danger-link" id="avRemove" hidden>Remove photo</button></div>
@@ -315,7 +316,8 @@
         <ol><li>URL: the web app URL of your main sheet (tap it in the list above)</li><li>Method: <b>POST</b></li><li>Request Body: <b>JSON</b>, with three Text fields:<br><code>action</code> = <code>punch</code><br><code>kind</code> = <code>in</code> (or <code>out</code>)<br><code>secret</code> = that sheet's secret</li></ol>
         <p>Then in Shortcuts → Automation, add <b>Arrive</b> at work → run Clock In (and <b>Leave</b> → Clock Out), or put them on the Action Button or a Lock Screen widget. Open Work Clock afterwards and the shift appears with the exact time you tapped. The app has to be open for sync to pull it in, and Auto-sync must be on.</p>
       </div></details>
-    <div class="settings-row"><span id="syncStatus">Not set up</span><button class="icon-btn" id="syncNowBtn">Sync now</button></div>
+    <div class="settings-row"><span id="syncStatus" role="status" aria-live="polite">Not set up</span><button class="icon-btn" id="syncNowBtn">Sync now</button></div>
+    <div class="sync-bar" id="syncBar" hidden role="progressbar" aria-label="Sync progress" aria-valuemin="0" aria-valuemax="100"><i></i></div>
   </div>
 
 <div class="card">
