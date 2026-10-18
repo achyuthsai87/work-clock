@@ -433,7 +433,8 @@ $("jobSave").onclick=()=>{
     const c=cleanJob({id:jobEditId||("j"+Date.now().toString(36)+Math.random().toString(36).slice(2,4)), name, rate}); if(!c) return;
     db.jobs=db.jobs||[]; const i=db.jobs.findIndex(x=>x.id===c.id); if(i>=0) db.jobs[i]=c; else db.jobs.push(c); }
   save(); closeJob(); render(); queueMeta(); };
-$("jobLeave").onclick=()=>{ const j=(db.jobs||[]).find(x=>x.id===jobEditId); if(!j) return;
+$("jobLeave").onclick=async()=>{ const j=(db.jobs||[]).find(x=>x.id===jobEditId); if(!j) return;
+  if(!j.left && !await askConfirm("Leave "+j.name+"?", "You won't be able to add new shifts or clock in for it, and its shifts will be hidden from History, Analytics and Calendar. Your earnings still count in your totals. You can come back to it anytime from Settings.", "Yes, I left", false)) return;
   if(j.left) delete j.left; else { j.left=dayKey(Date.now()); if(db.activeJob===j.id) delete db.activeJob; }
   save(); closeJob(); render(); queueMeta(); };
 $("jobDelete").onclick=async()=>{
@@ -1417,7 +1418,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.5";
+const APP_VERSION="2026.10.18.6";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
