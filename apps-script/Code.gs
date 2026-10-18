@@ -27,7 +27,7 @@ function style_(sh) {
 }
 
 const PAY_SHEET = "Payments";
-const PAY_HEADERS = ["id", "Date", "Month", "Amount", "Note", "ts", "Gross"];
+const PAY_HEADERS = ["id", "Date", "Month", "Amount", "Note", "ts", "Gross", "Job"];
 
 function payStyle_(p) {
   try {
@@ -44,7 +44,10 @@ function paySheet_(ss) {
   let p = ss.getSheetByName(PAY_SHEET);
   if (!p) p = ss.insertSheet(PAY_SHEET);
   if (p.getLastRow() === 0) { p.appendRow(PAY_HEADERS); payStyle_(p); }
-  else if (p.getRange(1, 7).getValue() !== "Gross") p.getRange(1, 7).setValue("Gross").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
+  else {
+    if (p.getRange(1, 7).getValue() !== "Gross") p.getRange(1, 7).setValue("Gross").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
+    if (p.getRange(1, 8).getValue() !== "Job") p.getRange(1, 8).setValue("Job").setFontWeight("bold").setBackground("#2f6fed").setFontColor("#ffffff");
+  }
   return p;
 }
 
@@ -177,7 +180,7 @@ function cleanPay_(p) {
   if (!isFinite(ts) || ts < 9.46e11 || !isFinite(amt) || amt <= 0 || amt > 1e7) return null;
   const txt = (v, n) => String(v == null ? "" : v).replace(/[^\w ,:.\-\/]/g, "").replace(/^[\-]+/, "").slice(0, n);
   const g = Math.round(Number(p.gross) * 100) / 100;
-  return [String(p.id), txt(p.date, 40), txt(p.month, 10), amt, txt(p.note, 60), ts, (p.gross != null && isFinite(g) && g >= amt && g <= 1e7) ? g : ""];
+  return [String(p.id), txt(p.date, 40), txt(p.month, 10), amt, txt(p.note, 60), ts, (p.gross != null && isFinite(g) && g >= amt && g <= 1e7) ? g : "", ID_RE.test(String(p.job || "")) ? String(p.job) : ""];
 }
 
 function idMap_(sh) {
@@ -256,7 +259,7 @@ function doPost(e) {
       const p = paySheet_(SpreadsheetApp.getActiveSpreadsheet()), n = p.getLastRow() - 1;
       const rows = n > 0 ? p.getRange(2, 1, n, PAY_HEADERS.length).getValues() : [];
       return out_({ ok: true, payments: rows.filter(r => r[0] && r[5])
-        .map(r => ({ id: String(r[0]), ts: Number(r[5]), amount: Number(r[3]) || 0, note: String(r[4] || ""), gross: r[6] === "" || r[6] == null ? undefined : Number(r[6]) })) });
+        .map(r => ({ id: String(r[0]), ts: Number(r[5]), amount: Number(r[3]) || 0, note: String(r[4] || ""), gross: r[6] === "" || r[6] == null ? undefined : Number(r[6]), job: String(r[7] || "") })) });
     }
 
     if (b.action === "pupsert" || b.action === "pbulk") {

@@ -31,6 +31,7 @@ function cleanPayment(p){
   const id = String(p.id == null ? "" : p.id), ts = Number(p.ts), amt = Math.round(Number(p.amount) * 100) / 100;
   if(!ID_RE.test(id) || !Number.isFinite(ts) || ts < MIN_TS || ts > MAX_TS || !Number.isFinite(amt) || amt <= 0 || amt > 10000000) return null;
   const out = {id, ts, amount: amt, note: cleanText(p.note, 60)}; const g = Math.round(Number(p.gross) * 100) / 100; if(p.gross != null && p.gross !== "" && Number.isFinite(g) && g >= amt && g <= 10000000) out.gross = g;
+  if(p.job != null && p.job !== "" && ID_RE.test(String(p.job))) out.job = String(p.job);
   return out;
 }
 const HM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -1078,7 +1079,7 @@ function queueSettings(){   // only the newest settings matter, so replace any w
   db.outbox=(db.outbox||[]).filter(e=>e.action!=="sset");
   queueSync({action:"sset", settings:settingsPayload()});
 }
-function payPayload(p){ return {id:p.id, date:fmtDate(p.ts), month:monthKey(p.ts), amount:p.amount, note:p.note, ts:p.ts, gross:p.gross}; }
+function payPayload(p){ return {id:p.id, date:fmtDate(p.ts), month:monthKey(p.ts), amount:p.amount, note:p.note, ts:p.ts, gross:p.gross, job:p.job||""}; }
 // Talk to the script and READ the reply, so wrong secrets / bad deployments show up as errors.
 async function syncCall(body){
   const c=syncCfg(); window.__syncStep=body&&body.action;
@@ -1634,7 +1635,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.34";
+const APP_VERSION="2026.10.18.35";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1788,6 +1789,8 @@ window.addEventListener("resize",()=>{ drawChart(); if(document.getElementById("
 
 // ---------- Pay: what the owner has actually paid you vs what you've earned ----------
 const pays=()=>db.payments||(db.payments=[]);
+let payJob="all";   // which job the Pay tab is showing
+const payOk=(p,f)=>f==="all" ? !jobLeft(p.job) : (f==="main" ? !p.job || !(db.jobs||[]).some(j=>j.id===p.job) : p.job===f);
 const credit=p=>(db.netTrack && p.gross!=null) ? p.gross : p.amount;   // what a payment settles: the gross wages it covers, if you track that
 const cycleOf=()=>db.payCycle || (db.payday ? "monthly" : "");
 function paydays(){   // {prev, next}: the latest payday on or before today and the next one after it
@@ -1829,7 +1832,8 @@ $("expDelete").onclick=async()=>{ const id=expEditId; if(!await askConfirm("Dele
   db.expenses=(db.expenses||[]).filter(x=>x.id!==id); if(!db.expenses.length) delete db.expenses; save(); closeExp(); render(); queueMeta(); };
 sheetDrag($("expBg"), closeExp);
 function renderPay(){
-  const done=db.shifts.filter(s=>s.end), P=pays();
+  { const on=hasJobs(); $("payJobRow").hidden=!on; if(!on) payJob="all"; else { if(payJob!=="all"&&payJob!=="main"&&!(db.jobs||[]).some(j=>j.id===payJob)) payJob="all"; jobChips($("payChips"), payJob, v=>{ payJob=v; renderPay(); }, {all:true, main:"main", left:true}); } }
+  const done=db.shifts.filter(s=>s.end && jobOk(s,payJob)), P=pays().filter(p=>payOk(p,payJob));
   const earned=done.reduce((a,s)=>a+pay(s),0), recv=P.reduce((a,p)=>a+credit(p),0), owed=Math.round((earned-recv)*100)/100, took=P.reduce((a,p)=>a+p.amount,0), held=Math.round((recv-took)*100)/100;
   $("payEarned").textContent=money(earned); $("payRecv").textContent=money(recv);
   { const h=$("payHeld"); h.hidden=!(db.netTrack && held>0.004); if(!h.hidden) h.textContent="Take-home so far "+money(took)+" \u00b7 "+money(held)+" held back before it reached you"; }
@@ -1866,7 +1870,7 @@ function renderPay(){
   if(!sorted.length){ const d=document.createElement("div"); d.className="empty"; d.textContent="No payments logged yet."; lb.appendChild(d); }
   sorted.forEach(p=>{
     const r=document.createElement("div"), a=document.createElement("div"), b=document.createElement("div"), m=document.createElement("b"), n=document.createElement("small"), e=document.createElement("button"), d=document.createElement("button");
-    r.className="prow"; m.textContent=money(p.amount); n.textContent=fmtDate(p.ts)+(p.note?" \u00b7 "+p.note:"");
+    r.className="prow"; m.textContent=money(p.amount); n.textContent=fmtDate(p.ts)+(hasJobs()?" \u00b7 "+jobName(p.job):"")+(p.note?" \u00b7 "+p.note:"");
     a.appendChild(m); a.appendChild(document.createElement("br")); a.appendChild(n);
     e.className="icon-btn"; e.textContent="Edit"; e.onclick=()=>openPay(p); d.className="icon-btn danger"; d.textContent="Delete";
     d.onclick=async()=>{ if(!await askConfirm("Delete this payment?", money(p.amount)+" · "+fmtDate(p.ts)+(p.note?" · "+p.note:"")+". You can undo right after.", "Delete", true)) return; db.payments=pays().filter(x=>x.id!==p.id); save(); render(); queueSync({action:"pdelete", id:p.id});
@@ -1906,36 +1910,39 @@ let payEditing=null;
 function openPay(p){
   payEditing=p?p.id:null; $("payTitle").textContent=p?"Edit payment":"Log payment";
   $("payAmt").value=p?p.amount:""; $("payGrossF").hidden=!db.netTrack; $("payGross").value=(p&&p.gross!=null)?p.gross:""; $("payDate").value=dayKey(p?p.ts:Date.now()); $("payNote").value=p?p.note:"";
+  { const on=hasJobs(); $("payJobF").hidden=!on; if(on){ const sel=$("payJobSel"); sel.innerHTML=""; const add=(v,t)=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); };
+      add("",jobName("")); (db.jobs||[]).forEach(j=>{ if(!j.left || (p&&p.job===j.id)) add(j.id,j.name+(j.left?" (left)":"")); });
+      const want=p?(p.job||""):(payJob==="all"||payJob==="main"?(payJob==="main"?"":(db.activeJob||"")):payJob); sel.value=[...sel.options].some(o=>o.value===want)?want:""; } }
   $("payBg").classList.add("open");
 }
 function closePay(){ $("payBg").classList.remove("open"); payEditing=null; }
 $("payAdd").onclick=()=>openPay(null);
 $("payCancel").onclick=closePay;
 $("payBg").addEventListener("click",e=>{ if(e.target===$("payBg")) closePay(); });
-$("payFill").onclick=()=>{ const earned=db.shifts.filter(s=>s.end).reduce((a,s)=>a+pay(s),0), recv=pays().reduce((a,p)=>a+credit(p),0), o=Math.round((earned-recv)*100)/100; if(o>0){ if(db.netTrack){ $("payGross").value=o; } else $("payAmt").value=o; } };
+$("payFill").onclick=()=>{ const f=hasJobs()?($("payJobSel").value||"main"):"all", earned=db.shifts.filter(s=>s.end && jobOk(s,f)).reduce((a,s)=>a+pay(s),0), recv=pays().filter(p=>payOk(p,f)).reduce((a,p)=>a+credit(p),0), o=Math.round((earned-recv)*100)/100; if(o>0){ if(db.netTrack){ $("payGross").value=o; } else $("payAmt").value=o; } };
 $("paySave").onclick=()=>{
   const amt=Math.round(parseFloat($("payAmt").value)*100)/100, dv=$("payDate").value;
   if(!Number.isFinite(amt)||amt<=0||amt>10000000){ alert("Enter the amount you received."); return; }
   if(!dv){ alert("Pick the date you were paid."); return; }
   const ts=new Date(dv+"T12:00:00").getTime(), note=$("payNote").value;
   const gv=db.netTrack&&$("payGross").value!==""?parseFloat($("payGross").value):undefined; if(gv!==undefined&&!(gv>=amt)){ alert("Gross wages can't be less than what you received."); return; }
-  const c=cleanPayment({id:payEditing||uid(), ts, amount:amt, note, gross:gv}); if(!c){ alert("That payment doesn't look right."); return; }
+  const c=cleanPayment({id:payEditing||uid(), ts, amount:amt, note, gross:gv, job:hasJobs()?$("payJobSel").value:""}); if(!c){ alert("That payment doesn't look right."); return; }
   if(payEditing){ const i=pays().findIndex(x=>x.id===payEditing); if(i>=0) db.payments[i]=c; else pays().push(c); } else pays().push(c);
   save(); closePay(); render(); queueSync({action:"pupsert", payment:payPayload(c)});
 };
 
 // ---------- Pay statement (for the owner): shifts, wages, tips, payments and the balance ----------
-function buildStatement(fromTs, toTs){
-  const done=db.shifts.filter(s=>s.end).sort((a,b)=>a.start-b.start);
+function buildStatement(fromTs, toTs, jf){
+  jf=jf||"all"; const done=db.shifts.filter(s=>s.end && jobOk(s,jf)).sort((a,b)=>a.start-b.start);
   const inR=done.filter(s=>s.start>=fromTs && s.start<=toTs);
   const hours=inR.reduce((a,s)=>a+hrs(s),0), wages=inR.reduce((a,s)=>a+pay(s),0);
   const earnedTo=done.filter(s=>s.start<=toTs).reduce((a,s)=>a+pay(s),0);
-  const paidTo=pays().filter(p=>p.ts<=toTs).reduce((a,p)=>a+credit(p),0);
-  const payIn=pays().filter(p=>p.ts>=fromTs && p.ts<=toTs).sort((a,b)=>a.ts-b.ts);
-  return {inR, hours, wages, earnedTo, paidTo, owed:Math.round((earnedTo-paidTo)*100)/100, payIn, fromTs, toTs};
+  const paidTo=pays().filter(p=>payOk(p,jf) && p.ts<=toTs).reduce((a,p)=>a+credit(p),0);
+  const payIn=pays().filter(p=>payOk(p,jf) && p.ts>=fromTs && p.ts<=toTs).sort((a,b)=>a.ts-b.ts);
+  return {inR, hours, wages, earnedTo, paidTo, owed:Math.round((earnedTo-paidTo)*100)/100, payIn, fromTs, toTs, jf, jobLabel:(hasJobs()&&jf!=="all")?jobName(jf==="main"?"":jf):""};
 }
 function statementText(S){
-  const L=["Pay statement "+fmtDate(S.fromTs)+" to "+fmtDate(S.toTs), ""];
+  const L=["Pay statement"+(S.jobLabel?" \u2013 "+S.jobLabel:"")+" "+fmtDate(S.fromTs)+" to "+fmtDate(S.toTs), ""];
   S.inR.forEach(s=>L.push(fmtDate(s.start)+"  "+fmtTime(s.start)+" - "+fmtTime(s.end)+"  "+hrs(s).toFixed(2)+"h @ "+money(rateOf(s))+"  "+money(pay(s))));
   L.push("", "Hours: "+S.hours.toFixed(2), "Wages: "+money(S.wages));
   if(S.payIn.length){ L.push("", "Payments received:"); S.payIn.forEach(p=>L.push(fmtDate(p.ts)+"  "+money(credit(p))+(db.netTrack&&p.gross!=null?" (take-home "+money(p.amount)+")":"")+(p.note?"  "+p.note:""))); }
@@ -1947,7 +1954,7 @@ function showStatement(S){
   stmtText=statementText(S);
   const pg=$("stmtPage"); pg.textContent="";
   const el=(tag,txt,cls)=>{ const e=document.createElement(tag); if(txt!=null) e.textContent=txt; if(cls) e.className=cls; return e; };
-  pg.appendChild(el("h1","Pay statement"));
+  pg.appendChild(el("h1","Pay statement"+(S.jobLabel?" \u2013 "+S.jobLabel:"")));
   pg.appendChild(el("div",fmtDate(S.fromTs)+" \u2013 "+fmtDate(S.toTs)+"","muted"));
   const tb=el("table"), hd=el("tr"); ["Date","In","Out","Hours","Rate","Wages"].forEach(h=>hd.appendChild(el("th",h))); tb.appendChild(hd);
   S.inR.forEach(s=>{ const r=el("tr"); [fmtDate(s.start),fmtTime(s.start),fmtTime(s.end),hrs(s).toFixed(2),money(rateOf(s))+"/hr",money(pay(s))].forEach(v=>r.appendChild(el("td",v))); tb.appendChild(r); });
@@ -1962,7 +1969,7 @@ function showStatement(S){
   $("stmt").hidden=false; document.body.classList.add("stmt-open");
 }
 function closeStmt(){ $("stmt").hidden=true; document.body.classList.remove("stmt-open"); }
-$("stmtBtn").onclick=()=>{ $("stmtPd").style.display=paydays()?"":"none"; const n=new Date(); $("stmtFrom").value=dayKey(new Date(n.getFullYear(),n.getMonth(),1).getTime()); $("stmtTo").value=dayKey(Date.now()); $("stmtBg").classList.add("open"); };
+$("stmtBtn").onclick=()=>{ { const on=hasJobs(); $("stmtJobF").hidden=!on; if(on){ const sel=$("stmtJob"); sel.innerHTML=""; const add=(v,t)=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); }; add("all","All jobs"); add("main",jobName("")); (db.jobs||[]).forEach(j=>add(j.id,j.name+(j.left?" (left)":""))); sel.value=[...sel.options].some(o=>o.value===payJob)?payJob:"all"; } } $("stmtPd").style.display=paydays()?"":"none"; const n=new Date(); $("stmtFrom").value=dayKey(new Date(n.getFullYear(),n.getMonth(),1).getTime()); $("stmtTo").value=dayKey(Date.now()); $("stmtBg").classList.add("open"); };
 $("stmtQuick").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return;
   const n=new Date(), y=n.getFullYear(), m=n.getMonth(), K=d=>dayKey(d.getTime()); let a,z=new Date(n);
   if(b.dataset.q==="month") a=new Date(y,m,1);
@@ -1975,7 +1982,7 @@ $("stmtBg").addEventListener("click",e=>{ if(e.target===$("stmtBg")) $("stmtBg")
 $("stmtGo").onclick=()=>{
   const f=$("stmtFrom").value, t=$("stmtTo").value; if(!f||!t){ alert("Pick both dates."); return; }
   const a=new Date(f+"T00:00:00").getTime(), b=new Date(t+"T23:59:59").getTime(); if(!(b>=a)){ alert("The end date is before the start date."); return; }
-  $("stmtBg").classList.remove("open"); showStatement(buildStatement(a,b));
+  $("stmtBg").classList.remove("open"); showStatement(buildStatement(a,b,hasJobs()?$("stmtJob").value:"all"));
 };
 $("stmtClose").onclick=closeStmt;
 $("stmtPrint").onclick=()=>window.print();
