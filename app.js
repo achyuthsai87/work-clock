@@ -382,10 +382,10 @@ function render(){
   { const line=$("planLine"), pls=db.plans||[]; const dn=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
     const f=t=>{ const [hh,mm]=t.split(":").map(Number); const d=new Date(); d.setHours(hh,mm,0,0); return fmtTime(d.getTime()); };
     if(pls.length===1){ const pl=pls[0];
-      line.textContent="Planned: "+f(pl.start)+" – "+f(pl.end)+" · "+(pl.once?(pl.once===dayKey(Date.now())?"today":fmtDay(new Date(pl.once+"T12:00:00").getTime())):[1,2,3,4,5,6,0].filter(x=>pl.days.includes(x)).map(x=>dn[x]).join(" "));
+      line.textContent=f(pl.start)+" – "+f(pl.end)+" · "+(pl.once?(pl.once===dayKey(Date.now())?"today":fmtDay(new Date(pl.once+"T12:00:00").getTime())):[1,2,3,4,5,6,0].filter(x=>pl.days.includes(x)).map(x=>dn[x]).join(" "));
       line.style.display=""; $("planBtn").textContent="Edit"; }
     else if(pls.length>1){ const nx=nextPlanned(); line.textContent=pls.length+" planned shifts"+(nx?" · next "+(nx.today?"today ":fmtDay(nx.day)+" ")+f(nx.plan.start):""); line.style.display=""; $("planBtn").textContent="Calendar"; }
-    else { line.textContent=""; line.style.display="none"; $("planBtn").textContent="Plan a shift"; } }
+    else { line.textContent="Nothing planned yet"; line.style.display=""; $("planBtn").textContent="Plan a shift"; } }
   clearInterval(liveTimer);
   if(open && jobOk(open,homeJob) && dayKey(open.start)===today){ const upd=()=>{ const h=(Date.now()-open.start)/3600000, hh=(db.breakMin>0&&h>=(db.breakAfter||6))?Math.max(0,h-db.breakMin/60):h;
       $("heroEarn").textContent=money(et+hh*rateOf(open)); $("heroSub").textContent=(th+hh).toFixed(2)+"h so far today"+(tt>0?" · + "+money(tt)+" tips":""); };
@@ -1977,7 +1977,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.46";
+const APP_VERSION="2026.10.18.47";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

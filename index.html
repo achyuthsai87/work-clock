@@ -70,6 +70,10 @@
     <button id="cancelShift" class="cancel-shift" style="display:none">Discard this shift</button>
     <span id="tipToday" hidden></span>
     <div class="quickrow"><button id="tipBtn" class="link">Add tip</button><i></i><button id="manualBtn" class="link">Add shift</button></div>
+  </div>
+
+<div class="card planbox">
+    <div class="pay-h">Planned shifts</div>
     <div class="planrow"><div id="planLine" class="plan-line"></div><button id="planBtn" class="link">Plan a shift</button></div>
   </div>
 
@@ -498,12 +502,11 @@
   <div class="fs-track" id="fsTrack" aria-hidden="true" hidden><i id="fsFill"></i><i id="fsExtra" class="x"></i><u class="sp" style="left:18%"></u><u class="sp" style="left:50%"></u><u class="sp" style="left:82%"></u></div>
   <div class="fs-plan" id="fsPlan" hidden></div>
   <div class="fs-earn" id="fsEarn"></div>
+  <div class="fs-row"><button id="fsBreak" class="fs-sub fs-brk" type="button">Break</button></div>
+  <button id="fsStart" class="fs-sub">Started late? Change start time</button>
   </div>
   <div class="fs-bot">
   <button id="fsOut" class="fs-out">Clock Out</button>
-  <div class="fs-row"><button id="fsBreak" class="fs-sub fs-brk" type="button">Break</button></div>
-  <button id="fsStart" class="fs-sub">Started late? Change start time</button>
-
   </div>
   <button id="fsMin" class="fs-min" aria-label="Minimise timer"><span class="fs-chev" aria-hidden="true"></span><span>Swipe up to minimise</span></button>
 </div>

@@ -1103,3 +1103,15 @@ html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme
 .range{display:flex; align-items:center; gap:10px}
 .range input{flex:1; min-width:0}
 .range span{color:var(--muted); font-size:14px}
+
+/* planned shifts card */
+.planbox .pay-h{margin-bottom:6px}
+.planbox .planrow{justify-content:space-between; margin-top:0; flex-wrap:nowrap; gap:12px}
+.planbox .plan-line{font-size:14.5px; color:var(--ink); flex:1; min-width:0}
+.planbox .planrow .link{flex:none}
+/* full-screen clock: timer higher, break/late under it, Clock Out low beside "swipe up" */
+.fs-clock{padding-top:calc(env(safe-area-inset-top) + 40px); padding-bottom:calc(env(safe-area-inset-bottom) + 86px)}
+.fs-clock > .fs-mid{flex:1 1 auto; justify-content:flex-start; padding-top:5vh; padding-bottom:0; gap:20px}
+.fs-clock .fs-mid .fs-row{margin-top:10px}
+.fs-clock .fs-mid .fs-sub{margin-top:0}
+.fs-clock > .fs-bot{margin-top:auto; padding-bottom:6px}
