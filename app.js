@@ -521,7 +521,7 @@ function drawChart(){
   $("monNext").disabled=monOff>=0; $("monPrev").disabled=!fk || fk>=keys[0];
   const cs=getComputedStyle(document.documentElement);
   const colMuted=(cs.getPropertyValue("--muted")||"#6b7686").trim(), colInk=(cs.getPropertyValue("--ink")||"#1b2430").trim();
-  const padL=8, padB=26, padT=40, cw=(W-padL)/6, bh=H-padB-padT;
+  const padL=8, padB=26, padT=64, cw=(W-padL)/6, bh=H-padB-padT;
   monGeom={keys, padL, cw};
   ctx.font="11px -apple-system, sans-serif"; ctx.textAlign="center";
   keys.forEach((k,i)=>{
@@ -532,8 +532,9 @@ function drawChart(){
     ctx.fillStyle=g; ctx.beginPath(); ctx.roundRect(x-bw/2, H-padB-wh, bw, wh, th>0.5?[0,0,6,6]:6); ctx.fill();
     if(th>0.5){ ctx.fillStyle="#f06aa8"; ctx.beginPath(); ctx.roundRect(x-bw/2, top, bw, th, [6,6,0,0]); ctx.fill(); }
     ctx.fillStyle=k===monSel?colInk:colMuted; const [mn,yr]=monthLabel(k).split(" "); ctx.fillText(mn+(k.endsWith("-01")?" \u2019"+yr.slice(2):""), x, H-10);
-    if(v>0){ ctx.fillStyle=colInk; ctx.font="600 11px -apple-system, sans-serif"; ctx.fillText("$"+Math.round(sums[k]), x, top-(tipS[k]>0?19:6));
-      if(tipS[k]>0){ ctx.fillStyle="#e0558f"; ctx.font="11px -apple-system, sans-serif"; ctx.fillText("+$"+Math.round(tipS[k]), x, top-6); } ctx.font="11px -apple-system, sans-serif"; }
+    if(v>0){ const hasT=tipS[k]>0.004, f="-apple-system, sans-serif"; let yy=top-6;
+      if(hasT){ ctx.fillStyle="#e0558f"; ctx.font="600 10.5px "+f; ctx.fillText("+$"+Math.round(tipS[k]), x, yy); yy-=13; ctx.fillStyle="#1a9b66"; ctx.fillText("$"+Math.round(sums[k]), x, yy); yy-=14; }
+      ctx.fillStyle=colInk; ctx.font="700 12px "+f; ctx.fillText("$"+Math.round(v), x, yy); ctx.font="11px "+f; }
   });
   renderMonWeeks();
 }
@@ -1542,7 +1543,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.17";
+const APP_VERSION="2026.10.18.18";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
