@@ -859,3 +859,11 @@ html[data-theme] .page-title{ font-size:34px; font-weight:750; letter-spacing:-.
 /* top edge: start from the exact colour iPhone paints in the status bar area (measured from a real screenshot), then melt into the page */
 html[data-theme="dark"] .edge-top{ background:linear-gradient(to bottom, #05080f 0%, #05080f calc(env(safe-area-inset-top)), color-mix(in srgb,#05080f 70%,transparent) calc(env(safe-area-inset-top) + 14px), color-mix(in srgb,#05080f 28%,transparent) calc(env(safe-area-inset-top) + 40px), transparent 100%); height:calc(env(safe-area-inset-top) + 76px); }
 @media (prefers-color-scheme:dark){ html[data-theme="auto"] .edge-top{ background:linear-gradient(to bottom, #05080f 0%, #05080f calc(env(safe-area-inset-top)), color-mix(in srgb,#05080f 70%,transparent) calc(env(safe-area-inset-top) + 14px), color-mix(in srgb,#05080f 28%,transparent) calc(env(safe-area-inset-top) + 40px), transparent 100%); height:calc(env(safe-area-inset-top) + 76px); } }
+
+/* pop-ups: the page behind never scrolls or takes taps; sheets sit above the keyboard */
+body.scroll-lock{position:fixed; left:0; right:0; width:100%; overflow:hidden}
+.modal-bg{inset:auto; left:0; right:0; top:var(--vvt,0px); height:var(--vvh,100%); touch-action:none; overscroll-behavior:contain}
+.modal{touch-action:pan-y; max-height:calc(var(--vvh,100dvh)*.92); overscroll-behavior:contain}
+.modal .grab{touch-action:none}
+.stmt{overscroll-behavior:contain}
+.lock{touch-action:none}

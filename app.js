@@ -1551,7 +1551,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.22";
+const APP_VERSION="2026.10.18.23";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1958,3 +1958,20 @@ if ("serviceWorker" in navigator) {
 let lastTouchEnd=0;
 document.addEventListener("touchend",e=>{ const n=Date.now(); if(n-lastTouchEnd<300 && !e.target.closest("input,textarea,select")) e.preventDefault(); lastTouchEnd=n; },{passive:false});
 document.addEventListener("touchmove",e=>{ if(e.touches.length>1) e.preventDefault(); },{passive:false});
+
+
+// ---- pop-ups: freeze the page behind them and keep them above the keyboard ----
+(function(){
+  let locked=false, savedY=0;
+  const need=()=>!!document.querySelector(".modal-bg.open") || document.body.classList.contains("fs-open");
+  function sync(){
+    const n=need();
+    if(n && !locked){ locked=true; savedY=window.scrollY; document.body.style.top=(-savedY)+"px"; document.body.classList.add("scroll-lock"); }
+    else if(!n && locked){ locked=false; document.body.classList.remove("scroll-lock"); document.body.style.top=""; window.scrollTo(0,savedY); }
+  }
+  new MutationObserver(sync).observe(document.body,{subtree:true,attributes:true,attributeFilter:["class"]});
+  const vv=window.visualViewport;
+  function vvSet(){ if(!vv) return; const r=document.documentElement.style; r.setProperty("--vvh",vv.height+"px"); r.setProperty("--vvt",vv.offsetTop+"px"); }
+  if(vv){ vv.addEventListener("resize",vvSet); vv.addEventListener("scroll",vvSet); vvSet(); }
+  document.addEventListener("focusin",e=>{ if(e.target.closest && e.target.closest(".modal-bg")) setTimeout(()=>{ vvSet(); try{ e.target.scrollIntoView({block:"nearest"}); }catch(_){} },300); });
+})();
