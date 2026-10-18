@@ -264,8 +264,8 @@ const hasJobs=()=>!!(db.jobs&&db.jobs.length);
 const jobOk=(s,f)=>f==="all" ? !jobLeft(s.job) : (f==="main" ? !s.job || !(db.jobs||[]).some(j=>j.id===s.job) : s.job===f);
 function S(){ return db.shifts.filter(s=>jobOk(s,jobFilter)); }   // shifts in view for Analytics
 
-function showFs(){ const el=$("fsClock"); if(!openShift()) return; el.hidden=false; document.body.classList.add("fs-open"); tickFs(); clearInterval(fsTimer); fsTimer=setInterval(tickFs,250); }
-function hideFs(){ const el=$("fsClock"); if(!el||el.hidden) return; el.hidden=true; document.body.classList.remove("fs-open"); clearInterval(fsTimer); }
+function showFs(){ const el=$("fsClock"); if(!openShift()) return; el.hidden=false; { const mc=document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute("content","#0b0f1a"); } document.body.classList.add("fs-open"); tickFs(); clearInterval(fsTimer); fsTimer=setInterval(tickFs,250); }
+function hideFs(){ const el=$("fsClock"); if(!el||el.hidden) return; el.hidden=true; applyTheme(); document.body.classList.remove("fs-open"); clearInterval(fsTimer); }
 let fsTimer=null;
 function tickFs(){ const o=openShift(); if(!o){ hideFs(); return; } const el=Math.max(0,Date.now()-o.start)/1000, h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
   $("fsTime").textContent=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0"); }
@@ -1501,7 +1501,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.13";
+const APP_VERSION="2026.10.18.14";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

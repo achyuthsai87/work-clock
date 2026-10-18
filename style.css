@@ -731,3 +731,7 @@ body.fs-open{overflow:hidden}
 
 /* the full-screen timer covers the tab bar; use Minimise to leave it */
 body.fs-open .tabbar{display:none}
+
+/* full-screen timer: blend into the status bar area so there is no visible band at the top */
+.fs-clock{background:radial-gradient(110% 60% at 50% 42%, #18274a 0%, #0b0f1a 62%, #06080f 100%)}
+html:has(body.fs-open), body.fs-open{background:#0b0f1a}
