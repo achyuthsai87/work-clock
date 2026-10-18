@@ -421,7 +421,7 @@ function openJob(id, existing){
   jobIsMain=existing && !id; jobEditId=id; const j=(db.jobs||[]).find(x=>x.id===id);
   $("jobTitle").textContent=jobIsMain?"Main job":(j?"Edit job":"Add a job");
   $("jobNameIn").value=jobIsMain?jobName(""):(j?j.name:""); $("jobRateIn").value=j?j.rate:"";
-  $("jobRateF").style.display=jobIsMain?"none":""; $("jobMainNote").style.display=jobIsMain?"":"none"; $("jobDelete").style.display=j?"":"none"; $("jobLeave").style.display=j?"":"none"; $("jobLeave").textContent=(j&&j.left)?"I'm back at this job":"I left this job";
+  $("jobRateF").style.display=jobIsMain?"none":""; $("jobMainNote").style.display=jobIsMain?"":"none"; $("jobDelete").style.display=(j&&j.left)?"":"none"; $("jobLeave").style.display=j?"":"none"; $("jobLeave").textContent=(j&&j.left)?"I'm back at this job":"I left this job";
   $("jobBg").classList.add("open"); }
 function closeJob(){ $("jobBg").classList.remove("open"); }
 $("jobAdd").onclick=()=>{ if((db.jobs||[]).length>=7){ alert("That's the maximum number of extra jobs."); return; } openJob(null,false); };
@@ -438,7 +438,7 @@ $("jobLeave").onclick=async()=>{ const j=(db.jobs||[]).find(x=>x.id===jobEditId)
   if(j.left) delete j.left; else { j.left=dayKey(Date.now()); if(db.activeJob===j.id) delete db.activeJob; }
   save(); closeJob(); render(); queueMeta(); };
 $("jobDelete").onclick=async()=>{
-  const id=expJobId(), j=(db.jobs||[]).find(x=>x.id===id); if(!j) return;
+  const id=expJobId(), j=(db.jobs||[]).find(x=>x.id===id); if(!j) return; if(!j.left) return;
   const mine=db.shifts.filter(s=>s.job===id), done=mine.filter(s=>s.end);
   const hh=done.reduce((t,x)=>t+hrs(x),0), ww=done.reduce((t,x)=>t+pay(x),0), pl=(db.plans||[]).filter(p=>p.job===id).length;
   const msg=done.length||mine.length
@@ -1422,7 +1422,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.7";
+const APP_VERSION="2026.10.18.8";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
