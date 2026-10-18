@@ -3,7 +3,7 @@
    - Pages, scripts, styles and the manifest are network-first, so pushed updates apply on the next
      online open with no reinstall. Offline falls back to the cached copy.
    - Only successful, same-origin responses are ever cached (no error pages, no opaque responses). */
-const CACHE = "workclock-v100";
+const CACHE = "workclock-v101";
 const ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./manifest.webmanifest",
   "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",

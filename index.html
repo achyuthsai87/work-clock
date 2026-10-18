@@ -415,14 +415,21 @@
 </div>
 <div id="fsClock" class="fs-clock" hidden role="dialog" aria-modal="true" aria-label="Shift timer">
   <div class="fs-glow" aria-hidden="true"></div>
+  <div class="fs-top">
   <div class="fs-live"><span class="dot"></span>Shift in progress</div>
+  </div>
+  <div class="fs-mid">
   <div class="fs-time" id="fsTime"><span id="fsH">00</span><i>:</i><span id="fsM">00</span><i>:</i><span id="fsS">00</span></div>
   <div class="fs-track" id="fsTrack" aria-hidden="true" hidden><i id="fsFill"></i><i id="fsExtra" class="x"></i><u class="sp" style="left:18%"></u><u class="sp" style="left:50%"></u><u class="sp" style="left:82%"></u></div>
   <div class="fs-plan" id="fsPlan" hidden></div>
   <div class="fs-earn" id="fsEarn"></div>
+  </div>
+  <div class="fs-bot">
   <button id="fsOut" class="fs-out">Clock Out</button>
   <div class="fs-row"><button id="fsBreak" class="fs-sub fs-brk" type="button">Break</button><button id="fsEnd" class="fs-sub" type="button">Set end time</button></div>
   <button id="fsStart" class="fs-sub">Started late? Change start time</button>
+
+  </div>
   <button id="fsMin" class="fs-min" aria-label="Minimise timer"><span class="fs-chev" aria-hidden="true"></span><span>Swipe up to minimise</span></button>
 </div>
 <div id="undoBar" class="toast" hidden><span id="undoTxt"></span><button id="undoBtn" class="link">Undo</button></div>

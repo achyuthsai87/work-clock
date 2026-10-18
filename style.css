@@ -903,3 +903,13 @@ html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme
 @keyframes fsGlint{0%{transform:translateX(0)}60%,100%{transform:translateX(420px)}}
 @keyframes fsTwinkle{0%,100%{opacity:.15; transform:scale(.6)}50%{opacity:1; transform:scale(1.25)}}
 @media (prefers-reduced-motion:reduce){ .fs-track.idle #fsFill,.fs-track.idle::after,.fs-track.idle u.sp{animation:none} .fs-track.idle::after{display:none} }
+
+.fs-clock{justify-content:flex-start; gap:0; padding:calc(env(safe-area-inset-top) + 64px) 24px calc(env(safe-area-inset-bottom) + 112px)}
+.fs-clock > .fs-top{flex:0 0 auto; display:flex; justify-content:center}
+.fs-clock > .fs-mid{flex:1 1 auto; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; padding-bottom:6vh}
+.fs-clock > .fs-bot{flex:0 0 auto; width:100%; display:flex; flex-direction:column; align-items:center; gap:14px}
+.fs-clock .fs-mid .fs-plan{margin-top:-10px}
+.fs-clock .fs-mid .fs-earn{margin-top:0}
+.fs-clock .fs-bot .fs-sub,.fs-clock .fs-bot .fs-row{margin-top:0}
+.fs-clock .fs-bot .fs-row{margin-top:2px}
+.fs-clock > .fs-mid{padding-bottom:2vh}
