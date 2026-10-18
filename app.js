@@ -23,7 +23,6 @@ function cleanShift(s){
   const nt = cleanText(s.note, 80); if(nt) o.note = nt;
   if(s.job != null && ID_RE.test(String(s.job))) o.job = String(s.job);
   for(const k of ["pin","pout"]) if(typeof s[k] === "string" && placeOk(s[k]) && (k === "pin" || end !== null)) o[k] = s[k];
-  const tg = Number(s.tgt); if(end === null && Number.isFinite(tg) && tg > start && tg - start <= MAX_SHIFT_MS) o.tgt = tg;
   const ae = Number(s.autoEnd); if(end === null && Number.isFinite(ae) && ae > start && ae - start <= MAX_SHIFT_MS) o.autoEnd = ae;
   return o;
 }
@@ -324,13 +323,12 @@ function planOf(o){   // the planned shift this clock-in belongs to, if any
   return null; }
 function tickFs(){ const o=openShift(); if(!o){ hideFs(); return; } const el=Math.max(0,Date.now()-o.start)/1000, h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60), p2=n=>String(n).padStart(2,"0");
   $("fsH").textContent=p2(h); $("fsM").textContent=p2(m); $("fsS").textContent=p2(s);
-  const pl=o.tgt?{S:o.start,E:o.tgt}:planOf(o), tr=$("fsTrack"), cap=$("fsPlan"); tr.hidden=false; tr.classList.toggle("idle",!pl); cap.hidden=!pl;
+  const pl=planOf(o), tr=$("fsTrack"), cap=$("fsPlan"); tr.hidden=false; tr.classList.toggle("idle",!pl); cap.hidden=!pl;
   { const jp=$("fsJob"); jp.hidden=!hasJobs(); if(hasJobs()){ $("fsJobName").textContent=jobName(o.job); $("fsClock").style.setProperty("--jc",jobColor(o.job)); } }
-  $("fsEnd").textContent=o.tgt?"Ends "+fmtTime(o.tgt)+" \u00b7 change":"Set end time";
   if(!pl){ $("fsFill").style.width="100%"; $("fsExtra").style.width="0%"; }
   if(pl){ const len=pl.E-pl.S, worked=hrs({start:o.start,end:Date.now(),brk:o.brk,bp:o.bp})*3600000, f=worked/len, ex=Math.max(0,worked-len)/60000;
     $("fsFill").style.width=(Math.min(f,1)*100).toFixed(1)+"%"; $("fsExtra").style.width=(f>1?Math.min(f-1,1)*100:0).toFixed(1)+"%";
-    cap.textContent=f<1 ? Math.floor(f*100)+"% of your "+(o.tgt?"shift":"planned shift")+" \u00b7 until "+fmtTime(pl.E) : (o.tgt?"Shift done":"Planned shift done")+(ex>=1?" \u00b7 +"+brkText(Math.round(ex))+" extra":""); }
+    cap.textContent=f<1 ? Math.floor(f*100)+"% of your "+"planned shift"+" \u00b7 until "+fmtTime(pl.E) : "Planned shift done"+(ex>=1?" \u00b7 +"+brkText(Math.round(ex))+" extra":""); }
   const hh=hrs({start:o.start,end:Date.now(),brk:o.brk,bp:o.bp}); $("fsEarn").textContent=money(hh*rateOf(o))+" earned so far"+(hasJobs()?" \u00b7 "+jobName(o.job):"");
   $("fsBreak").textContent=o.brk>0?"Break \u00b7 "+brkText(o.brk)+(o.bp?" (paid)":""):"Break"; }
 // Nudge to back up when history isn't saved anywhere else
@@ -1959,7 +1957,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.43";
+const APP_VERSION="2026.10.18.44";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -2419,32 +2417,20 @@ $("sndFile").addEventListener("change",async e=>{
   catch(_){ msg.textContent="Couldn't read that file. Try an MP3, M4A or WAV."; } });
 // the alarm itself: when the planned (or chosen) end time arrives while the app is open
 let alarmH=null, alarmShift=null;
-function endTimeOf(o){ if(o.tgt) return o.tgt; const p=planOf(o); return p?p.E:null; }
+function endTimeOf(o){ const p=planOf(o); return p?p.E:null; }
 function stopAlarm(){ if(alarmH){ alarmH.stop(); alarmH=null; } }
 function closeAlarm(){ stopAlarm(); $("alarmBg").classList.remove("open"); alarmShift=null; }
 function checkAlarm(){
   const o=openShift(); if(!o){ if(alarmShift) closeAlarm(); return; } const T=endTimeOf(o); if(!T || Date.now()<T) return; const s=snd(); if(!s.on) return;
   const tag=o.id+":"+T; let seen=""; try{ seen=localStorage.getItem("workclock.alarm")||""; }catch(_){} if(seen===tag) return; try{ localStorage.setItem("workclock.alarm",tag); }catch(_){}
   const late=Date.now()-T>10*60000; alarmShift=o.id;
-  $("alarmTxt").textContent=(o.tgt?"Your end time of ":"Your planned shift ended at ")+fmtTime(T)+(hasJobs()?" · "+jobName(o.job):"")+(late?" passed a while ago.":" has arrived.");
+  $("alarmTxt").textContent="Your planned shift ended at "+fmtTime(T)+(hasJobs()?" · "+jobName(o.job):"")+(late?" passed a while ago.":" has arrived.");
   $("alarmBg").classList.add("open"); if(!late){ startSound(s.pick,{loop:true,maxSec:30,vol:s.vol}).then(h=>{ if(alarmShift) alarmH=h; else h.stop(); }); }
 }
 setInterval(checkAlarm,1000); document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkAlarm(); });
 $("alarmStop").onclick=closeAlarm; $("alarmOut").onclick=()=>{ closeAlarm(); hideFs(); $("clockBtn").onclick(); };
 $("alarmBg").addEventListener("click",e=>{ if(e.target===$("alarmBg")) closeAlarm(); });
 loadSndMeta();
-// ---- optional end time for an unplanned shift (drives the progress bar; it does not clock you out) ----
-(function(){
-  const close=()=>$("tgBg").classList.remove("open"), p2=n=>String(n).padStart(2,"0");
-  $("fsEnd").onclick=()=>{ const o=openShift(); if(!o) return; const d=new Date(o.tgt||o.start+4*3600000); $("tgTime").value=p2(d.getHours())+":"+p2(d.getMinutes()); $("tgClear").hidden=!o.tgt; $("tgBg").classList.add("open"); };
-  $("tgQuick").addEventListener("click",e=>{ const b=e.target.closest("button"); const o=openShift(); if(!b||!o) return; const d=new Date(o.start+Number(b.dataset.h)*3600000); $("tgTime").value=p2(d.getHours())+":"+p2(d.getMinutes()); });
-  $("tgCancel").onclick=close; $("tgBg").addEventListener("click",e=>{ if(e.target===$("tgBg")) close(); }); sheetDrag($("tgBg"), close);
-  $("tgSave").onclick=()=>{ const o=openShift(), v=$("tgTime").value; if(!o||!HM_RE.test(v)){ close(); return; }
-    const [hh,mm]=v.split(":").map(Number), c=new Date(o.start); c.setHours(hh,mm,0,0); let t=c.getTime(); if(t<=o.start) t+=86400000;
-    if(t-o.start>MAX_SHIFT_MS){ alert("That end time is too far away."); return; }
-    o.tgt=t; save(); close(); tickFs(); };
-  $("tgClear").onclick=()=>{ const o=openShift(); if(o){ delete o.tgt; save(); tickFs(); } close(); };
-})();
 // ---- break: iPhone-style wheels for hours and minutes ----
 function brkText(m){ const h=Math.floor(m/60), r=m%60; return h?(r?h+"h "+r+"m":h+"h"):r+" min"; }
 (function(){
