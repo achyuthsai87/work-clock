@@ -990,3 +990,29 @@ html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme
 .sh-err[hidden]{display:none}
 .sh-more{display:flex; flex-direction:column; align-items:center; gap:2px; margin-top:8px}
 .sh-more[hidden],.sh-more .link[hidden]{display:none}
+
+/* iOS-style undo banner: glass capsule that drops in from the top */
+.toast.ios-banner{top:calc(env(safe-area-inset-top,0px) + 10px); bottom:auto; z-index:140; width:min(420px,calc(100% - 24px)); padding:12px 14px 13px 14px; border-radius:26px; gap:11px; overflow:hidden;
+  background:color-mix(in srgb,var(--card) 80%,transparent); border:.5px solid color-mix(in srgb,var(--ink) 14%,transparent);
+  -webkit-backdrop-filter:blur(28px) saturate(1.8); backdrop-filter:blur(28px) saturate(1.8);
+  box-shadow:0 14px 40px rgba(0,0,0,.22), inset 0 .5px 0 rgba(255,255,255,.35); font-size:15px; font-weight:600; color:var(--ink);
+  animation:ubIn .5s cubic-bezier(.2,1.1,.3,1) both}
+.toast.ios-banner.out{opacity:0; transform:translateX(-50%) translateY(-130%)}
+@keyframes ubIn{from{opacity:0; transform:translateX(-50%) translateY(-130%) scale(.96)}to{opacity:1; transform:translateX(-50%)}}
+.toast.ios-banner .ub-ico{display:grid; place-items:center; width:32px; height:32px; flex:none; border-radius:50%; background:color-mix(in srgb,var(--red,#ff453a) 16%,transparent); color:var(--red,#ff453a)}
+.toast.ios-banner .ub-ico svg{width:17px; height:17px}
+.toast.ios-banner #undoTxt{flex:1; min-width:0}
+.toast.ios-banner .link{margin:0; padding:7px 14px; border-radius:99px; background:color-mix(in srgb,var(--accent) 16%,transparent); color:var(--accent); font-weight:700; font-size:15px}
+.toast.ios-banner .ub-bar{position:absolute; left:14px; right:14px; bottom:4px; height:2.5px; border-radius:2px; background:color-mix(in srgb,var(--accent) 55%,transparent); transform-origin:left; animation:ubTimer 6s linear forwards}
+@keyframes ubTimer{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (prefers-reduced-motion:reduce){.toast.ios-banner{animation:none}.toast.ios-banner .ub-bar{animation:none}}
+/* location */
+.fs-loc{margin-top:8px; font-size:13px; color:rgba(255,255,255,.62); text-align:center}
+.fs-loc[hidden]{display:none}
+.floc{margin:2px 0 12px; padding:10px 12px; border-radius:14px; background:var(--chip); font-size:13px; color:var(--muted); line-height:1.5}
+.floc[hidden]{display:none}
+.floc-r b{color:var(--ink); margin-right:8px; font-weight:600}
+.floc-r a{margin-left:8px; color:var(--accent); font-weight:600; text-decoration:none}
+#locWork[hidden]{display:none}
+.settings-row small{display:block; font-size:12.5px; color:var(--muted); margin-top:2px; font-weight:400}
+#locWork .settings-row .icon-btn+.icon-btn{margin-left:6px}

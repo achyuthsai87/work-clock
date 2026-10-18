@@ -43,3 +43,7 @@ Each Google Sheet has its own script, URL and secret. Repeat the setup above for
 - The first sheet is the **main** sheet: your shifts are restored from it, and Shortcuts clock-ins are read from it. Open any sheet in the list to rename it, restore from it, make it the main sheet, or remove it.
 - Every change goes to all sheets. If one is unreachable its changes wait, and **Sync now** catches it up.
 - Names and URLs must be different for each sheet.
+
+## Where you clocked in and out
+
+The app notes your location at the moment you tap Clock in and Clock out (never in the background). The Shifts sheet gets four extra columns: **In place** and **Out place** (latitude, longitude, accuracy in metres) and **In from work (m)** and **Out from work (m)** (distance from the work location you set in Settings > Location). Paste a place into Google Maps to see it. Updating from an older Code.gs adds the columns in place.

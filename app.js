@@ -9,6 +9,8 @@ const KEY = "workclock.v1";
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const SYNC_URL_RE = /^https:\/\/script\.google\.com\/(?:macros|a\/macros\/[A-Za-z0-9.-]+)\/s\/[A-Za-z0-9_-]{8,200}\/exec$/;
 const MIN_TS = 946684800000, MAX_TS = 4102444800000, MAX_SHIFT_MS = 7*86400000;   // 2000..2100, 7 days
+const PLACE_RE = /^(-?\d{1,2}(?:\.\d{1,6})?),(-?\d{1,3}(?:\.\d{1,6})?),(\d{1,5})$/;
+function placeOk(v){ const m = PLACE_RE.exec(String(v)); return !!m && Math.abs(+m[1]) <= 90 && Math.abs(+m[2]) <= 180; }
 function cleanShift(s){
   if(!s || typeof s !== "object") return null;
   const id = String(s.id == null ? "" : s.id), start = Number(s.start), end = s.end == null ? null : Number(s.end);
@@ -20,6 +22,7 @@ function cleanShift(s){
   const bk = s.brk == null || s.brk === "" ? NaN : Math.round(Number(s.brk)); if(Number.isFinite(bk) && bk >= 0 && bk <= 720){ o.brk = bk; if(s.bp === 1 || s.bp === true || s.brkPaid === 1 || s.brkPaid === true) o.bp = 1; }
   const nt = cleanText(s.note, 80); if(nt) o.note = nt;
   if(s.job != null && ID_RE.test(String(s.job))) o.job = String(s.job);
+  for(const k of ["pin","pout"]) if(typeof s[k] === "string" && placeOk(s[k]) && (k === "pin" || end !== null)) o[k] = s[k];
   const tg = Number(s.tgt); if(end === null && Number.isFinite(tg) && tg > start && tg - start <= MAX_SHIFT_MS) o.tgt = tg;
   const ae = Number(s.autoEnd); if(end === null && Number.isFinite(ae) && ae > start && ae - start <= MAX_SHIFT_MS) o.autoEnd = ae;
   return o;
@@ -125,6 +128,10 @@ function cleanLocal(d){  // everything persisted on this device, incl. sync + lo
       out.sync.mirrors.push({id:String(m.id), name:nm, url:String(m.url), secret: typeof m.secret === "string" ? m.secret.slice(0,200) : "", err:"", last: Number.isFinite(Number(m.last)) ? Number(m.last) : 0,
         outbox:(Array.isArray(m.outbox) ? m.outbox : []).slice(0, 5000).map(e => cleanEvent(e, out.rate)).filter(Boolean)});
     });
+  }
+  if(d && d.loc && typeof d.loc === "object"){
+    out.loc = {on: d.loc.on === 0 ? 0 : 1, work: {}};
+    if(d.loc.work && typeof d.loc.work === "object") Object.keys(d.loc.work).slice(0, 12).forEach(k => { if((k === "" || ID_RE.test(k)) && placeOk(d.loc.work[k])) out.loc.work[k] = d.loc.work[k]; });
   }
   if(d && d.planDone && typeof d.planDone === "object"){ out.planDone = {};
     Object.keys(d.planDone).forEach(k => { const m = /^(?:([A-Za-z0-9_-]{1,64}):)?(\d{4}-\d{2}-\d{2})$/.exec(k); if(!m) return; const key = m[1] ? k : (d.plan && !d.plans ? "plan1:" + k : ""); if(key) out.planDone[key] = true; });
@@ -292,7 +299,7 @@ function jobStats(f){ const today=dayKey(Date.now()), mk=monthKey(Date.now()), r
   db.shifts.forEach(s=>{ if(!jobOk(s,f)) return; const tp=tipOf(s); if(tp){ if(dayKey(s.start)===today) r.tt+=tp; if(monthKey(s.start)===mk) r.mt+=tp; }
     if(!s.end) return; r.n++; const h=hrs(s), p=pay(s); r.ah+=h; r.aw+=p; if(dayKey(s.start)===today){ r.th+=h; r.tw+=p; } if(monthKey(s.start)===mk){ r.mh+=h; r.mw+=p; } }); return r; }
 
-function showFs(){ const el=$("fsClock"); if(!openShift()) return; el.hidden=false; { const mc=document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute("content","#0b0f1a"); } document.body.classList.add("fs-open"); tickFs(); { const jp=$("fsJob"); jp.classList.remove("pop"); void jp.offsetWidth; jp.classList.add("pop"); } clearInterval(fsTimer); fsTimer=setInterval(tickFs,250); }
+function showFs(){ const el=$("fsClock"); if(!openShift()) return; el.hidden=false; { const mc=document.querySelector('meta[name="theme-color"]'); if(mc) mc.setAttribute("content","#0b0f1a"); } document.body.classList.add("fs-open"); { const o=openShift(), el=$("fsLoc"); if(el && !el.textContent.startsWith("Getting")){ const t=o&&locOn()&&o.pin?placeNote(o,"pin"):""; el.textContent=t; el.hidden=!t; } } tickFs(); { const jp=$("fsJob"); jp.classList.remove("pop"); void jp.offsetWidth; jp.classList.add("pop"); } clearInterval(fsTimer); fsTimer=setInterval(tickFs,250); }
 function hideFs(){ const el=$("fsClock"); if(!el||el.hidden) return; el.hidden=true; el.style.transform=""; el.style.transition=""; el.classList.remove("dragging"); applyTheme(); document.body.classList.remove("fs-open"); clearInterval(fsTimer); }
 let fsTimer=null;
 function planOf(o){   // the planned shift this clock-in belongs to, if any
@@ -400,6 +407,8 @@ function render(){
       '<div class="m"><b>'+money(pay(s))+'</b><span class="chev" aria-hidden="true">\u203a</span></div>';
     row.dataset.edit=s.id; row.tabIndex=0; row.setAttribute("role","button"); row.setAttribute("aria-label","Edit shift "+fmtTime(s.start));
     if(s.note){ const nd=document.createElement("div"); nd.className="shnote"; nd.textContent="\uD83D\uDCDD "+s.note; row.appendChild(nd); }
+    if(s.pin||s.pout){ const nd=document.createElement("div"); nd.className="shnote"; const di=distFromWork(s,"pin"), dout=distFromWork(s,"pout");
+      nd.textContent="\uD83D\uDCCD In "+(s.pin?(di!==""?fmtDist(di)+" from work":"saved"):"\u2013")+" \u00b7 Out "+(s.pout?(dout!==""?fmtDist(dout)+" from work":"saved"):"\u2013"); row.appendChild(nd); }
     box.appendChild(row);
   });
   box.querySelectorAll("[data-edit]").forEach(b=>{ b.onclick=()=>openModal(db.shifts.find(s=>s.id===b.dataset.edit));
@@ -546,18 +555,22 @@ $("jobDelete").onclick=async()=>{
   const mine=db.shifts.filter(s=>s.job===id), done=mine.filter(s=>s.end);
   const hh=done.reduce((t,x)=>t+hrs(x),0), ww=done.reduce((t,x)=>t+pay(x),0), pl=(db.plans||[]).filter(p=>p.job===id).length;
   const msg=done.length||mine.length
-    ? "\""+j.name+"\" has "+mine.length+" shift"+(mine.length===1?"":"s")+" logged ("+hh.toFixed(1)+"h, "+money(ww)+"). You\u2019ll choose next whether to keep them (under "+jobName("")+") or delete them too."+(pl?" "+pl+" planned shift"+(pl===1?"":"s")+" for it will be removed.":"")+" The job itself can't be brought back."
-    : "\""+j.name+"\" has no shifts yet."+(pl?" "+pl+" planned shift"+(pl===1?"":"s")+" for it will be removed.":"")+" This can't be undone.";
+    ? "\""+j.name+"\" has "+mine.length+" shift"+(mine.length===1?"":"s")+" logged ("+hh.toFixed(1)+"h, "+money(ww)+"). You\u2019ll choose next whether to keep them (under "+jobName("")+") or delete them too."+(pl?" "+pl+" planned shift"+(pl===1?"":"s")+" for it will be removed.":"")+" You can undo right after."
+    : "\""+j.name+"\" has no shifts yet."+(pl?" "+pl+" planned shift"+(pl===1?"":"s")+" for it will be removed.":"")+" You can undo right after.";
   if(!await askConfirm("Delete "+j.name+"?", msg, "Delete job", true)) return;
   let wipe=false;
   if(mine.length) wipe=await askConfirm("What about its "+mine.length+" shift"+(mine.length===1?"":"s")+"?", "Keep them in your history and pay totals, or delete them too? Deleting removes "+hh.toFixed(1)+"h and "+money(ww)+" of recorded pay (handy if this was just a test job).", "Delete shifts too", true, "Keep shifts");
+  const jobSnap=JSON.stringify({jobs:db.jobs, plans:db.plans, activeJob:db.activeJob, mine});
   if(wipe){ const gone=mine.slice(); const ids=new Set(gone.map(x=>x.id)); db.shifts=db.shifts.filter(x=>!ids.has(x.id)); gone.filter(x=>x.end).forEach(x=>queueSync({action:"delete", id:x.id})); }
   else db.shifts.forEach(s=>{ if(s.job===id){ if(s.rate==null) s.rate=j.rate; delete s.job; } });   // keep each shift's pay exactly as it was
   db.jobs=db.jobs.filter(x=>x.id!==id); if(!db.jobs.length) delete db.jobs; if(db.activeJob===id) delete db.activeJob;
   if(db.plans){ db.plans=db.plans.filter(p=>p.job!==id); if(!db.plans.length) delete db.plans; }
   if(histJob===id) histJob="all"; if(jobFilter===id) jobFilter="all";
   const upd=wipe?[]:mine.filter(s=>s.end).map(s=>shiftPayload(s)); if(upd.length) queueSync({action:"bulk", shifts:upd});
-  save(); closeJob(); render(); queueMeta(); };
+  save(); closeJob(); render(); queueMeta();
+  showUndo("Job deleted.", ()=>{ const o=JSON.parse(jobSnap); db.jobs=o.jobs; if(o.plans) db.plans=o.plans; else delete db.plans; if(o.activeJob) db.activeJob=o.activeJob;
+    const ids=new Set(o.mine.map(x=>x.id)); db.shifts=db.shifts.filter(x=>!ids.has(x.id)).concat(o.mine); save(); render(); queueMeta();
+    const l=o.mine.filter(x=>x.end).map(x=>shiftPayload(x)); if(l.length) queueSync({action:"bulk", shifts:l}); }); };
 function expJobId(){ return jobEditId; }
 sheetDrag($("jobBg"), closeJob);
 $("jobPick").onchange=e=>{ if(e.target.value) db.activeJob=e.target.value; else delete db.activeJob; save(); };
@@ -1070,7 +1083,8 @@ const sheetName = t => t.name || (t === syncCfg() ? "My sheet" : "Backup sheet")
 function shiftPayload(s, rate){
   const h=hrs(s); rate = s.rate!=null ? s.rate : (rate==null ? jobRate(s.job) : rate);
   return {id:s.id, date:fmtDate(s.start), day:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(s.start).getDay()], month:monthKey(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
-          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, note:s.note||"", rate:rate, start:s.start, end:s.end, brk:(s.brk==null?"":s.brk), brkPaid:(s.brk!=null&&s.bp?1:""), job:s.job||"", jobName:(db.jobs&&db.jobs.length)?jobName(s.job):""};
+          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, note:s.note||"", rate:rate, start:s.start, end:s.end, brk:(s.brk==null?"":s.brk), brkPaid:(s.brk!=null&&s.bp?1:""), job:s.job||"", jobName:(db.jobs&&db.jobs.length)?jobName(s.job):"",
+          pin:s.pin||"", pout:s.pout||"", dIn:distFromWork(s,"pin"), dOut:distFromWork(s,"pout")};
 }
 // Before the pay rate changes, lock every older shift to the rate it was worked at, so a raise only affects new shifts.
 function stampRates(){ db.shifts.forEach(s=>{ if(s.rate==null) s.rate=jobRate(s.job); }); }
@@ -1159,7 +1173,7 @@ async function syncPull(applySettings, t){
   const pendingDel=new Set(OB.filter(e=>e.action==="delete").map(e=>e.id));
   let added=0;
   (Array.isArray(j.shifts) ? j.shifts : []).slice(0,50000).forEach(r=>{
-    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip, note:r.note, rate:r.rate, job:r.job, brk:r.brk, brkPaid:r.brkPaid});
+    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip, note:r.note, rate:r.rate, job:r.job, brk:r.brk, brkPaid:r.brkPaid, pin:r.pin, pout:r.pout});
     if(!c || !c.end || have.has(c.id) || pendingDel.has(c.id)) return;
     have.add(c.id); db.shifts.push(c); added++;
   });
@@ -1294,6 +1308,16 @@ $("missLater").onclick=()=>{ missedList().forEach(m=>missLater.add(m.k)); $("mis
 $("missDiff").onclick=()=>{ const m=missCur; if(!m) return; $("missBg").classList.remove("open"); missCtx=m.k; openModal(null);
   const t2=ts=>{ const x=new Date(ts); return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0"); };
   $("fDate").value=m.dk; $("fIn").value=t2(m.S); $("fOut").value=t2(m.E); if(!$("fJobF").hidden) $("fJob").value=m.plan.job||""; $("fRate").value=rateAt(m.plan.job,m.S); };
+function renderShiftLoc(shift){
+  const box=$("fLoc"); box.textContent=""; box.hidden=!(shift && (shift.pin||shift.pout)); if(box.hidden) return;
+  [["pin","Clocked in"],["pout","Clocked out"]].forEach(([k,lab])=>{
+    const row=document.createElement("div"), b=document.createElement("b"), sp=document.createElement("span"); row.className="floc-r"; b.textContent=lab; row.appendChild(b);
+    const p=placeParts(shift[k]);
+    if(!p){ sp.textContent=shift.end||k==="pin"?"No location saved":"Not clocked out yet"; row.appendChild(sp); box.appendChild(row); return; }
+    const d=distFromWork(shift,k);
+    sp.textContent=p.la.toFixed(5)+", "+p.lo.toFixed(5)+" (\u00b1"+p.ac+" m)"+(d!==""?" \u00b7 "+fmtDist(d)+" from work":""); row.appendChild(sp);
+    const a=document.createElement("a"); a.textContent="Map"; a.href="https://maps.apple.com/?ll="+p.la+","+p.lo+"&q="+encodeURIComponent(lab); a.target="_blank"; a.rel="noopener noreferrer"; row.appendChild(a); box.appendChild(row); });
+}
 function openModal(shift){
   editingId = shift ? shift.id : null;
   $("modalTitle").textContent = shift ? "Edit shift" : "Add shift";
@@ -1304,7 +1328,7 @@ function openModal(shift){
   $("fOut").value = (shift && shift.end) ? t2(shift.end) : "";
   fillJobSelect($("fJob"), shift?shift.job:db.activeJob); $("fJobF").hidden=!hasJobs();
   $("fBrk").value = (shift && shift.brk!=null) ? shift.brk : ""; $("fBrkPaid").value = (shift && shift.bp) ? "1" : ""; $("fTip").value = (shift && shift.tip) ? shift.tip : ""; $("fNote").value = (shift && shift.note) ? shift.note : ""; $("fRate").value = shift ? rateOf(shift) : rateAt(db.activeJob, Date.now());
-  $("modalDelete").style.display = shift ? "" : "none";
+  $("modalDelete").style.display = shift ? "" : "none"; renderShiftLoc(shift);
   $("modalBg").classList.add("open");
 }
 $("modalDelete").onclick=async()=>{
@@ -1373,7 +1397,7 @@ $("cfmYes").onclick=()=>cfmDone(true); $("cfmNo").onclick=()=>cfmDone(false);
 $("cfmBg").addEventListener("click",e=>{ if(e.target===$("cfmBg") && !cfmLock) cfmDone(false); });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && cfmResolve) cfmDone(false); });
 function hideUndo(){ const b=$("undoBar"); clearTimeout(undoTimer); undoFn=null; if(b.hidden) return; b.classList.add("out"); setTimeout(()=>{ if(!undoFn){ b.hidden=true; } b.classList.remove("out"); b.style.transform=""; b.style.opacity=""; },220); }
-function showUndo(msg, fn){ const b=$("undoBar"); undoFn=fn; $("undoTxt").textContent=msg; b.classList.remove("out"); b.style.transform=""; b.style.opacity=""; b.hidden=false; clearTimeout(undoTimer); undoTimer=setTimeout(hideUndo,5000); }
+function showUndo(msg, fn){ const b=$("undoBar"); undoFn=fn; $("undoTxt").textContent=msg; b.classList.remove("out"); b.style.transform=""; b.style.opacity=""; b.hidden=false; clearTimeout(undoTimer); undoTimer=setTimeout(hideUndo,6000); const ub=b.querySelector(".ub-bar"); if(ub){ ub.style.animation="none"; void ub.offsetWidth; ub.style.animation=""; } }
 (()=>{ const b=$("undoBar"); let x0=null,y0=0,dx=0;
   b.addEventListener("pointerdown",e=>{ if(e.target.closest("button")) return; x0=e.clientX; y0=e.clientY; dx=0; b.style.transition="none"; clearTimeout(undoTimer); });
   b.addEventListener("pointermove",e=>{ if(x0==null) return; dx=e.clientX-x0; b.style.transform="translateX(calc(-50% + "+dx+"px))"; b.style.opacity=String(Math.max(0.2,1-Math.abs(dx)/200)); });
@@ -1420,7 +1444,9 @@ document.querySelectorAll("#planDays button").forEach(b=>b.onclick=()=>b.classLi
 $("planCancel").onclick=closePlan;
 $("planBg").addEventListener("click",e=>{ if(e.target===$("planBg")) closePlan(); });
 $("planRemove").onclick=async()=>{ if(!await askConfirm("Remove this planned shift?","It will no longer show on your calendar or ask about this shift. Shifts already logged stay.","Remove",true)) return;
-  db.plans=(db.plans||[]).filter(p=>p.id!==planEditId); if(!db.plans.length) delete db.plans; save(); closePlan(); render(); queueMeta(); };
+  const gonePlan=(db.plans||[]).find(p=>p.id===planEditId);
+  db.plans=(db.plans||[]).filter(p=>p.id!==planEditId); if(!db.plans.length) delete db.plans; save(); closePlan(); render(); queueMeta();
+  if(gonePlan) showUndo("Planned shift removed.", ()=>{ (db.plans=db.plans||[]).push(gonePlan); save(); render(); queueMeta(); }); };
 $("planSave").onclick=async()=>{
   const days=[...document.querySelectorAll("#planDays button.on")].map(b=>Number(b.dataset.d));
   const job=$("planJobF").hidden?undefined:($("planJob").value||undefined);
@@ -1471,6 +1497,41 @@ $("histMonth").addEventListener("change",e=>{ histMonth=e.target.value; render()
 $("nudgeNow").onclick=()=>{ $("jsonBtn").click(); };
 $("nudgeSync").onclick=()=>{ document.querySelector('.tabbar button[data-tab="settings"]').click(); if(!syncCfg().url) setTimeout(()=>openSheet(null),50); };
 $("nudgeLater").onclick=()=>{ db.nudgeAt=Date.now(); save(); updateNudge(); };
+
+// ---------- Where you clocked in and out: checked only at the moment you tap, never tracked in the background ----------
+function locOn(){ return !(db.loc && db.loc.on===0); }
+function getPos(ms){
+  return new Promise(res=>{
+    if(!navigator.geolocation) return res({err:"unsupported"});
+    let done=false; const fin=r=>{ if(!done){ done=true; clearTimeout(t); res(r); } }, t=setTimeout(()=>fin({err:"timeout"}), (ms||9000)+1500);
+    try{ navigator.geolocation.getCurrentPosition(p=>{ const c=p.coords, la=Number(c.latitude), lo=Number(c.longitude);
+        if(!isFinite(la)||!isFinite(lo)) return fin({err:"unavailable"});
+        fin({s:la.toFixed(5)+","+lo.toFixed(5)+","+Math.min(99999,Math.max(1,Math.round(c.accuracy||0)))}); },
+      e=>fin({err:e&&e.code===1?"denied":e&&e.code===3?"timeout":"unavailable"}), {enableHighAccuracy:true, timeout:ms||9000, maximumAge:0}); }catch(e){ fin({err:"unavailable"}); }
+  });
+}
+function placeParts(v){ const m=PLACE_RE.exec(String(v||"")); return m&&placeOk(v)?{la:+m[1],lo:+m[2],ac:+m[3]}:null; }
+function distM(a,b){ const R=6371000, rad=x=>x*Math.PI/180, dLa=rad(b.la-a.la), dLo=rad(b.lo-a.lo);
+  const h=Math.sin(dLa/2)**2+Math.cos(rad(a.la))*Math.cos(rad(b.la))*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.min(1,Math.sqrt(h))); }
+function workPlace(job){ const w=db.loc&&db.loc.work; return w?placeParts(w[job||""]):null; }
+function distFromWork(s,key){ const p=placeParts(s&&s[key]), w=workPlace(s&&s.job); return p&&w?Math.round(distM(p,w)):""; }
+function fmtDist(m){ if(m>=1000) return (m/1000).toFixed(1)+" km"; const st=m<100?1:5; return Math.max(1,Math.round(m/st)*st)+" m"; }
+function placeNote(s,key){   // "Location saved · 30 m from work"
+  const p=placeParts(s[key]); if(!p) return ""; const d=distFromWork(s,key);
+  return "Location saved"+(d!==""?" \u00b7 "+fmtDist(d)+" from work":""); }
+function locFail(e){ return e==="denied"?"Location is blocked for Work Clock":"Couldn\u2019t get a location"; }
+function setLocNote(key,txt,id){
+  if(key==="pin"){ const el=$("fsLoc"); if(el){ el.textContent=txt||""; el.hidden=!txt; } }
+  else if(key==="pout" && toastShift===id && !$("toast").hidden && txt){ $("toastTxt").textContent=$("toastTxt").textContent.replace(/ \u00b7 [^\u00b7]*$/,"")+" \u00b7 "+txt; }
+}
+async function stampPlace(id,key){
+  if(!locOn()) return setLocNote(key,"",id);
+  setLocNote(key,"Getting location\u2026",id);
+  const r=await getPos(), s=db.shifts.find(x=>x.id===id);
+  if(!r.s){ setLocNote(key,locFail(r.err),id); return; }
+  if(!s) return;
+  s[key]=r.s; save(); setLocNote(key,placeNote(s,key),id); render(); if(s.end) queueSync({action:"upsert", shift:shiftPayload(s)});
+}
 try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
 $("clockBtn").onclick=()=>{
   try{ if(navigator.vibrate) navigator.vibrate(18); }catch(e){}
@@ -1478,11 +1539,12 @@ $("clockBtn").onclick=()=>{
   const open=openShift();
   if(open){ stopAlarm(); if(snd().tap){ unlockAudio(); startSound(snd().pick,{loop:false,maxSec:3,vol:snd().vol}); } }
   if(open){ const fromTxt=$("heroEarn").textContent; open.end=Date.now(); save(); render(); countUp($("heroEarn"), parseFloat(fromTxt.replace(/[^0-9.]/g,"")), parseFloat($("heroEarn").textContent.replace(/[^0-9.]/g,""))); queueSync({action:"upsert", shift:shiftPayload(open)});
-    toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); }
-  else { db.shifts.push(mkShift(Date.now(), null, db.activeJob)); save(); render(); showFs(); }
+    toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); stampPlace(open.id,"pout"); }
+  else { const ns=mkShift(Date.now(), null, db.activeJob); db.shifts.push(ns); save(); render(); showFs(); stampPlace(ns.id,"pin"); }
 };
 $("cancelShift").onclick=async()=>{ if(await askConfirm("Discard this shift?","The shift you're clocked into will be thrown away, not saved.","Discard",true)){
-  db.shifts=db.shifts.filter(s=>s.end); save(); render(); }};
+  const gone=openShift(); db.shifts=db.shifts.filter(s=>s.end); save(); render(); hideFs();
+  if(gone) showUndo("Shift discarded.", ()=>{ if(!openShift()){ db.shifts.push(gone); save(); render(); } }); }};
 
 // settings
 document.querySelectorAll("#themeSeg button").forEach(b=>b.onclick=()=>{
@@ -1664,14 +1726,35 @@ $("importFile").addEventListener("change",e=>{
       const clean=cleanCore(d), skipped=d.shifts.length-clean.shifts.length;
       if(await askConfirm("Replace your data?","Your current shifts and payments will be replaced by this backup ("+clean.shifts.length+" shifts, "+clean.payments.length+" payments"+(skipped>0?", "+skipped+" invalid skipped":"")+").","Replace",true)){
         // only shifts + display prefs come from a file; sync, secret and lock settings always stay as they are
-        db=Object.assign(clean,{sync:db.sync, outbox:db.outbox, lastSync:db.lastSync, lock:db.lock}); save(); render(); }
+        db=Object.assign(clean,{sync:db.sync, outbox:db.outbox, lastSync:db.lastSync, lock:db.lock, loc:db.loc}); save(); render(); }
     }catch(_){ alert("That file doesn't look like a Work Clock backup."); } };
   r.readAsText(f); e.target.value="";
 });
-$("wipeBtn").onclick=async()=>{ if(await askConfirm("Delete all data?","Every shift and payment on this phone will be erased. This can't be undone. Back up first if you're not sure.","Delete everything",true)){
-  const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, sound:db.sound, payCycle:db.payCycle, payAnchor:db.payAnchor, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock};
-  db=Object.assign({shifts:[], outbox:[]}, keep); mirrors().forEach(m=>{ m.outbox=[]; }); save(); render(); updateSyncStatus(); }};
+$("wipeBtn").onclick=async()=>{ if(await askConfirm("Delete all data?","Every shift and payment on this phone will be erased. You get a few seconds to undo it afterwards, so back up first if you're not sure.","Delete everything",true)){
+  const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, sound:db.sound, payCycle:db.payCycle, payAnchor:db.payAnchor, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock, loc:db.loc};
+  const snapAll=JSON.stringify(Object.assign({},db,{sync:undefined, lock:undefined, outbox:undefined, loc:undefined}));
+  db=Object.assign({shifts:[], outbox:[]}, keep); mirrors().forEach(m=>{ m.outbox=[]; }); save(); render(); updateSyncStatus();
+  showUndo("All data deleted.", ()=>{ const o=JSON.parse(snapAll); db=Object.assign(o,{sync:db.sync, lock:db.lock, outbox:db.outbox, lastSync:db.lastSync, loc:db.loc}); save(); render(); updateSyncStatus();
+    const l=(o.shifts||[]).filter(x=>x.end).map(x=>shiftPayload(x)); if(l.length) queueSync({action:"bulk", shifts:l}); (o.payments||[]).forEach(p=>queueSync({action:"pupsert", payment:payPayload(p)})); queueMeta(); }); }};
 
+// location settings
+function renderLoc(){
+  const on=locOn(); $("locToggle").setAttribute("aria-checked",on?"true":"false"); const box=$("locWork"); box.textContent=""; box.hidden=!on;
+  if(!on) return;
+  const list=[{id:"",name:jobName("")}].concat((db.jobs||[]).filter(j=>!j.left).map(j=>({id:j.id,name:j.name})));
+  list.forEach(j=>{
+    const row=document.createElement("div"); row.className="settings-row";
+    const l=document.createElement("span"), sm=document.createElement("small"), w=workPlace(j.id);
+    l.textContent="Work location"+(list.length>1?" \u00b7 "+j.name:""); sm.textContent=w?"Set (\u00b1"+w.ac+" m)":"Not set"; l.appendChild(sm); row.appendChild(l);
+    const bs=document.createElement("span"), set=document.createElement("button"), clr=document.createElement("button");
+    set.type=clr.type="button"; set.className=clr.className="icon-btn"; set.textContent=w?"Update":"Set here"; clr.textContent="Clear"; clr.hidden=!w;
+    set.onclick=async()=>{ $("locMsg").textContent="Getting location\u2026"; const r=await getPos(); if(!r.s){ $("locMsg").textContent=locFail(r.err)+(r.err==="denied"?". Turn it on in iPhone Settings > Privacy & Security > Location Services.":"."); return; }
+      (db.loc=db.loc||{on:1,work:{}}).work=db.loc.work||{}; db.loc.work[j.id]=r.s; save(); $("locMsg").textContent="Saved. Stand in your store when you set this."; renderLoc(); render(); queueRestamp(); };
+    clr.onclick=()=>{ if(db.loc&&db.loc.work) delete db.loc.work[j.id]; save(); $("locMsg").textContent=""; renderLoc(); render(); queueRestamp(); };
+    bs.appendChild(set); bs.appendChild(clr); row.appendChild(bs); box.appendChild(row); });
+}
+$("locToggle").onclick=()=>{ db.loc=db.loc||{on:1,work:{}}; db.loc.on=locOn()?0:1; save(); $("locMsg").textContent=""; renderLoc(); };
+renderLoc();
 // google sheets sync settings
 updateSyncToggle(); updateSyncStatus();
 let shT=null;   // the sheet being edited (null = adding a new one)
@@ -1724,11 +1807,13 @@ $("shMain").onclick=async()=>{ const c=syncCfg(), m=shT; if(!m||m===c) return;
   save(); closeSheet(); updateSyncStatus(); flushOutbox(); };
 $("shRemove").onclick=async()=>{ const c=syncCfg(), t=shT; if(!t) return;
   if(!await askConfirm("Remove "+sheetName(t)+"?","The app stops syncing with this sheet. Nothing is deleted from the sheet or from this phone.","Remove",true)) return;
+  const snapS=JSON.stringify(db.sync), snapO=JSON.stringify(db.outbox||[]);
   if(t===c){
     if(mirrors().length){ const m=mirrors().shift(); c.name=m.name; c.url=m.url; c.secret=m.secret; c.err=m.err||""; db.outbox=outboxOf(m); db.lastSync=m.last||0; }
     else { c.name=""; c.url=""; c.secret=""; c.err=""; c.enabled=false; db.outbox=[]; updateSyncToggle(); }
   } else { const i=mirrors().indexOf(t); if(i>=0) mirrors().splice(i,1); }
-  save(); closeSheet(); updateSyncStatus(); };
+  save(); closeSheet(); updateSyncStatus();
+  showUndo("Sheet removed.", ()=>{ db.sync=JSON.parse(snapS); db.outbox=JSON.parse(snapO); save(); updateSyncToggle(); updateSyncStatus(); if(db.sync.enabled) flushOutbox(); }); };
 $("syncToggle").onclick=()=>{ const c=syncCfg(); c.enabled=!c.enabled; save(); updateSyncToggle(); updateSyncStatus(); if(c.enabled) flushOutbox(); };
 $("syncNowBtn").onclick=()=>syncRun("Syncing", async()=>{ await flushOutbox(); if(syncCfg().err) throw new Error(syncCfg().err); const n=await syncPull(); let b=0;
   for(const m of mirrors().slice()){ try{ b+=await mirrorSync(m); }catch(e){ if(!e.offline) m.err=e.message; } } save();
@@ -1741,7 +1826,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.37";
+const APP_VERSION="2026.10.18.38";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1934,8 +2019,10 @@ $("expSave").onclick=()=>{
   const c=cleanExpense({id:expEditId||("x"+Date.now().toString(36)+Math.random().toString(36).slice(2,4)), ts, amount, miles, note:$("expNote").value}); if(!c){ alert("That entry isn't valid."); return; }
   db.expenses=db.expenses||[]; const i=db.expenses.findIndex(x=>x.id===c.id); if(i>=0) db.expenses[i]=c; else db.expenses.push(c);
   save(); closeExp(); render(); queueMeta(); };
-$("expDelete").onclick=async()=>{ const id=expEditId; if(!await askConfirm("Delete this entry?","This can't be undone.","Delete",true)) return;
-  db.expenses=(db.expenses||[]).filter(x=>x.id!==id); if(!db.expenses.length) delete db.expenses; save(); closeExp(); render(); queueMeta(); };
+$("expDelete").onclick=async()=>{ const id=expEditId; if(!await askConfirm("Delete this entry?","You can undo right after.","Delete",true)) return;
+  const goneE=(db.expenses||[]).find(x=>x.id===id);
+  db.expenses=(db.expenses||[]).filter(x=>x.id!==id); if(!db.expenses.length) delete db.expenses; save(); closeExp(); render(); queueMeta();
+  if(goneE) showUndo("Entry deleted.", ()=>{ (db.expenses=db.expenses||[]).push(goneE); save(); render(); queueMeta(); }); };
 sheetDrag($("expBg"), closeExp);
 function renderPay(){
   { const on=hasJobs(); $("payJobRow").hidden=!on; if(!on) payJob="all"; else { if(payJob!=="all"&&payJob!=="main"&&!(db.jobs||[]).some(j=>j.id===payJob)) payJob="all"; jobChips($("payChips"), payJob, v=>{ payJob=v; renderPay(); }, {all:true, main:"main", left:true}); } }

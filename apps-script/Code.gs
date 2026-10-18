@@ -7,7 +7,7 @@
  */
 const SECRET = "CHANGE-ME-TO-SOMETHING-LONG";   // use 24+ random characters; never share or commit it
 const SHEET_NAME = "Shifts";
-const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end", "Note", "Rate", "Job", "jobId", "Break", "Break paid"];
+const HEADERS = ["id", "Date", "Day", "Month", "Clock in", "Clock out", "Hours", "Tips", "Earned", "start", "end", "Note", "Rate", "Job", "jobId", "Break", "Break paid", "In place", "Out place", "In from work (m)", "Out from work (m)"];
 const COL = { START: 10, END: 11, TIP: 8 };   // 1-based columns the app reads back
 const MAX_BULK = 5000;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -129,7 +129,7 @@ function sheet_() {
     const hdr = sh.getRange(1, 1, 1, HEADERS.length).getValues()[0];
     if (hdr.slice(0, BASE).join("|") === HEADERS.slice(0, BASE).join("|")) {
       for (let i = BASE; i < HEADERS.length; i++) if (!hdr[i]) sh.getRange(1, i + 1).setValue(HEADERS[i]);   // add newer columns in place
-      try { sh.getRange("L:L").setNumberFormat("@"); sh.getRange("M:M").setNumberFormat("$#,##0.00"); sh.getRange("N:O").setNumberFormat("@"); sh.hideColumns(15); } catch (_) {}
+      try { sh.getRange("L:L").setNumberFormat("@"); sh.getRange("M:M").setNumberFormat("$#,##0.00"); sh.getRange("N:O").setNumberFormat("@"); sh.hideColumns(15); sh.getRange("R:S").setNumberFormat("@"); sh.getRange("T:U").setNumberFormat("0"); } catch (_) {}
     }
   }
   if (sh && sh.getLastRow() > 0 && sh.getRange(1, 1, 1, BASE).getValues()[0].join("|") !== HEADERS.slice(0, BASE).join("|")) {
@@ -157,6 +157,13 @@ function same_(a, b) {
   return diff === 0;
 }
 
+// Where the shift started/ended: "lat,lng,accuracy-in-metres", digits only. Anything else is dropped.
+function place_(v) {
+  const m = /^(-?\d{1,2}(?:\.\d{1,6})?),(-?\d{1,3}(?:\.\d{1,6})?),(\d{1,5})$/.exec(String(v == null ? "" : v));
+  return m && Math.abs(Number(m[1])) <= 90 && Math.abs(Number(m[2])) <= 180 ? m[0] : "";
+}
+function dist_(v) { return (v === "" || v == null || !isFinite(Number(v)) || Number(v) < 0 || Number(v) > 1e7) ? "" : Math.round(Number(v)); }
+
 // Only accept well-formed shifts; anything else is dropped. Text fields are stripped of formula/control characters.
 function clean_(s) {
   if (!s || typeof s !== "object" || !ID_RE.test(String(s.id))) return null;
@@ -170,7 +177,8 @@ function clean_(s) {
           (s.rate === "" || s.rate == null || !isFinite(Number(s.rate)) || Number(s.rate) < 0 || Number(s.rate) > 100000) ? "" : Number(s.rate),
           txt(s.jobName).slice(0, 24), ID_RE.test(String(s.job || "")) ? String(s.job) : "",
           (s.brk === "" || s.brk == null || !isFinite(Number(s.brk)) || Number(s.brk) < 0 || Number(s.brk) > 720) ? "" : Math.round(Number(s.brk)),
-          (s.brkPaid === 1 || s.brkPaid === true || s.brkPaid === "1") ? 1 : ""];
+          (s.brkPaid === 1 || s.brkPaid === true || s.brkPaid === "1") ? 1 : "",
+          place_(s.pin), place_(s.pout), dist_(s.dIn), dist_(s.dOut)];
 }
 
 // Payments the owner made to you.
@@ -215,7 +223,7 @@ function doPost(e) {
       const n = sh.getLastRow() - 1;
       const rows = n > 0 ? sh.getRange(2, 1, n, HEADERS.length).getValues() : [];
       return out_({ ok: true, shifts: rows.filter(r => r[0] && r[9] && r[10])
-        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0, note: String(r[11] || ""), rate: r[12] === "" || r[12] == null ? null : Number(r[12]), job: String(r[14] || ""), brk: r[15] === "" || r[15] == null ? null : Number(r[15]), brkPaid: r[16] == 1 ? 1 : 0 })) });
+        .map(r => ({ id: String(r[0]), start: Number(r[9]), end: Number(r[10]), tip: Number(r[7]) || 0, note: String(r[11] || ""), rate: r[12] === "" || r[12] == null ? null : Number(r[12]), job: String(r[14] || ""), brk: r[15] === "" || r[15] == null ? null : Number(r[15]), brkPaid: r[16] == 1 ? 1 : 0, pin: String(r[17] || ""), pout: String(r[18] || "") })) });
     }
 
     if (b.action === "sget") {
