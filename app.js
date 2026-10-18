@@ -1579,7 +1579,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.24";
+const APP_VERSION="2026.10.18.25";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1999,7 +1999,7 @@ document.addEventListener("touchmove",e=>{ if(e.touches.length>1) e.preventDefau
   }
   new MutationObserver(sync).observe(document.body,{subtree:true,attributes:true,attributeFilter:["class"]});
   const vv=window.visualViewport;
-  function vvSet(){ if(!vv) return; const r=document.documentElement.style; r.setProperty("--vvh",vv.height+"px"); r.setProperty("--vvt",vv.offsetTop+"px"); }
+  function vvSet(){ if(!vv) return; const r=document.documentElement.style; const kb=Math.max(0, Math.round(window.innerHeight-vv.height-vv.offsetTop)); r.setProperty("--vvh",vv.height+"px"); r.setProperty("--kb",kb+"px"); }
   if(vv){ vv.addEventListener("resize",vvSet); vv.addEventListener("scroll",vvSet); vvSet(); }
   document.addEventListener("focusin",e=>{ if(e.target.closest && e.target.closest(".modal-bg")) setTimeout(()=>{ vvSet(); try{ e.target.scrollIntoView({block:"nearest"}); }catch(_){} },300); });
 })();

@@ -862,7 +862,7 @@ html[data-theme="dark"] .edge-top{ background:linear-gradient(to bottom, #05080f
 
 /* pop-ups: the page behind never scrolls or takes taps; sheets sit above the keyboard */
 body.scroll-lock{position:fixed; left:0; right:0; width:100%; overflow:hidden}
-.modal-bg{inset:auto; left:0; right:0; top:var(--vvt,0px); height:var(--vvh,100%); touch-action:none; overscroll-behavior:contain}
+.modal-bg{inset:auto; left:0; right:0; top:0; bottom:var(--kb,0px); height:auto; touch-action:none; overscroll-behavior:contain}
 .modal{touch-action:pan-y; max-height:calc(var(--vvh,100dvh)*.92); overscroll-behavior:contain}
 .modal .grab{touch-action:none}
 .stmt{overscroll-behavior:contain}
