@@ -17,7 +17,7 @@ function cleanShift(s){
   const o = {id, start, end}, tp = Math.round(Number(s.tip != null ? s.tip : s.tips) * 100) / 100;
   if(Number.isFinite(tp) && tp > 0 && tp <= 100000) o.tip = tp;
   const sr = s.rate == null || s.rate === "" ? NaN : Number(s.rate); if(Number.isFinite(sr) && sr >= 0 && sr <= 100000) o.rate = sr;
-  const bk = s.brk == null || s.brk === "" ? NaN : Math.round(Number(s.brk)); if(Number.isFinite(bk) && bk >= 0 && bk <= 720) o.brk = bk;
+  const bk = s.brk == null || s.brk === "" ? NaN : Math.round(Number(s.brk)); if(Number.isFinite(bk) && bk >= 0 && bk <= 720){ o.brk = bk; if(s.bp === 1 || s.bp === true || s.brkPaid === 1 || s.brkPaid === true) o.bp = 1; }
   const nt = cleanText(s.note, 80); if(nt) o.note = nt;
   if(s.job != null && ID_RE.test(String(s.job))) o.job = String(s.job);
   const ae = Number(s.autoEnd); if(end === null && Number.isFinite(ae) && ae > start && ae - start <= MAX_SHIFT_MS) o.autoEnd = ae;
@@ -149,7 +149,7 @@ function fmtDate(ts){ const d=new Date(ts); return MONTHS[d.getMonth()]+" "+d.ge
 function dayKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function monthKey(ts){ const d=new Date(ts); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
 function monthLabel(key){ const [y,m]=key.split("-").map(Number); return MONTHS[m-1]+" "+y; }
-function hrs(s){ const h=(s.end - s.start)/3600000; if(s.brk!=null) return Math.max(0,h-s.brk/60); return (db.breakMin>0 && h>=(db.breakAfter||6)) ? Math.max(0,h-db.breakMin/60) : h; }   // optional unpaid break
+function hrs(s){ const h=(s.end - s.start)/3600000; if(s.brk!=null) return s.bp ? h : Math.max(0,h-s.brk/60); return (db.breakMin>0 && h>=(db.breakAfter||6)) ? Math.max(0,h-db.breakMin/60) : h; }   // optional unpaid break
 function money(n){ return "$"+Number(n).toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2}); }
 function fmtDay(ts){ const d=new Date(ts), y=d.getFullYear()===new Date().getFullYear()?"":", "+d.getFullYear(); return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()]+", "+MONTHS[d.getMonth()]+" "+d.getDate()+y; }
 function tipOf(s){ return s.tip||0; }
@@ -273,8 +273,8 @@ let fsTimer=null;
 function tickFs(){ const o=openShift(); if(!o){ hideFs(); return; } const el=Math.max(0,Date.now()-o.start)/1000, h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60), p2=n=>String(n).padStart(2,"0");
   $("fsH").textContent=p2(h); $("fsM").textContent=p2(m); $("fsS").textContent=p2(s);
   $("fsFill").style.width=((el%60)/60*100).toFixed(1)+"%";
-  const hh=hrs({start:o.start,end:Date.now(),brk:o.brk}); $("fsEarn").textContent=money(hh*rateOf(o))+" earned so far"+(hasJobs()?" \u00b7 "+jobName(o.job):"");
-  $("fsBreak").textContent=o.brk>0?"Break \u00b7 "+brkText(o.brk):"Break"; }
+  const hh=hrs({start:o.start,end:Date.now(),brk:o.brk,bp:o.bp}); $("fsEarn").textContent=money(hh*rateOf(o))+" earned so far"+(hasJobs()?" \u00b7 "+jobName(o.job):"");
+  $("fsBreak").textContent=o.brk>0?"Break \u00b7 "+brkText(o.brk)+(o.bp?" (paid)":""):"Break"; }
 // Nudge to back up when history isn't saved anywhere else
 function updateNudge(){ const el=$("backupNudge"); if(!el) return; const DAY=864e5, now=Date.now(), c=db.sync;
   const synced=c && c.enabled && c.url && db.lastSync && now-db.lastSync<14*DAY;
@@ -1011,7 +1011,7 @@ function syncCfg(){ return db.sync || (db.sync = {url:"", secret:"", enabled:fal
 function shiftPayload(s, rate){
   const h=hrs(s); rate = s.rate!=null ? s.rate : (rate==null ? jobRate(s.job) : rate);
   return {id:s.id, date:fmtDate(s.start), day:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(s.start).getDay()], month:monthKey(s.start), in:fmtTime(s.start), out:fmtTime(s.end),
-          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, note:s.note||"", rate:rate, start:s.start, end:s.end, brk:(s.brk==null?"":s.brk), job:s.job||"", jobName:(db.jobs&&db.jobs.length)?jobName(s.job):""};
+          hours:Math.round(h*100)/100, earned:Math.round(h*rate*100)/100, tips:s.tip||0, note:s.note||"", rate:rate, start:s.start, end:s.end, brk:(s.brk==null?"":s.brk), brkPaid:(s.brk!=null&&s.bp?1:""), job:s.job||"", jobName:(db.jobs&&db.jobs.length)?jobName(s.job):""};
 }
 // Before the pay rate changes, lock every older shift to the rate it was worked at, so a raise only affects new shifts.
 function stampRates(){ db.shifts.forEach(s=>{ if(s.rate==null) s.rate=jobRate(s.job); }); }
@@ -1088,7 +1088,7 @@ async function syncPull(applySettings){
   const pendingDel=new Set((db.outbox||[]).filter(e=>e.action==="delete").map(e=>e.id));
   let added=0;
   (Array.isArray(j.shifts) ? j.shifts : []).slice(0,50000).forEach(r=>{
-    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip, note:r.note, rate:r.rate, job:r.job, brk:r.brk});
+    const c=cleanShift(r && {id:r.id, start:r.start, end:r.end, tip:r.tip, note:r.note, rate:r.rate, job:r.job, brk:r.brk, brkPaid:r.brkPaid});
     if(!c || !c.end || have.has(c.id) || pendingDel.has(c.id)) return;
     have.add(c.id); db.shifts.push(c); added++;
   });
@@ -1199,7 +1199,7 @@ function openModal(shift){
   $("fIn").value = shift ? t2(shift.start) : "";
   $("fOut").value = (shift && shift.end) ? t2(shift.end) : "";
   fillJobSelect($("fJob"), shift?shift.job:db.activeJob); $("fJobF").hidden=!hasJobs();
-  $("fBrk").value = (shift && shift.brk!=null) ? shift.brk : ""; $("fTip").value = (shift && shift.tip) ? shift.tip : ""; $("fNote").value = (shift && shift.note) ? shift.note : ""; $("fRate").value = shift ? rateOf(shift) : rateAt(db.activeJob, Date.now());
+  $("fBrk").value = (shift && shift.brk!=null) ? shift.brk : ""; $("fBrkPaid").value = (shift && shift.bp) ? "1" : ""; $("fTip").value = (shift && shift.tip) ? shift.tip : ""; $("fNote").value = (shift && shift.note) ? shift.note : ""; $("fRate").value = shift ? rateOf(shift) : rateAt(db.activeJob, Date.now());
   $("modalDelete").style.display = shift ? "" : "none";
   $("modalBg").classList.add("open");
 }
@@ -1222,8 +1222,8 @@ $("modalSave").onclick=()=>{
   const tp=Math.round(parseFloat($("fTip").value)*100)/100, tipV=(Number.isFinite(tp)&&tp>0)?Math.min(tp,100000):0;
   const rv=parseFloat($("fRate").value), jobV=$("fJobF").hidden?undefined:($("fJob").value||undefined), rateV=(Number.isFinite(rv)&&rv>=0)?Math.min(rv,100000):rateAt(jobV,start);
   const noteV=cleanText($("fNote").value,80), bkv=parseInt($("fBrk").value,10), brkV=(Number.isFinite(bkv)&&bkv>=0)?Math.min(bkv,720):null;
-  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; if(noteV) s.note=noteV; else delete s.note; s.rate=rateV; if(brkV!=null) s.brk=brkV; else delete s.brk; if(!$("fJobF").hidden){ if(jobV) s.job=jobV; else delete s.job; } queueSync({action:"upsert", shift:shiftPayload(s)}); }
-  else { const ns={id:uid(), start, end}; if(tipV) ns.tip=tipV; if(noteV) ns.note=noteV; ns.rate=rateV; if(brkV!=null) ns.brk=brkV; if(jobV) ns.job=jobV; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
+  if(editingId){ const s=db.shifts.find(x=>x.id===editingId); s.start=start; s.end=end; if(tipV) s.tip=tipV; else delete s.tip; if(noteV) s.note=noteV; else delete s.note; s.rate=rateV; if(brkV!=null){ s.brk=brkV; if($("fBrkPaid").value) s.bp=1; else delete s.bp; } else { delete s.brk; delete s.bp; } if(!$("fJobF").hidden){ if(jobV) s.job=jobV; else delete s.job; } queueSync({action:"upsert", shift:shiftPayload(s)}); }
+  else { const ns={id:uid(), start, end}; if(tipV) ns.tip=tipV; if(noteV) ns.note=noteV; ns.rate=rateV; if(brkV!=null){ ns.brk=brkV; if($("fBrkPaid").value) ns.bp=1; } if(jobV) ns.job=jobV; db.shifts.push(ns); queueSync({action:"upsert", shift:shiftPayload(ns)}); }
   if(missCtx){ markPlanDone(missCtx); missCtx=null; }
   save(); closeModal(); render(); setTimeout(showMissed,300);
 };
@@ -1342,7 +1342,7 @@ $("fsMin").onclick=minimiseFs;
     dy=Math.min(0,d); el.style.transform="translateY("+dy+"px)"; });
   const end=()=>{ if(y0==null) return; const was=drag; y0=null; if(!was) return; drag=false;
     const v=dy/Math.max(1,Date.now()-t0);
-    if(dy<-window.innerHeight*0.22 || v<-0.7){ el.style.transition="transform .28s cubic-bezier(.3,.8,.3,1)"; el.style.transform="translateY(-104%)"; setTimeout(hideFs,280); }
+    if(dy<-window.innerHeight*0.45 || (v<-1.5 && dy<-window.innerHeight*0.25)){ el.style.transition="transform .28s cubic-bezier(.3,.8,.3,1)"; el.style.transform="translateY(-104%)"; setTimeout(hideFs,280); }
     else { el.style.transition="transform .42s cubic-bezier(.34,1.5,.5,1)"; el.style.transform="translateY(0)"; setTimeout(()=>{ el.style.transition=""; el.style.transform=""; el.classList.remove("dragging"); if(!el.hidden) document.body.classList.add("fs-open"); },430); } };
   el.addEventListener("pointerup",end); el.addEventListener("pointercancel",end);
 })();
@@ -1589,7 +1589,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.29";
+const APP_VERSION="2026.10.18.30";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -1985,11 +1985,13 @@ function brkText(m){ const h=Math.floor(m/60), r=m%60; return h?(r?h+"h "+r+"m":
   const upd=()=>{ paint(wh); paint(wm); const t=val(wh)*60+val(wm); $("brkSum").textContent=t?brkText(t):"No break"; };
   [wh,wm].forEach(el=>el.addEventListener("scroll",upd,{passive:true}));
   function setWheels(m){ wh.scrollTop=Math.floor(m/60)*IH; wm.scrollTop=(m%60)*IH; upd(); }
+  let paid=false; const setPaid=p=>{ paid=p; $("brkPaid").classList.toggle("on",p); $("brkUnpaid").classList.toggle("on",!p); $("brkPaid").setAttribute("aria-pressed",p); $("brkUnpaid").setAttribute("aria-pressed",!p); $("brkNote").textContent=p?"Paid. Your hours stay the same.":"Unpaid. It comes off this shift's hours."; };
+  $("brkPaid").onclick=()=>setPaid(true); $("brkUnpaid").onclick=()=>setPaid(false);
   const close=()=>$("brkBg").classList.remove("open");
-  $("fsBreak").onclick=()=>{ const o=openShift(); if(!o) return; $("brkBg").classList.add("open"); $("brkClear").hidden=!(o.brk>0); setTimeout(()=>setWheels(o.brk||0),30); };
+  $("fsBreak").onclick=()=>{ const o=openShift(); if(!o) return; $("brkBg").classList.add("open"); $("brkClear").hidden=!(o.brk>0); setPaid(!!o.bp); setTimeout(()=>setWheels(o.brk||0),30); };
   $("brkCancel").onclick=close; $("brkBg").addEventListener("click",e=>{ if(e.target===$("brkBg")) close(); }); sheetDrag($("brkBg"), close);
-  $("brkSave").onclick=()=>{ const o=openShift(); if(!o){ close(); return; } const t=val(wh)*60+val(wm); if(t>0) o.brk=t; else delete o.brk; save(); close(); tickFs(); };
-  $("brkClear").onclick=()=>{ const o=openShift(); if(o){ delete o.brk; save(); tickFs(); } close(); };
+  $("brkSave").onclick=()=>{ const o=openShift(); if(!o){ close(); return; } const t=val(wh)*60+val(wm); if(t>0){ o.brk=t; if(paid) o.bp=1; else delete o.bp; } else { delete o.brk; delete o.bp; } save(); close(); tickFs(); };
+  $("brkClear").onclick=()=>{ const o=openShift(); if(o){ delete o.brk; delete o.bp; save(); tickFs(); } close(); };
 })();
 
 })();

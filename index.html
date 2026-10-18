@@ -335,7 +335,8 @@
 <div class="modal-bg" id="brkBg">
   <div class="modal">
     <h2>Take a break</h2>
-    <div class="sub" style="margin:0 0 8px">Unpaid. It comes off this shift's hours.</div>
+    <div class="chips brk-type" role="group" aria-label="Break type"><button type="button" id="brkUnpaid" class="on" aria-pressed="true">Unpaid</button><button type="button" id="brkPaid" aria-pressed="false">Paid</button></div>
+    <div class="sub" id="brkNote" style="margin:8px 0 4px;text-align:center">Unpaid. It comes off this shift's hours.</div>
     <div class="wheels"><div class="wheel-band"></div>
       <div class="wheel" id="wheelH" aria-label="Hours"></div><span class="wheel-u">hr</span>
       <div class="wheel" id="wheelM" aria-label="Minutes"></div><span class="wheel-u">min</span>
@@ -343,7 +344,7 @@
     <div class="brk-sum" id="brkSum">No break</div>
     <div class="btn-row">
       <button class="btn ghost" id="brkCancel" type="button">Cancel</button>
-      <button class="btn primary" id="brkSave" type="button">Save</button>
+      <button class="btn primary" id="brkSave" type="button">Start</button>
     </div>
     <button class="link" id="brkClear" type="button" hidden style="display:block;margin:10px auto 0">Remove break</button>
   </div>
@@ -524,6 +525,7 @@
     <div class="field"><label>Tips (optional)</label><input type="number" id="fTip" inputmode="decimal" min="0" max="100000" step="0.01" placeholder="0.00"></div>
     <div class="field"><label>Hourly rate for this shift ($)</label><input type="number" id="fRate" inputmode="decimal" min="0" step="0.25"></div>
     <div class="field"><label>Unpaid break (minutes, optional)</label><input type="number" id="fBrk" inputmode="numeric" min="0" max="720" step="1" placeholder="0"></div>
+    <div class="field"><label>Break is</label><select id="fBrkPaid"><option value="">Unpaid</option><option value="1">Paid</option></select></div>
     <div class="field"><label>Note (private, optional)</label><input type="text" id="fNote" maxlength="80" placeholder="e.g. closed alone"></div>
     <div class="btn-row">
       <button class="btn ghost" id="modalCancel">Cancel</button>
