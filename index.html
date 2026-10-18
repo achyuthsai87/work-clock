@@ -332,6 +332,20 @@
 </div>
 
 
+<div class="modal-bg" id="tgBg">
+  <div class="modal">
+    <h2>When will you finish?</h2>
+    <div class="sub" style="margin:0 0 8px">Optional. It only shapes the progress bar. It won't clock you out.</div>
+    <div class="chips" id="tgQuick"><button type="button" data-h="4">4 hours</button><button type="button" data-h="6">6 hours</button><button type="button" data-h="8">8 hours</button></div>
+    <div class="field"><label>End time</label><input type="time" id="tgTime"></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="tgCancel" type="button">Cancel</button>
+      <button class="btn primary" id="tgSave" type="button">Save</button>
+    </div>
+    <button class="link" id="tgClear" type="button" hidden style="display:block;margin:10px auto 0">Remove end time</button>
+  </div>
+</div>
+
 <div class="modal-bg" id="brkBg">
   <div class="modal">
     <h2>Take a break</h2>
@@ -403,11 +417,11 @@
   <div class="fs-glow" aria-hidden="true"></div>
   <div class="fs-live"><span class="dot"></span>Shift in progress</div>
   <div class="fs-time" id="fsTime"><span id="fsH">00</span><i>:</i><span id="fsM">00</span><i>:</i><span id="fsS">00</span></div>
-  <div class="fs-track" id="fsTrack" aria-hidden="true" hidden><i id="fsFill"></i><i id="fsExtra" class="x"></i></div>
+  <div class="fs-track" id="fsTrack" aria-hidden="true" hidden><i id="fsFill"></i><i id="fsExtra" class="x"></i><u class="sp" style="left:18%"></u><u class="sp" style="left:50%"></u><u class="sp" style="left:82%"></u></div>
   <div class="fs-plan" id="fsPlan" hidden></div>
   <div class="fs-earn" id="fsEarn"></div>
   <button id="fsOut" class="fs-out">Clock Out</button>
-  <button id="fsBreak" class="fs-sub fs-brk" type="button">Break</button>
+  <div class="fs-row"><button id="fsBreak" class="fs-sub fs-brk" type="button">Break</button><button id="fsEnd" class="fs-sub" type="button">Set end time</button></div>
   <button id="fsStart" class="fs-sub">Started late? Change start time</button>
   <button id="fsMin" class="fs-min" aria-label="Minimise timer"><span class="fs-chev" aria-hidden="true"></span><span>Swipe up to minimise</span></button>
 </div>

@@ -727,7 +727,7 @@ body.fs-open{overflow:hidden}
 .miss-btns .btn{width:100%}
 .miss-btns .link{align-self:center; margin-top:4px}
 .fs-sub{background:none; border:0; color:rgba(255,255,255,.6); font-size:15px; padding:8px 12px; cursor:pointer; margin-top:-24px}
-#startBg,#cfmBg,#brkBg{z-index:130}
+#startBg,#cfmBg,#brkBg,#endBg,#tgBg{z-index:130}
 
 /* the full-screen timer covers the tab bar; use Minimise to leave it */
 body.fs-open .tabbar{display:none}
@@ -891,3 +891,15 @@ html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme
 .fs-track i.x{background:linear-gradient(90deg,#ffd36e,#ff9b5e); box-shadow:0 0 12px rgba(255,170,90,.75); transition:width .25s linear}
 .fs-track[hidden],.fs-plan[hidden]{display:none}
 .fs-plan{font-size:13.5px; color:rgba(255,255,255,.65); margin-top:-20px; font-variant-numeric:tabular-nums}
+.fs-row{display:flex; gap:22px; align-items:center; justify-content:center; margin-top:-6px}
+.fs-row .fs-sub{margin-top:0}
+.fs-track u.sp{display:none}
+.fs-track.idle{height:8px; border-radius:5px}
+.fs-track.idle #fsFill{border-radius:5px; background:linear-gradient(90deg,#8fe3c0,#7fb0ff,#c9a6ff,#ff9ecb,#ffd36e,#8fe3c0); background-size:300% 100%; animation:fsFlow 7s linear infinite; transition:none}
+.fs-track.idle::after{content:""; position:absolute; top:0; bottom:0; left:-60px; width:60px; background:linear-gradient(90deg,transparent,rgba(255,255,255,.8),transparent); animation:fsGlint 3.2s ease-in-out infinite}
+.fs-track.idle u.sp{display:block; position:absolute; top:2px; width:4px; height:4px; border-radius:50%; background:#fff; box-shadow:0 0 6px 1px rgba(255,255,255,.9); animation:fsTwinkle 2.4s ease-in-out infinite}
+.fs-track.idle u.sp:nth-of-type(2){animation-delay:.8s} .fs-track.idle u.sp:nth-of-type(3){animation-delay:1.6s}
+@keyframes fsFlow{to{background-position:-300% 0}}
+@keyframes fsGlint{0%{transform:translateX(0)}60%,100%{transform:translateX(420px)}}
+@keyframes fsTwinkle{0%,100%{opacity:.15; transform:scale(.6)}50%{opacity:1; transform:scale(1.25)}}
+@media (prefers-reduced-motion:reduce){ .fs-track.idle #fsFill,.fs-track.idle::after,.fs-track.idle u.sp{animation:none} .fs-track.idle::after{display:none} }
