@@ -80,9 +80,9 @@
     </div>
   </div>
 
-<div class="card"><div class="tipbox-top"><span class="tipbox-h">Wages</span><span class="tipbox-t">hours shown below</span></div><div class="stats flat3">
+<div class="card"><div class="tipbox-top"><span class="tipbox-h">Wages</span></div><div class="stats flat3">
     <div class="stat"><div class="label">Today</div><div class="val" id="statToday">—</div></div>
-    <div class="stat"><div class="label" id="monthLabel">This month</div><div class="val" id="statMonth">—</div></div>
+    <div class="stat tap" id="monthStat" role="button" tabindex="0" aria-label="See this month week by week"><div class="label" id="monthLabel">This month</div><div class="val" id="statMonth">—</div></div>
     <div class="stat"><div class="label">All time</div><div class="val" id="statAll">—</div></div>
   </div></div>
   </section>
@@ -119,6 +119,13 @@
       <div class="goal-msg" id="goalMsg"></div>
       <button class="link" id="goalSet" style="padding:6px 0 0">Set goal</button>
     </div>
+  </div>
+
+<div class="card" style="margin-top:12px">
+    <div class="card-head"><span class="t">Monthly earnings</span><span class="mon-key"><i class="kw"></i>Wages <i class="kt"></i>Tips</span></div>
+    <div class="ana-nav"><button id="monPrev" aria-label="Earlier months">‹</button><span id="monRange"></span><button id="monNext" aria-label="Later months">›</button></div>
+    <canvas id="chart" width="600" height="340"></canvas>
+    <div class="mon-hint">Tap a month for its week-by-week breakdown</div>
   </div>
 
 <div class="card" style="margin-top:12px">
@@ -165,12 +172,6 @@
     <div class="badges" id="badges"></div>
   </div>
 
-<div class="card" style="margin-top:12px">
-    <div class="card-head"><span class="t">Monthly earnings</span><span class="mon-key"><i class="kw"></i>Wages <i class="kt"></i>Tips</span></div>
-    <div class="ana-nav"><button id="monPrev" aria-label="Earlier months">‹</button><span id="monRange"></span><button id="monNext" aria-label="Later months">›</button></div>
-    <canvas id="chart" width="600" height="340"></canvas>
-    <div class="mon-hint">Tap a month for its week-by-week breakdown</div>
-  </div>
   <div class="card" id="tipYieldCard" hidden>
     <div class="pay-h">Tip yield</div>
     <div class="job-hint" id="tyNote" style="margin:-4px 0 10px"></div>

@@ -561,6 +561,8 @@ const moveWeek=d=>{ const a=new Date(wkStart); a.setDate(a.getDate()+7*d); wkSta
 $("mwPrev").onclick=()=>moveWeek(-1); $("mwNext").onclick=()=>moveWeek(1);
 const closeMon=()=>$("monBg").classList.remove("open");
 $("mwClose").onclick=closeMon; $("monBg").addEventListener("click",e=>{ if(e.target===$("monBg")) closeMon(); }); sheetDrag($("monBg"), closeMon);
+$("monthStat").addEventListener("click",()=>{ document.querySelector('.tabbar [data-tab="analytics"]').click(); setTimeout(()=>openWeekFor(monthKey(Date.now())),120); });
+$("monthStat").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); $("monthStat").click(); } });
 $("monPrev").onclick=()=>{ monOff--; drawChart(); }; $("monNext").onclick=()=>{ if(monOff<0){ monOff++; drawChart(); } };
 $("chart").addEventListener("click",e=>{ if(!monGeom) return; const r=$("chart").getBoundingClientRect(), i=Math.floor((e.clientX-r.left-monGeom.padL)/monGeom.cw); if(i>=0&&i<6) openWeekFor(monGeom.keys[i]); });
 
@@ -1549,7 +1551,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.20";
+const APP_VERSION="2026.10.18.21";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
