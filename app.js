@@ -442,14 +442,17 @@ $("jobDelete").onclick=async()=>{
   const mine=db.shifts.filter(s=>s.job===id), done=mine.filter(s=>s.end);
   const hh=done.reduce((t,x)=>t+hrs(x),0), ww=done.reduce((t,x)=>t+pay(x),0), pl=(db.plans||[]).filter(p=>p.job===id).length;
   const msg=done.length||mine.length
-    ? "\""+j.name+"\" has "+mine.length+" shift"+(mine.length===1?"":"s")+" logged ("+hh.toFixed(1)+"h, "+money(ww)+"). They stay in your history and totals with the pay they earned, but will show under "+jobName("")+" instead of this job."+(pl?" "+pl+" planned shift"+(pl===1?"":"s")+" for it will be removed.":"")+" The job itself can't be brought back."
+    ? "\""+j.name+"\" has "+mine.length+" shift"+(mine.length===1?"":"s")+" logged ("+hh.toFixed(1)+"h, "+money(ww)+"). You\u2019ll choose next whether to keep them (under "+jobName("")+") or delete them too."+(pl?" "+pl+" planned shift"+(pl===1?"":"s")+" for it will be removed.":"")+" The job itself can't be brought back."
     : "\""+j.name+"\" has no shifts yet."+(pl?" "+pl+" planned shift"+(pl===1?"":"s")+" for it will be removed.":"")+" This can't be undone.";
   if(!await askConfirm("Delete "+j.name+"?", msg, "Delete job", true)) return;
-  db.shifts.forEach(s=>{ if(s.job===id){ if(s.rate==null) s.rate=j.rate; delete s.job; } });   // keep each shift's pay exactly as it was
+  let wipe=false;
+  if(mine.length) wipe=await askConfirm("What about its "+mine.length+" shift"+(mine.length===1?"":"s")+"?", "Keep them in your history and pay totals, or delete them too? Deleting removes "+hh.toFixed(1)+"h and "+money(ww)+" of recorded pay (handy if this was just a test job).", "Delete shifts too", true, "Keep shifts");
+  if(wipe){ const gone=mine.slice(); const ids=new Set(gone.map(x=>x.id)); db.shifts=db.shifts.filter(x=>!ids.has(x.id)); gone.filter(x=>x.end).forEach(x=>queueSync({action:"delete", id:x.id})); }
+  else db.shifts.forEach(s=>{ if(s.job===id){ if(s.rate==null) s.rate=j.rate; delete s.job; } });   // keep each shift's pay exactly as it was
   db.jobs=db.jobs.filter(x=>x.id!==id); if(!db.jobs.length) delete db.jobs; if(db.activeJob===id) delete db.activeJob;
   if(db.plans){ db.plans=db.plans.filter(p=>p.job!==id); if(!db.plans.length) delete db.plans; }
   if(histJob===id) histJob="all"; if(jobFilter===id) jobFilter="all";
-  const upd=mine.filter(s=>s.end).map(s=>shiftPayload(s)); if(upd.length) queueSync({action:"bulk", shifts:upd});
+  const upd=wipe?[]:mine.filter(s=>s.end).map(s=>shiftPayload(s)); if(upd.length) queueSync({action:"bulk", shifts:upd});
   save(); closeJob(); render(); queueMeta(); };
 function expJobId(){ return jobEditId; }
 sheetDrag($("jobBg"), closeJob);
@@ -1119,15 +1122,16 @@ $("tipSave").onclick=()=>{
 // clock in/out
 let undoFn=null, undoTimer=null;
 let cfmResolve=null;
-function askConfirm(title,msg,yesLabel,danger){
+let cfmLock=false;
+function askConfirm(title,msg,yesLabel,danger,noLabel){
   return new Promise(res=>{
     if(cfmResolve) cfmResolve(false);
-    cfmResolve=res; $("cfmTitle").textContent=title; $("cfmMsg").textContent=msg||""; $("cfmYes").textContent=yesLabel||"Confirm";
+    cfmResolve=res; $("cfmTitle").textContent=title; $("cfmMsg").textContent=msg||""; $("cfmYes").textContent=yesLabel||"Confirm"; $("cfmNo").textContent=noLabel||"Cancel"; cfmLock=!!noLabel;
     $("cfmYes").classList.toggle("danger-btn",!!danger); $("cfmBg").classList.add("open"); setTimeout(()=>{ try{ $("cfmNo").focus(); }catch(e){} },60); });
 }
 function cfmDone(v){ $("cfmBg").classList.remove("open"); const r=cfmResolve; cfmResolve=null; if(r) r(v); }
 $("cfmYes").onclick=()=>cfmDone(true); $("cfmNo").onclick=()=>cfmDone(false);
-$("cfmBg").addEventListener("click",e=>{ if(e.target===$("cfmBg")) cfmDone(false); });
+$("cfmBg").addEventListener("click",e=>{ if(e.target===$("cfmBg") && !cfmLock) cfmDone(false); });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && cfmResolve) cfmDone(false); });
 function hideUndo(){ const b=$("undoBar"); clearTimeout(undoTimer); undoFn=null; if(b.hidden) return; b.classList.add("out"); setTimeout(()=>{ if(!undoFn){ b.hidden=true; } b.classList.remove("out"); b.style.transform=""; b.style.opacity=""; },220); }
 function showUndo(msg, fn){ const b=$("undoBar"); undoFn=fn; $("undoTxt").textContent=msg; b.classList.remove("out"); b.style.transform=""; b.style.opacity=""; b.hidden=false; clearTimeout(undoTimer); undoTimer=setTimeout(hideUndo,5000); }
@@ -1418,7 +1422,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.6";
+const APP_VERSION="2026.10.18.7";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
