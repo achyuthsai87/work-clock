@@ -284,7 +284,7 @@
 
 <div class="card" id="locCard">
     <div class="pay-h">Location</div>
-    <div class="sub" style="margin-bottom:8px">Work Clock notes where you are at the moment you tap Clock in and Clock out, so your owner can see you were at the store. It never tracks you in the background. The spot is saved with the shift, on this phone and in your sheets.</div>
+    <div class="sub" style="margin-bottom:8px">For jobs at a fixed place, Work Clock notes where you are at the moment you tap Clock in and Clock out, so your owner can see you were at the store. For jobs on the road (like deliveries) it saves nothing. It never tracks you in the background. The spot is saved with the shift, on this phone and in your sheets.</div>
     <div class="settings-row"><span>Record where I clock in and out</span><button class="ios-switch" id="locToggle" role="switch" aria-checked="true" aria-label="Record location"></button></div>
     <div id="locWork"></div>
     <div class="sub" id="locMsg" style="margin:4px 2px 0"></div>
@@ -571,6 +571,7 @@
     <h2 id="jobTitle">Add a job</h2>
     <div class="field"><label>Name</label><input type="text" id="jobNameIn" maxlength="24" placeholder="e.g. Weekend cafe"></div>
     <div class="field" id="jobRateF"><label>Hourly rate ($)</label><input type="number" id="jobRateIn" inputmode="decimal" min="0" max="100000" step="0.25"></div>
+    <div class="field" id="jobPlaceF"><label for="jobPlace">Where do you work?</label><select id="jobPlace"><option value="">On the road (no location saved)</option><option value="1">At a place (save where I clock in and out)</option></select><div style="font-size:12px;color:var(--muted);margin-top:5px">Set the place itself in Settings &gt; Location.</div></div>
     <div id="jobMainNote" class="cfm-msg" style="display:none">The main job's rate is the Pay rate above.</div>
     <button type="button" class="link" id="jobLeave" style="display:none">I left this job</button>
     <button type="button" class="link danger-link" id="jobDelete" style="display:none">Delete this job for good</button>

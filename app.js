@@ -131,6 +131,7 @@ function cleanLocal(d){  // everything persisted on this device, incl. sync + lo
   }
   if(d && d.loc && typeof d.loc === "object"){
     out.loc = {on: d.loc.on === 0 ? 0 : 1, work: {}};
+    if(d.loc.at && typeof d.loc.at === "object"){ out.loc.at = {}; Object.keys(d.loc.at).slice(0, 12).forEach(k => { if((k === "" || ID_RE.test(k)) && d.loc.at[k] === 1) out.loc.at[k] = 1; }); }
     if(d.loc.work && typeof d.loc.work === "object") Object.keys(d.loc.work).slice(0, 12).forEach(k => { if((k === "" || ID_RE.test(k)) && placeOk(d.loc.work[k])) out.loc.work[k] = d.loc.work[k]; });
   }
   if(d && d.planDone && typeof d.planDone === "object"){ out.planDone = {};
@@ -147,6 +148,7 @@ let otCache = null;
 let db = {rate: 14, theme: "auto", shifts: []};
 try { const raw = localStorage.getItem(KEY); if (raw) db = cleanLocal(JSON.parse(raw)); } catch(e){}
 function save(){ otCache=null; try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} }
+if(!db.loc || !db.loc.at){ db.loc=db.loc||{on:1,work:{}}; db.loc.work=db.loc.work||{}; db.loc.at={"":1}; (db.jobs||[]).forEach(j=>{ db.loc.at[j.id]=1; }); save(); }   // existing jobs keep recording; new jobs start "on the road"
 
 function applyTheme(){
   const t = db.theme || "auto";
@@ -518,6 +520,7 @@ function renderJobsUI(){
   const mk=(id,name,rate,left)=>{ const r=document.createElement("button"); r.type="button"; r.className="job-row"+(left?" job-left":""); r.dataset.job=id;
     const n=document.createElement("span"); n.textContent=name; const m=document.createElement("span"); m.className="job-rate"; m.textContent=left?"Left "+fmtDay(new Date(left+"T12:00:00").getTime()):money(rate)+"/hr"; r.appendChild(n); r.appendChild(m); r.onclick=()=>openJob(id||null, true); L.appendChild(r); };
   mk("", jobName(""), db.rate); (db.jobs||[]).forEach(j=>mk(j.id,j.name,j.rate,j.left));
+  if(typeof renderLoc==="function") renderLoc();
 }
 function renderJobCards(){
   const box=$("jobCards"); box.innerHTML=""; const on=hasJobs() && homeJob==="all"; box.hidden=!on; if(!on) return;
@@ -535,16 +538,20 @@ function openJob(id, existing){
   $("jobTitle").textContent=jobIsMain?"Main job":(j?"Edit job":"Add a job");
   $("jobNameIn").value=jobIsMain?jobName(""):(j?j.name:""); $("jobRateIn").value=j?j.rate:"";
   $("jobRateF").style.display=jobIsMain?"none":""; $("jobMainNote").style.display=jobIsMain?"":"none"; $("jobDelete").style.display=(j&&j.left)?"":"none"; $("jobLeave").style.display=j?"":"none"; $("jobLeave").textContent=(j&&j.left)?"I'm back at this job":"I left this job";
+  $("jobPlace").value=(db.loc&&db.loc.at&&(jobIsMain?db.loc.at[""]===1:(!!id&&db.loc.at[id]===1)))?"1":"";
   $("jobBg").classList.add("open"); }
 function closeJob(){ $("jobBg").classList.remove("open"); }
 $("jobAdd").onclick=()=>{ if((db.jobs||[]).length>=7){ alert("That's the maximum number of extra jobs."); return; } openJob(null,false); };
 $("jobCancel").onclick=closeJob; $("jobBg").addEventListener("click",e=>{ if(e.target===$("jobBg")) closeJob(); });
+let jobSaveId="";
+function setPlaceMode(id,on){ db.loc=db.loc||{on:1,work:{}}; db.loc.at=db.loc.at||{}; if(on) db.loc.at[id]=1; else delete db.loc.at[id]; }
 $("jobSave").onclick=()=>{
   const name=cleanText($("jobNameIn").value,24); if(!name){ alert("Give the job a name."); return; }
   if(jobIsMain){ if(name==="Main job") delete db.jobName; else db.jobName=name; }
   else { const rate=parseFloat($("jobRateIn").value); if(!(rate>=0) || rate>100000){ alert("Enter an hourly rate."); return; }
     const c=cleanJob({id:jobEditId||("j"+Date.now().toString(36)+Math.random().toString(36).slice(2,4)), name, rate}); if(!c) return;
-    db.jobs=db.jobs||[]; const i=db.jobs.findIndex(x=>x.id===c.id); if(i>=0) db.jobs[i]=c; else db.jobs.push(c); }
+    db.jobs=db.jobs||[]; const i=db.jobs.findIndex(x=>x.id===c.id); if(i>=0) db.jobs[i]=c; else db.jobs.push(c); jobSaveId=c.id; }
+  setPlaceMode(jobIsMain?"":jobSaveId, $("jobPlace").value==="1");
   save(); closeJob(); render(); queueMeta(); };
 $("jobLeave").onclick=async()=>{ const j=(db.jobs||[]).find(x=>x.id===jobEditId); if(!j) return;
   if(!j.left && !await askConfirm("Leave "+j.name+"?", "You won't be able to add new shifts or clock in for it, and its shifts will be hidden from History, Analytics and Calendar. Your earnings still count in your totals. You can come back to it anytime from Settings.", "Yes, I left", false)) return;
@@ -560,15 +567,15 @@ $("jobDelete").onclick=async()=>{
   if(!await askConfirm("Delete "+j.name+"?", msg, "Delete job", true)) return;
   let wipe=false;
   if(mine.length) wipe=await askConfirm("What about its "+mine.length+" shift"+(mine.length===1?"":"s")+"?", "Keep them in your history and pay totals, or delete them too? Deleting removes "+hh.toFixed(1)+"h and "+money(ww)+" of recorded pay (handy if this was just a test job).", "Delete shifts too", true, "Keep shifts");
-  const jobSnap=JSON.stringify({jobs:db.jobs, plans:db.plans, activeJob:db.activeJob, mine});
+  const jobSnap=JSON.stringify({jobs:db.jobs, plans:db.plans, activeJob:db.activeJob, mine, loc:db.loc});
   if(wipe){ const gone=mine.slice(); const ids=new Set(gone.map(x=>x.id)); db.shifts=db.shifts.filter(x=>!ids.has(x.id)); gone.filter(x=>x.end).forEach(x=>queueSync({action:"delete", id:x.id})); }
   else db.shifts.forEach(s=>{ if(s.job===id){ if(s.rate==null) s.rate=j.rate; delete s.job; } });   // keep each shift's pay exactly as it was
-  db.jobs=db.jobs.filter(x=>x.id!==id); if(!db.jobs.length) delete db.jobs; if(db.activeJob===id) delete db.activeJob;
+  db.jobs=db.jobs.filter(x=>x.id!==id); if(!db.jobs.length) delete db.jobs; if(db.loc){ if(db.loc.at) delete db.loc.at[id]; if(db.loc.work) delete db.loc.work[id]; } if(db.activeJob===id) delete db.activeJob;
   if(db.plans){ db.plans=db.plans.filter(p=>p.job!==id); if(!db.plans.length) delete db.plans; }
   if(histJob===id) histJob="all"; if(jobFilter===id) jobFilter="all";
   const upd=wipe?[]:mine.filter(s=>s.end).map(s=>shiftPayload(s)); if(upd.length) queueSync({action:"bulk", shifts:upd});
   save(); closeJob(); render(); queueMeta();
-  showUndo("Job deleted.", ()=>{ const o=JSON.parse(jobSnap); db.jobs=o.jobs; if(o.plans) db.plans=o.plans; else delete db.plans; if(o.activeJob) db.activeJob=o.activeJob;
+  showUndo("Job deleted.", ()=>{ const o=JSON.parse(jobSnap); db.jobs=o.jobs; if(o.plans) db.plans=o.plans; else delete db.plans; if(o.activeJob) db.activeJob=o.activeJob; if(o.loc) db.loc=o.loc;
     const ids=new Set(o.mine.map(x=>x.id)); db.shifts=db.shifts.filter(x=>!ids.has(x.id)).concat(o.mine); save(); render(); queueMeta();
     const l=o.mine.filter(x=>x.end).map(x=>shiftPayload(x)); if(l.length) queueSync({action:"bulk", shifts:l}); }); };
 function expJobId(){ return jobEditId; }
@@ -1500,6 +1507,7 @@ $("nudgeLater").onclick=()=>{ db.nudgeAt=Date.now(); save(); updateNudge(); };
 
 // ---------- Where you clocked in and out: checked only at the moment you tap, never tracked in the background ----------
 function locOn(){ return !(db.loc && db.loc.on===0); }
+function locFor(job){ return locOn() && !!(db.loc && db.loc.at && db.loc.at[job||""]===1); }
 function getPos(ms){
   return new Promise(res=>{
     if(!navigator.geolocation) return res({err:"unsupported"});
@@ -1525,7 +1533,8 @@ function setLocNote(key,txt,id){
   else if(key==="pout" && toastShift===id && !$("toast").hidden && txt){ $("toastTxt").textContent=$("toastTxt").textContent.replace(/ \u00b7 [^\u00b7]*$/,"")+" \u00b7 "+txt; }
 }
 async function stampPlace(id,key){
-  if(!locOn()) return setLocNote(key,"",id);
+  const s0=db.shifts.find(x=>x.id===id);
+  if(!locFor(s0&&s0.job)) return setLocNote(key,"",id);
   setLocNote(key,"Getting location\u2026",id);
   const r=await getPos(), s=db.shifts.find(x=>x.id===id);
   if(!r.s){ setLocNote(key,locFail(r.err),id); return; }
@@ -1743,15 +1752,22 @@ function renderLoc(){
   if(!on) return;
   const list=[{id:"",name:jobName("")}].concat((db.jobs||[]).filter(j=>!j.left).map(j=>({id:j.id,name:j.name})));
   list.forEach(j=>{
-    const row=document.createElement("div"); row.className="settings-row";
-    const l=document.createElement("span"), sm=document.createElement("small"), w=workPlace(j.id);
-    l.textContent="Work location"+(list.length>1?" \u00b7 "+j.name:""); sm.textContent=w?"Set (\u00b1"+w.ac+" m)":"Not set"; l.appendChild(sm); row.appendChild(l);
-    const bs=document.createElement("span"), set=document.createElement("button"), clr=document.createElement("button");
-    set.type=clr.type="button"; set.className=clr.className="icon-btn"; set.textContent=w?"Update":"Set here"; clr.textContent="Clear"; clr.hidden=!w;
-    set.onclick=async()=>{ $("locMsg").textContent="Getting location\u2026"; const r=await getPos(); if(!r.s){ $("locMsg").textContent=locFail(r.err)+(r.err==="denied"?". Turn it on in iPhone Settings > Privacy & Security > Location Services.":"."); return; }
-      (db.loc=db.loc||{on:1,work:{}}).work=db.loc.work||{}; db.loc.work[j.id]=r.s; save(); $("locMsg").textContent="Saved. Stand in your store when you set this."; renderLoc(); render(); queueRestamp(); };
-    clr.onclick=()=>{ if(db.loc&&db.loc.work) delete db.loc.work[j.id]; save(); $("locMsg").textContent=""; renderLoc(); render(); queueRestamp(); };
-    bs.appendChild(set); bs.appendChild(clr); row.appendChild(bs); box.appendChild(row); });
+    const at=!!(db.loc&&db.loc.at&&db.loc.at[j.id]===1), w=workPlace(j.id), wrap=document.createElement("div"); wrap.className="loc-job";
+    const row=document.createElement("div"); row.className="settings-row"; const l=document.createElement("span"); l.textContent=j.name; row.appendChild(l);
+    const seg=document.createElement("span"); seg.className="seg";
+    [["","On the road"],["1","At a place"]].forEach(([v,t])=>{ const b=document.createElement("button"); b.type="button"; b.textContent=t; b.classList.toggle("on",(v==="1")===at);
+      b.onclick=()=>{ setPlaceMode(j.id,v==="1"); save(); $("locMsg").textContent=""; renderLoc(); }; seg.appendChild(b); });
+    row.appendChild(seg); wrap.appendChild(row);
+    if(at){
+      const r2=document.createElement("div"); r2.className="settings-row loc-sub"; const l2=document.createElement("span"), sm=document.createElement("small");
+      l2.textContent="Work location"; sm.textContent=w?"Set (\u00b1"+w.ac+" m)":"Not set yet"; l2.appendChild(sm); r2.appendChild(l2);
+      const bs=document.createElement("span"), set=document.createElement("button"), clr=document.createElement("button");
+      set.type=clr.type="button"; set.className=clr.className="icon-btn"; set.textContent=w?"Update":"Set here"; clr.textContent="Clear"; clr.hidden=!w;
+      set.onclick=async()=>{ $("locMsg").textContent="Getting location\u2026"; const r=await getPos(); if(!r.s){ $("locMsg").textContent=locFail(r.err)+(r.err==="denied"?". Turn it on in iPhone Settings > Privacy & Security > Location Services.":"."); return; }
+        (db.loc=db.loc||{on:1,work:{}}).work=db.loc.work||{}; db.loc.work[j.id]=r.s; save(); $("locMsg").textContent="Saved. Stand in your store when you set this."; renderLoc(); render(); queueRestamp(); };
+      clr.onclick=()=>{ if(db.loc&&db.loc.work) delete db.loc.work[j.id]; save(); $("locMsg").textContent=""; renderLoc(); render(); queueRestamp(); };
+      bs.appendChild(set); bs.appendChild(clr); r2.appendChild(bs); wrap.appendChild(r2); }
+    box.appendChild(wrap); });
 }
 $("locToggle").onclick=()=>{ db.loc=db.loc||{on:1,work:{}}; db.loc.on=locOn()?0:1; save(); $("locMsg").textContent=""; renderLoc(); };
 renderLoc();
@@ -1826,7 +1842,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   try{ await flushOutbox(); if(!c.err) await syncPull(); }catch(e){ if(!e.offline){ c.err=e.message; save(); } } updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.18.38";
+const APP_VERSION="2026.10.18.39";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

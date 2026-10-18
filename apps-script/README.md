@@ -46,4 +46,4 @@ Each Google Sheet has its own script, URL and secret. Repeat the setup above for
 
 ## Where you clocked in and out
 
-The app notes your location at the moment you tap Clock in and Clock out (never in the background). The Shifts sheet gets four extra columns: **In place** and **Out place** (latitude, longitude, accuracy in metres) and **In from work (m)** and **Out from work (m)** (distance from the work location you set in Settings > Location). Paste a place into Google Maps to see it. Updating from an older Code.gs adds the columns in place.
+For jobs set to "At a place", the app notes your location at the moment you tap Clock in and Clock out (never in the background). Jobs set to "On the road" save nothing. The Shifts sheet gets four extra columns: **In place** and **Out place** (latitude, longitude, accuracy in metres) and **In from work (m)** and **Out from work (m)** (distance from the work location you set in Settings > Location). Paste a place into Google Maps to see it. Updating from an older Code.gs adds the columns in place.
