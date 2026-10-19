@@ -1981,7 +1981,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.19.55";
+const APP_VERSION="2026.10.19.56";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -2514,7 +2514,7 @@ document.addEventListener("touchmove",e=>{ if(e.touches.length>1) e.preventDefau
   function setKbd(){ document.documentElement.classList.toggle("kbd", kbFocus||kbMetric); }
   document.addEventListener("focusin",e=>{ kbFocus=!!textLike(e.target); setKbd(); });
   document.addEventListener("focusout",()=>{ setTimeout(()=>{ kbFocus=!!textLike(document.activeElement); setKbd(); },120); });
-  function vvSet(){ if(!vv) return; const r=document.documentElement.style; const kb=Math.max(0, Math.round(window.innerHeight-vv.height-vv.offsetTop)); r.setProperty("--vvh",vv.height+"px"); r.setProperty("--kb",kb+"px"); kbMetric=kb>80||(vv.height<window.innerHeight-80); setKbd(); }
+  function vvSet(){ if(!vv) return; const r=document.documentElement.style; const kb=Math.max(0, Math.round(window.innerHeight-vv.height-vv.offsetTop)); r.setProperty("--vvh",vv.height+"px"); r.setProperty("--kb",kb+"px"); r.setProperty("--avail",Math.max(200,window.innerHeight-kb)+"px"); kbMetric=kb>80||(vv.height<window.innerHeight-80); setKbd(); }
   if(vv){ vv.addEventListener("resize",vvSet); vv.addEventListener("scroll",vvSet); vvSet(); }
   document.addEventListener("focusin",e=>{ if(e.target.closest && e.target.closest(".modal-bg")) setTimeout(()=>{ vvSet(); try{ e.target.scrollIntoView({block:"nearest"}); }catch(_){} },300); });
 })();
