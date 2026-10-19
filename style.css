@@ -1120,3 +1120,14 @@ html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme
 .av-face video,.av-face img{border-radius:50%; clip-path:circle(50% at 50% 50%); background:#cfe3fb; pointer-events:none}
 .av-tile .av-face img{background:#cfe3fb}
 .av-grid{grid-template-columns:repeat(4,1fr); gap:12px 10px}
+
+/* mascot moments */
+.moment-bg{position:fixed; inset:0; z-index:150; display:flex; align-items:center; justify-content:center; background:rgba(8,12,24,.55); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
+.moment-bg[hidden]{display:none}
+.moment{width:min(80vw,330px); text-align:center; animation:moPop .45s cubic-bezier(.2,1.3,.4,1) both}
+.moment video{width:100%; aspect-ratio:1; display:block; object-fit:cover; border-radius:34px; background:#cfe3fb; box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.mo-cap{margin-top:16px; font-size:20px; font-weight:700; color:#fff}
+.mo-sub{margin-top:4px; font-size:13px; color:rgba(255,255,255,.6)}
+@keyframes moPop{from{transform:scale(.8); opacity:0} to{transform:scale(1); opacity:1}}
+@media (prefers-reduced-motion:reduce){.moment{animation:none}}
+.av-grid{grid-template-columns:repeat(4,1fr)}
