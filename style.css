@@ -869,7 +869,9 @@ body.scroll-lock{position:fixed; left:0; right:0; width:100%; overflow:hidden}
 .lock{touch-action:none}
 .tap{cursor:pointer}.tipbox-t.tap:active{opacity:.6}
 html.kbd .modal{margin-bottom:0; padding-bottom:14px}
-html.kbd .modal-bg{padding-bottom:0}
+/* iOS floats a bar (up / down / done) above the keyboard; keep the sheet, and its Save button, clear of it */
+html.kbd .modal-bg{padding-bottom:64px}
+html.kbd .modal{max-height:calc(var(--vvh,100dvh) - 64px - 14px)}
 html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme:light}
 
 .mw-up{display:block; margin:0 0 2px -4px; padding:4px 6px; font-size:14px}
