@@ -987,7 +987,7 @@ html[data-theme="dark"]{color-scheme:dark} html[data-theme="light"]{color-scheme
   background:color-mix(in srgb,var(--card) 80%,transparent); border:.5px solid color-mix(in srgb,var(--ink) 14%,transparent);
   -webkit-backdrop-filter:blur(28px) saturate(1.8); backdrop-filter:blur(28px) saturate(1.8);
   box-shadow:0 14px 40px rgba(0,0,0,.22), inset 0 .5px 0 rgba(255,255,255,.35); font-size:15px; font-weight:600; color:var(--ink);
-  animation:ubIn .5s cubic-bezier(.2,1.1,.3,1) both}
+  animation:ubIn .5s cubic-bezier(.2,1.1,.3,1) backwards}
 .toast.ios-banner.out{opacity:0; transform:translateX(-50%) translateY(-130%)}
 @keyframes ubIn{from{opacity:0; transform:translateX(-50%) translateY(-130%) scale(.96)}to{opacity:1; transform:translateX(-50%)}}
 .toast.ios-banner .ub-ico{display:grid; place-items:center; width:32px; height:32px; flex:none; border-radius:50%; background:color-mix(in srgb,var(--red,#ff453a) 16%,transparent); color:var(--red,#ff453a)}

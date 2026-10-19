@@ -1978,7 +1978,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.19.58";
+const APP_VERSION="2026.10.19.59";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -2361,7 +2361,7 @@ document.querySelectorAll(".tabbar button, #avatarBtn").forEach(b=>b.onclick=()=
   document.querySelectorAll(".tabbar button, #avatarBtn").forEach(x=>x.classList.toggle("on",x===b));
   const t=b.dataset.tab;
   document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("on",p.id==="tab-"+t));
-  window.scrollTo(0,0); hideUndo();
+  window.scrollTo(0,0);
   if(t==="analytics"){ renderAnalytics(); drawChart(); }
   if(t==="pay") renderPay();
        if((t==="home"||t==="pay") && !counted[t]){ counted[t]=1; countUpAll(t); }
