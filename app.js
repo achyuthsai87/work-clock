@@ -1437,11 +1437,11 @@ $("tipSave").onclick=()=>{
 let undoFn=null, undoTimer=null;
 let cfmResolve=null;
 let cfmLock=false;
-function askConfirm(title,msg,yesLabel,danger,noLabel){
+function askConfirm(title,msg,yesLabel,danger,noLabel,center){
   return new Promise(res=>{
     if(cfmResolve) cfmResolve(false);
-    cfmResolve=res; $("cfmTitle").textContent=title; $("cfmMsg").textContent=msg||""; $("cfmYes").textContent=yesLabel||"Confirm"; $("cfmNo").textContent=noLabel||"Cancel"; cfmLock=!!noLabel;
-    $("cfmYes").classList.toggle("danger-btn",!!danger); $("cfmBg").classList.add("open"); setTimeout(()=>{ try{ $("cfmNo").focus(); }catch(e){} },60); });
+    cfmResolve=res; $("cfmTitle").textContent=title; $("cfmMsg").textContent=msg||""; $("cfmYes").textContent=yesLabel||"Confirm"; $("cfmNo").textContent=noLabel||"Cancel"; cfmLock=!!noLabel&&!center;
+    $("cfmYes").classList.toggle("danger-btn",!!danger); $("cfmBg").classList.toggle("center",!!center); $("cfmBg").classList.add("open"); setTimeout(()=>{ try{ $("cfmNo").focus(); }catch(e){} },60); });
 }
 function cfmDone(v){ $("cfmBg").classList.remove("open"); const r=cfmResolve; cfmResolve=null; if(r) r(v); }
 $("cfmYes").onclick=()=>cfmDone(true); $("cfmNo").onclick=()=>cfmDone(false);
@@ -1617,11 +1617,11 @@ function lateAsk(t){ return new Promise(res=>{ const now=Date.now();
   const done=v=>{ $("lateBg").classList.remove("open"); res(v); };
   $("lateGo").onclick=()=>done("now"); $("lateEdit").onclick=()=>done("edit"); $("lateNo").onclick=()=>done("cancel"); $("lateBg").onclick=e=>{ if(e.target===$("lateBg")) done("cancel"); };
   $("lateBg").classList.add("open"); }); }
-$("clockBtn").onclick=async()=>{
+$("clockBtn").onclick=async(ev,skipAsk)=>{
   const open=openShift(), now=Date.now();
   if(open){ const t=planOf(open);
-    if(t && now<t.E-PLAN_SLACK){ const left=brkText(Math.round((t.E-now)/60000));
-      if(!await askConfirm("Clock out now?","Your planned shift ends at "+fmtTime(t.E)+". There's still "+left+" left.","Clock out",true)) return; }
+    const early=t && now<t.E-PLAN_SLACK, left=early?brkText(Math.round((t.E-now)/60000)):"";
+    if(!skipAsk && !await askConfirm("Are you sure?", early?"You're about to clock out. Your planned shift ends at "+fmtTime(t.E)+", and there's still "+left+" left.":"You're about to clock out.", "Yes", false, "No", true)) return;
     return doClock(); }
   const t=planOf({start:now, job:db.activeJob});
   if(t && now>t.S+PLAN_SLACK && !db.shifts.some(x=>(x.job||"")===(db.activeJob||"") && x.start>=t.S-2*3600000 && x.start<t.E)){
@@ -1981,7 +1981,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.19.53";
+const APP_VERSION="2026.10.19.54";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -2452,7 +2452,7 @@ function checkAlarm(){
   $("alarmBg").classList.add("open"); if(!late){ startSound(s.pick,{loop:true,maxSec:30,vol:s.vol}).then(h=>{ if(alarmShift) alarmH=h; else h.stop(); }); }
 }
 setInterval(checkAlarm,1000); document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkAlarm(); });
-$("alarmStop").onclick=closeAlarm; $("alarmOut").onclick=()=>{ closeAlarm(); hideFs(); $("clockBtn").onclick(); };
+$("alarmStop").onclick=closeAlarm; $("alarmOut").onclick=()=>{ closeAlarm(); hideFs(); $("clockBtn").onclick(null,true); };
 $("alarmBg").addEventListener("click",e=>{ if(e.target===$("alarmBg")) closeAlarm(); });
 loadSndMeta();
 // ---- break: iPhone-style wheels for hours and minutes ----
