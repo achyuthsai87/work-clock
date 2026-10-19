@@ -36,7 +36,6 @@ function cleanPayment(p){
   if(p.job != null && p.job !== "" && ID_RE.test(String(p.job))) out.job = String(p.job);
   return out;
 }
-const SND_PICK_RE = /^[pc]:[A-Za-z0-9_-]{1,40}$/;
 const HM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DAY_RE = /^20\d\d-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 function cleanJob(j){
@@ -82,7 +81,6 @@ function cleanCore(d){   // the user's data only (shifts + display prefs)
   const hp = Number(d.holPct); if(Number.isFinite(hp) && hp > 0 && hp <= 300) out.holPct = Math.round(hp * 10) / 10;
   if(d.holidays && typeof d.holidays === "object"){ out.holidays = {}; Object.keys(d.holidays).filter(k => DAY_RE.test(k)).sort().slice(-400).forEach(k => { out.holidays[k] = 1; }); if(!Object.keys(out.holidays).length) delete out.holidays; }
   if(d.netTrack) out.netTrack = 1;
-  if(d.sound && typeof d.sound === "object"){ const so = {}; so.on = d.sound.on === 0 ? 0 : 1; if(typeof d.sound.pick === "string" && SND_PICK_RE.test(d.sound.pick)) so.pick = d.sound.pick; const sv = Number(d.sound.vol); if(Number.isFinite(sv) && sv >= 0.1 && sv <= 1) so.vol = Math.round(sv * 100) / 100; so.tap = d.sound.tap ? 1 : 0; out.sound = so; }
   if(["weekly","biweekly","monthly"].includes(d.payCycle)) out.payCycle = d.payCycle;
   if(typeof d.payAnchor === "string" && DAY_RE.test(d.payAnchor)) out.payAnchor = d.payAnchor;
   const jn = cleanText(d.jobName, 24); if(jn) out.jobName = jn;
@@ -1605,7 +1603,6 @@ function doClock(){
   try{ if(navigator.vibrate) navigator.vibrate(18); }catch(e){}
   { const b=$("clockBtn"); b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); }
   const open=openShift();
-  if(open){ stopAlarm(); if(snd().tap){ unlockAudio(); startSound(snd().pick,{loop:false,maxSec:3,vol:snd().vol}); } }
   if(open){ const fromTxt=$("heroEarn").textContent; open.end=Date.now(); save(); render(); countUp($("heroEarn"), parseFloat(fromTxt.replace(/[^0-9.]/g,"")), parseFloat($("heroEarn").textContent.replace(/[^0-9.]/g,""))); queueSync({action:"upsert", shift:shiftPayload(open)});
     toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); stampPlace(open.id,"pout"); }
   else { const ns=mkShift(Date.now(), null, db.activeJob); db.shifts.push(ns); save(); render(); showFs(); stampPlace(ns.id,"pin"); }
@@ -1803,7 +1800,7 @@ $("csvBtn").onclick=()=>{
   });
   download("workclock.csv",csv,"text/csv");
 };
-$("jsonBtn").onclick=()=>{ db.lastBackup=Date.now(); save(); updateNudge(); }; $("jsonBtn").addEventListener("click",()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, shifts:db.shifts, payments:db.payments||[], jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, sound:db.sound, payCycle:db.payCycle, payAnchor:db.payAnchor, plans:db.plans, daysOff:db.daysOff, expenses:db.expenses},null,2),"application/json"));  // never includes sync URL/secret
+$("jsonBtn").onclick=()=>{ db.lastBackup=Date.now(); save(); updateNudge(); }; $("jsonBtn").addEventListener("click",()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, shifts:db.shifts, payments:db.payments||[], jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, payCycle:db.payCycle, payAnchor:db.payAnchor, plans:db.plans, daysOff:db.daysOff, expenses:db.expenses},null,2),"application/json"));  // never includes sync URL/secret
 $("importBtn").onclick=()=>$("importFile").click();
 $("importFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -1819,7 +1816,7 @@ $("importFile").addEventListener("change",e=>{
   r.readAsText(f); e.target.value="";
 });
 $("wipeBtn").onclick=async()=>{ if(await askConfirm("Delete all data?","Every shift and payment on this phone will be erased. You get a few seconds to undo it afterwards, so back up first if you're not sure.","Delete everything",true)){
-  const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, sound:db.sound, payCycle:db.payCycle, payAnchor:db.payAnchor, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock, loc:db.loc, profile:db.profile};
+  const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, payCycle:db.payCycle, payAnchor:db.payAnchor, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock, loc:db.loc, profile:db.profile};
   const snapAll=JSON.stringify(Object.assign({},db,{sync:undefined, lock:undefined, outbox:undefined, loc:undefined, profile:undefined}));
   db=Object.assign({shifts:[], outbox:[]}, keep); mirrors().forEach(m=>{ m.outbox=[]; }); save(); render(); updateSyncStatus();
   showUndo("All data deleted.", ()=>{ const o=JSON.parse(snapAll); db=Object.assign(o,{sync:db.sync, lock:db.lock, outbox:db.outbox, lastSync:db.lastSync, loc:db.loc, profile:db.profile}); save(); render(); updateSyncStatus();
@@ -1981,7 +1978,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.19.57";
+const APP_VERSION="2026.10.19.58";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -2375,86 +2372,7 @@ setTimeout(replayActive,80);
 setTimeout(showMissed,1200);
 let hidAt=0;
 document.addEventListener("visibilitychange",()=>{ if(document.hidden){ hidAt=Date.now(); } else if(Date.now()-hidAt>4000){ for(const k in counted) delete counted[k]; setTimeout(replayActive,150); } });
-// ---- sounds: alarm at clock-out time + optional sound on Clock Out; built-in tones plus your own files ----
-const SND_DEF={on:1, pick:"p:bell", vol:0.8, tap:0};
-function snd(){ const s=db.sound||{}; return {on:s.on===0?0:1, pick:(typeof s.pick==="string"&&SND_PICK_RE.test(s.pick))?s.pick:SND_DEF.pick, vol:(Number(s.vol)>=0.1&&Number(s.vol)<=1)?Number(s.vol):SND_DEF.vol, tap:s.tap?1:0}; }
-function setSnd(patch){ db.sound=Object.assign(snd(),patch); save(); }
-let sndCtx=null; const sndBufs=new Map(), sndMeta=[];
-function audioCtx(){ if(!sndCtx){ const C=window.AudioContext||window.webkitAudioContext; if(!C) return null; sndCtx=new C(); } return sndCtx; }
-function unlockAudio(){ const c=audioCtx(); if(!c) return; if(c.state==="suspended") c.resume().catch(()=>{}); try{ const b=c.createBuffer(1,1,22050), s=c.createBufferSource(); s.buffer=b; s.connect(c.destination); s.start(0); }catch(_){} }
-["pointerdown","touchend","keydown"].forEach(ev=>document.addEventListener(ev,unlockAudio,{passive:true}));
-// stored sounds (your own files) live in this browser's IndexedDB, never in the sheet
-const sndDB=()=>new Promise((res,rej)=>{ try{ const r=indexedDB.open("workclock-sounds",1); r.onupgradeneeded=()=>r.result.createObjectStore("s",{keyPath:"id"}); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }catch(e){ rej(e); } });
-const sndTx=async(mode,fn)=>{ const d=await sndDB(); return new Promise((res,rej)=>{ const t=d.transaction("s",mode), st=t.objectStore("s"); const q=fn(st); t.oncomplete=()=>res(q&&q.result); t.onerror=()=>rej(t.error); }); };
-async function loadSndMeta(){ try{ const all=await sndTx("readonly",st=>st.getAll()); sndMeta.length=0; (all||[]).forEach(x=>sndMeta.push({id:x.id,name:x.name})); }catch(_){ sndMeta.length=0; } renderSounds(); }
-async function loadBuffer(id){ if(sndBufs.has(id)) return sndBufs.get(id); const c=audioCtx(); if(!c) return null;
-  const rec=await sndTx("readonly",st=>st.get(id)); if(!rec||!rec.data) return null;
-  const buf=await new Promise((res,rej)=>{ const p=c.decodeAudioData(rec.data.slice(0),res,rej); if(p&&p.catch) p.catch(rej); }); sndBufs.set(id,buf); return buf; }
-function tone(c,out,t,f,dur,type,gain,att){ const o=c.createOscillator(), g=c.createGain(); o.type=type; o.frequency.value=f; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002,gain),t+(att||.01)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.connect(g); g.connect(out); o.start(t); o.stop(t+dur+.05); }
-const SND_PRESETS=[
-  {id:"bell",name:"Bell",cycle:2.6,play:(c,o,t)=>{ [[880,1],[1760,.4],[2640,.18]].forEach(([f,g])=>tone(c,o,t,f,2.2,"sine",.34*g)); [[880,1],[1760,.4]].forEach(([f,g])=>tone(c,o,t+1,f,1.6,"sine",.24*g)); }},
-  {id:"chime",name:"Chime",cycle:2.4,play:(c,o,t)=>{ [523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(c,o,t+i*.2,f,1.2,"triangle",.3)); }},
-  {id:"marimba",name:"Marimba",cycle:2.0,play:(c,o,t)=>{ [392,494,587,784,587,494].forEach((f,i)=>{ tone(c,o,t+i*.17,f,.5,"sine",.38); tone(c,o,t+i*.17,f*4,.12,"sine",.08); }); }},
-  {id:"digital",name:"Digital alarm",cycle:1.5,play:(c,o,t)=>{ for(let i=0;i<4;i++) tone(c,o,t+i*.2,1000,.12,"square",.16,.005); }},
-  {id:"pulse",name:"Soft pulse",cycle:2.2,play:(c,o,t)=>{ tone(c,o,t,330,.9,"sine",.4,.08); tone(c,o,t+1,262,1,"sine",.4,.08); }},
-  {id:"rise",name:"Rise",cycle:2.6,play:(c,o,t)=>{ const x=c.createOscillator(), g=c.createGain(); x.type="triangle"; x.frequency.setValueAtTime(500,t); x.frequency.exponentialRampToValueAtTime(1500,t+.9); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.3,t+.1); g.gain.exponentialRampToValueAtTime(.0001,t+1.1); x.connect(g); g.connect(o); x.start(t); x.stop(t+1.2); tone(c,o,t+1.1,1500,.8,"sine",.25); }}
-];
-async function startSound(pick, o){   // returns {stop}; o: loop, maxSec, vol
-  const c=audioCtx(); if(!c) return {stop(){}}; try{ if(c.state==="suspended") await c.resume(); }catch(_){}
-  const master=c.createGain(); master.gain.value=o.vol; master.connect(c.destination);
-  let stopped=false; const timers=[], srcs=[];
-  const stop=()=>{ if(stopped) return; stopped=true; timers.forEach(clearTimeout); try{ master.gain.setTargetAtTime(0,c.currentTime,.05); }catch(_){} srcs.forEach(s=>{ try{ s.stop(c.currentTime+.25); }catch(_){} }); setTimeout(()=>{ try{ master.disconnect(); }catch(_){} },500); };
-  if(pick.indexOf("p:")===0){ const p=SND_PRESETS.find(x=>x.id===pick.slice(2))||SND_PRESETS[0]; const run=()=>{ if(stopped) return; p.play(c,master,c.currentTime+.03); if(o.loop) timers.push(setTimeout(run,p.cycle*1000)); }; run(); }
-  else { let buf=null; try{ buf=await loadBuffer(pick.slice(2)); }catch(_){} if(!buf){ return startSound("p:bell",o); } if(!stopped){ const s=c.createBufferSource(); s.buffer=buf; s.loop=!!o.loop&&buf.duration<6; s.connect(master); s.start(); srcs.push(s); } }
-  if(o.maxSec) timers.push(setTimeout(stop,o.maxSec*1000));
-  return {stop};
-}
-let sndPrev=null;
-function stopPreview(){ if(sndPrev){ sndPrev.stop(); sndPrev=null; } document.querySelectorAll(".snd-play.on").forEach(b=>{ b.classList.remove("on"); b.textContent="▶"; }); }
-function renderSounds(){
-  const box=$("sndList"); if(!box) return; box.innerHTML=""; const cur=snd().pick;
-  const mk=(pick,name,custom)=>{ const r=document.createElement("div"); r.className="snd-row"+(pick===cur?" on":"");
-    const sel=document.createElement("button"); sel.type="button"; sel.className="snd-pick"; sel.setAttribute("aria-pressed",pick===cur); sel.innerHTML='<i class="snd-r"></i>'; const nm=document.createElement("span"); nm.textContent=name; sel.appendChild(nm);
-    sel.onclick=()=>{ setSnd({pick}); renderSounds(); };
-    const pl=document.createElement("button"); pl.type="button"; pl.className="snd-play"; pl.textContent="▶"; pl.setAttribute("aria-label","Play "+name);
-    pl.onclick=async()=>{ const was=pl.classList.contains("on"); stopPreview(); if(was) return; unlockAudio(); pl.classList.add("on"); pl.textContent="■"; const h=await startSound(pick,{loop:false,maxSec:6,vol:snd().vol}); sndPrev=h; setTimeout(()=>{ if(sndPrev===h){ stopPreview(); } },6100); };
-    r.appendChild(sel); r.appendChild(pl);
-    if(custom){ const d=document.createElement("button"); d.type="button"; d.className="snd-del"; d.textContent="Delete"; d.setAttribute("aria-label","Delete "+name);
-      d.onclick=async()=>{ if(!await askConfirm("Delete this sound?",name,"Delete",true)) return; stopPreview(); try{ await sndTx("readwrite",st=>st.delete(pick.slice(2))); }catch(_){} sndBufs.delete(pick.slice(2)); if(snd().pick===pick) setSnd({pick:SND_DEF.pick}); await loadSndMeta(); };
-      r.appendChild(d); }
-    box.appendChild(r); };
-  SND_PRESETS.forEach(p=>mk("p:"+p.id,p.name,false)); sndMeta.forEach(m=>mk("c:"+m.id,m.name,true));
-  const s=snd(); $("sndOn").value=s.on?"1":""; $("sndTap").value=s.tap?"1":""; $("sndVol").value=String(Math.round(s.vol*100)); $("sndAdd").disabled=sndMeta.length>=8; $("sndAdd").textContent=sndMeta.length>=8?"8 sounds added (delete one to add another)":"Add your own sound";
-}
-$("sndOn").addEventListener("change",e=>{ setSnd({on:e.target.value?1:0}); });
-$("sndTap").addEventListener("change",e=>{ setSnd({tap:e.target.value?1:0}); });
-$("sndVol").addEventListener("input",e=>{ setSnd({vol:Math.min(1,Math.max(.1,Number(e.target.value)/100))}); });
-$("sndAdd").onclick=()=>{ unlockAudio(); $("sndFile").click(); };
-$("sndFile").addEventListener("change",async e=>{
-  const f=e.target.files&&e.target.files[0]; e.target.value=""; if(!f) return; const msg=$("sndMsg"); msg.textContent="";
-  if(f.size>8*1024*1024){ msg.textContent="That file is over 8 MB. Pick a shorter one."; return; }
-  if(!/^audio\//.test(f.type) && !/\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|caf|aif|aiff)$/i.test(f.name)){ msg.textContent="That doesn't look like an audio file."; return; }
-  const c=audioCtx(); if(!c){ msg.textContent="This browser can't play custom sounds."; return; }
-  try{ const data=await f.arrayBuffer(); const buf=await new Promise((res,rej)=>{ const p=c.decodeAudioData(data.slice(0),res,rej); if(p&&p.catch) p.catch(rej); });
-    const id="u"+uid().replace(/[^A-Za-z0-9]/g,"").slice(0,20), name=cleanText(f.name.replace(/\.[^.]+$/,""),40)||"My sound";
-    await sndTx("readwrite",st=>st.put({id,name,data})); sndBufs.set(id,buf); setSnd({pick:"c:"+id}); await loadSndMeta(); msg.textContent="Added “"+name+"” and selected it."; }
-  catch(_){ msg.textContent="Couldn't read that file. Try an MP3, M4A or WAV."; } });
-// the alarm itself: when the planned (or chosen) end time arrives while the app is open
-let alarmH=null, alarmShift=null;
-function endTimeOf(o){ const p=planOf(o); return p?p.E:null; }
-function stopAlarm(){ if(alarmH){ alarmH.stop(); alarmH=null; } }
-function closeAlarm(){ stopAlarm(); $("alarmBg").classList.remove("open"); alarmShift=null; }
-function checkAlarm(){
-  const o=openShift(); if(!o){ if(alarmShift) closeAlarm(); return; } const T=endTimeOf(o); if(!T || Date.now()<T) return; const s=snd(); if(!s.on) return;
-  const tag=o.id+":"+T; let seen=""; try{ seen=localStorage.getItem("workclock.alarm")||""; }catch(_){} if(seen===tag) return; try{ localStorage.setItem("workclock.alarm",tag); }catch(_){}
-  const late=Date.now()-T>10*60000; alarmShift=o.id;
-  $("alarmTxt").textContent="Your planned shift ended at "+fmtTime(T)+(hasJobs()?" · "+jobName(o.job):"")+(late?" passed a while ago.":" has arrived.");
-  $("alarmBg").classList.add("open"); if(!late){ startSound(s.pick,{loop:true,maxSec:30,vol:s.vol}).then(h=>{ if(alarmShift) alarmH=h; else h.stop(); }); }
-}
-setInterval(checkAlarm,1000); document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkAlarm(); });
-$("alarmStop").onclick=closeAlarm; $("alarmOut").onclick=()=>{ closeAlarm(); hideFs(); $("clockBtn").onclick(null,true); };
-$("alarmBg").addEventListener("click",e=>{ if(e.target===$("alarmBg")) closeAlarm(); });
-loadSndMeta();
+try{ indexedDB.deleteDatabase("workclock-sounds"); localStorage.removeItem("workclock.alarm"); }catch(_){}
 // ---- break: iPhone-style wheels for hours and minutes ----
 function brkText(m){ const h=Math.floor(m/60), r=m%60; return h?(r?h+"h "+r+"m":h+"h"):r+" min"; }
 (function(){
