@@ -1449,15 +1449,19 @@ $("cfmBg").addEventListener("click",e=>{ if(e.target===$("cfmBg") && !cfmLock) c
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && cfmResolve) cfmDone(false); });
 function hideUndo(){ const b=$("undoBar"); clearTimeout(undoTimer); undoFn=null; if(b.hidden) return; b.classList.add("out"); setTimeout(()=>{ if(!undoFn){ b.hidden=true; } b.classList.remove("out"); b.style.transform=""; b.style.opacity=""; },220); }
 function showUndo(msg, fn){ const b=$("undoBar"); undoFn=fn; $("undoTxt").textContent=msg; b.classList.remove("out"); b.style.transform=""; b.style.opacity=""; b.hidden=false; clearTimeout(undoTimer); undoTimer=setTimeout(hideUndo,6000); const ub=b.querySelector(".ub-bar"); if(ub){ ub.style.animation="none"; void ub.offsetWidth; ub.style.animation=""; } }
-(()=>{ const b=$("undoBar"); let x0=null,y0=0,dx=0;
-  b.addEventListener("pointerdown",e=>{ if(e.target.closest("button")) return; x0=e.clientX; y0=e.clientY; dx=0; b.style.transition="none"; clearTimeout(undoTimer); });
-  b.addEventListener("pointermove",e=>{ if(x0==null) return; dx=e.clientX-x0; b.style.transform="translateX(calc(-50% + "+dx+"px))"; b.style.opacity=String(Math.max(0.2,1-Math.abs(dx)/200)); });
-  const end=()=>{ if(x0==null) return; x0=null; b.style.transition=""; if(Math.abs(dx)>60){ b.style.transform="translateX(calc(-50% + "+(dx>0?400:-400)+"px))"; b.style.opacity="0"; hideUndo(); } else { b.style.transform=""; b.style.opacity=""; undoTimer=setTimeout(hideUndo,3000); } };
-  b.addEventListener("pointerup",end); b.addEventListener("pointercancel",end);
-})();
+// swipe any pop-up notice left or right to clear it (hold it to keep it on screen)
+function swipeAway(b, onHold, onGone, onBack){ let x0=null, dx=0, id=null;
+  b.addEventListener("pointerdown",e=>{ if(e.target.closest("button")) return; x0=e.clientX; dx=0; id=e.pointerId; try{ b.setPointerCapture(id); }catch(_){} b.style.transition="none"; if(onHold) onHold(); });
+  b.addEventListener("pointermove",e=>{ if(x0==null||e.pointerId!==id) return; dx=e.clientX-x0; b.style.transform="translateX(calc(-50% + "+dx+"px))"; b.style.opacity=String(Math.max(0.2,1-Math.abs(dx)/200)); });
+  const end=()=>{ if(x0==null) return; x0=null; b.style.transition="";
+    if(Math.abs(dx)>60){ b.style.transform="translateX(calc(-50% + "+(dx>0?420:-420)+"px))"; b.style.opacity="0"; setTimeout(()=>{ b.style.transform=""; b.style.opacity=""; },260); onGone(); }
+    else { b.style.transform=""; b.style.opacity=""; if(onBack) onBack(); } };
+  b.addEventListener("pointerup",end); b.addEventListener("pointercancel",end); }
+swipeAway($("undoBar"), ()=>clearTimeout(undoTimer), ()=>hideUndo(), ()=>{ undoTimer=setTimeout(hideUndo,3000); });
 $("undoBtn").onclick=()=>{ const f=undoFn; hideUndo(); if(f) f(); };
 let toastTimer=null, toastShift=null, toastTap=0;
 function hideToast(){ $("toast").hidden=true; clearTimeout(toastTimer); }
+swipeAway($("toast"), ()=>clearTimeout(toastTimer), ()=>setTimeout(hideToast,200), ()=>{ toastTimer=setTimeout(hideToast,6000); });
 $("toastBtn").onclick=()=>{ const s=db.shifts.find(x=>x.id===toastShift); if(!s) return hideToast(); hideToast();
   const d=new Date(s.end); $("endTime").value=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); $("endBg").classList.add("open"); };
 $("endCancel").onclick=()=>$("endBg").classList.remove("open");
@@ -1977,7 +1981,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.19.52";
+const APP_VERSION="2026.10.19.53";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
