@@ -3,7 +3,7 @@
    - Pages, scripts, styles and the manifest are network-first, so pushed updates apply on the next
      online open with no reinstall. Offline falls back to the cached copy.
    - Only successful, same-origin responses are ever cached (no error pages, no opaque responses). */
-const CACHE = "workclock-v120";
+const CACHE = "workclock-v121";
 const ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./manifest.webmanifest",
   "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
@@ -34,7 +34,6 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;          // never intercept cross-origin traffic
-  if (/\.mp4$/.test(url.pathname)) return;                  // videos stream straight from the network (iOS needs range requests)
 
   const networkFirst = req.mode === "navigate" || url.pathname.endsWith("/") ||
                        /\.(?:html|js|css|webmanifest)$/.test(url.pathname);

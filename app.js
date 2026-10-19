@@ -134,9 +134,8 @@ function cleanLocal(d){  // everything persisted on this device, incl. sync + lo
     if(d.loc.work && typeof d.loc.work === "object") Object.keys(d.loc.work).slice(0, 12).forEach(k => { if((k === "" || ID_RE.test(k)) && placeOk(d.loc.work[k])) out.loc.work[k] = d.loc.work[k]; });
   }
   if(d && d.profile && typeof d.profile === "object"){
-    const pf = d.profile, kinds = ["initials","photo","animal"], animals = ["chinnu","fox","bunny","cat","penguin"], legacy = {lion:"chinnu", panda:"chinnu", "mascot-fox-wave":"fox", "mascot-bunny-cheer":"bunny", "mascot-cat-typing":"cat", "mascot-penguin-dance":"penguin", "mascot-penguin-slide":"penguin"};
-    out.profile = {name: cleanText(pf.name, 30).replace(/\s+/g, " "), kind: kinds.includes(pf.kind) ? pf.kind : "initials", animal: animals.includes(pf.animal) ? pf.animal : (String(pf.animal).startsWith("chinnu") ? "chinnu" : (legacy[pf.animal] || "chinnu"))};
-    if(pf.mute) out.profile.mute = 1;
+    const pf = d.profile, kinds = ["initials","photo","animal"], animals = ["lion","cat","fox","panda","bunny","penguin"];
+    out.profile = {name: cleanText(pf.name, 30).replace(/\s+/g, " "), kind: kinds.includes(pf.kind) ? pf.kind : "initials", animal: animals.includes(pf.animal) ? pf.animal : "lion"};
     if(typeof pf.photo === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]{1,120000}$/.test(pf.photo)) out.profile.photo = pf.photo;
   }
   if(d && d.planDone && typeof d.planDone === "object"){ out.planDone = {};
@@ -1604,8 +1603,8 @@ function doClock(){
   const open=openShift();
   if(open){ stopAlarm(); if(snd().tap){ unlockAudio(); startSound(snd().pick,{loop:false,maxSec:3,vol:snd().vol}); } }
   if(open){ const fromTxt=$("heroEarn").textContent; open.end=Date.now(); save(); render(); countUp($("heroEarn"), parseFloat(fromTxt.replace(/[^0-9.]/g,"")), parseFloat($("heroEarn").textContent.replace(/[^0-9.]/g,""))); queueSync({action:"upsert", shift:shiftPayload(open)});
-    toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); stampPlace(open.id,"pout"); moment("out","Shift done. Nice work!"); }
-  else { const ns=mkShift(Date.now(), null, db.activeJob); db.shifts.push(ns); save(); render(); showFs(); stampPlace(ns.id,"pin"); moment("in","Clocked in. Let's go!"); }
+    toastShift=open.id; toastTap=open.end; $("toastTxt").textContent="Clocked out at "+fmtTime(open.end)+"."; $("toast").hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(hideToast,20000); stampPlace(open.id,"pout"); }
+  else { const ns=mkShift(Date.now(), null, db.activeJob); db.shifts.push(ns); save(); render(); showFs(); stampPlace(ns.id,"pin"); }
 }
 // planned shifts: ask before starting 5+ minutes late, or clocking out before the planned end
 const PLAN_SLACK=5*60000, hmOf=ts=>{ const d=new Date(ts); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); };
@@ -1824,41 +1823,22 @@ $("wipeBtn").onclick=async()=>{ if(await askConfirm("Delete all data?","Every sh
 
 
 // ---------- Profile circle: initials, your photo, or a cute animal; it "types" while you're clocked in ----------
-// each character has a clip for the big moments (clock in, break, clock out, paid) and one that loops quietly in the corner circle while you work
-const CHARS={
-  chinnu:{name:"Chinnu", still:"chinnu-idle", work:"chinnu-typing", in:"chinnu-running", brk:"chinnu-coffee", out:"chinnu-celebrate", pay:"chinnu-money"},
-  fox:{name:"Fox", still:"mascot-fox-wave", all:"mascot-fox-wave"},
-  bunny:{name:"Bunny", still:"mascot-bunny-cheer", all:"mascot-bunny-cheer"},
-  cat:{name:"Cat", still:"mascot-cat-typing", all:"mascot-cat-typing"},
-  penguin:{name:"Penguin", still:"mascot-penguin-dance", work:"mascot-penguin-dance", in:"mascot-penguin-slide", brk:"mascot-penguin-slide", out:"mascot-penguin-dance", pay:"mascot-penguin-dance"}
+const ANIMALS=[["lion","Lion"],["cat","Cat"],["fox","Fox"],["panda","Panda"],["bunny","Bunny"],["penguin","Penguin"]];
+const AV_SVG={
+ lion:'<rect width="100" height="100" fill="#ffe7b0"/><g class="a-head"><circle cx="50" cy="56" r="38" fill="#e59a3d"/><circle cx="27" cy="27" r="9" fill="#f2b25a"/><circle cx="27" cy="27" r="4.6" fill="#ffd9b0"/><circle cx="73" cy="27" r="9" fill="#f2b25a"/><circle cx="73" cy="27" r="4.6" fill="#ffd9b0"/><circle cx="50" cy="58" r="27" fill="#ffd694"/><ellipse cx="50" cy="68" rx="13" ry="10" fill="#fff0d2"/><g class="a-eyes"><circle cx="40" cy="54" r="3.7" fill="#3a2a22"/><circle cx="60" cy="54" r="3.7" fill="#3a2a22"/><circle cx="41.2" cy="52.8" r="1.2" fill="#fff"/><circle cx="61.2" cy="52.8" r="1.2" fill="#fff"/></g><path d="M46 62h8l-4 4z" fill="#c2603a"/><path d="M50 66v3M50 69q-4 4-8 1M50 69q4 4 8 1" stroke="#7a4a32" stroke-width="1.6" fill="none" stroke-linecap="round"/><ellipse cx="33" cy="64" rx="4.5" ry="3" fill="#ff9d8a" opacity=".65"/><ellipse cx="67" cy="64" rx="4.5" ry="3" fill="#ff9d8a" opacity=".65"/></g>',
+ cat:'<rect width="100" height="100" fill="#d3e3ff"/><g class="a-head"><path d="M22 44L27 14L47 31Z" fill="#9ca8bf"/><path d="M28 36L30 22L40 31Z" fill="#ffb6c8"/><path d="M78 44L73 14L53 31Z" fill="#9ca8bf"/><path d="M72 36L70 22L60 31Z" fill="#ffb6c8"/><ellipse cx="50" cy="60" rx="31" ry="27" fill="#b6c0d5"/><path d="M50 36v8M43 37l2 7M57 37l-2 7" stroke="#8f9bb4" stroke-width="2.4" stroke-linecap="round"/><g class="a-eyes"><ellipse cx="38" cy="58" rx="4" ry="5" fill="#2b2f45"/><ellipse cx="62" cy="58" rx="4" ry="5" fill="#2b2f45"/><circle cx="39.4" cy="56.2" r="1.4" fill="#fff"/><circle cx="63.4" cy="56.2" r="1.4" fill="#fff"/></g><path d="M47 66h6l-3 3.2z" fill="#ff8fa8"/><path d="M50 69q-3 4-7 2M50 69q3 4 7 2" stroke="#6b5a6b" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M24 66l-12-2M24 70l-12 3M76 66l12-2M76 70l12 3" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity=".85"/><ellipse cx="31" cy="68" rx="4" ry="2.8" fill="#ff9fb4" opacity=".6"/><ellipse cx="69" cy="68" rx="4" ry="2.8" fill="#ff9fb4" opacity=".6"/></g>',
+ fox:'<rect width="100" height="100" fill="#ffe3d3"/><g class="a-head"><path d="M20 46L25 12L47 30Z" fill="#ee7b38"/><path d="M26 36L28 21L40 30Z" fill="#4a3328"/><path d="M80 46L75 12L53 30Z" fill="#ee7b38"/><path d="M74 36L72 21L60 30Z" fill="#4a3328"/><ellipse cx="50" cy="58" rx="31" ry="27" fill="#f28c47"/><path d="M19 62Q36 80 50 86Q64 80 81 62Q66 70 50 70Q34 70 19 62Z" fill="#fff3e6"/><g class="a-eyes"><ellipse cx="38" cy="56" rx="3.6" ry="4.4" fill="#2a1f1f"/><ellipse cx="62" cy="56" rx="3.6" ry="4.4" fill="#2a1f1f"/><circle cx="39.2" cy="54.6" r="1.2" fill="#fff"/><circle cx="63.2" cy="54.6" r="1.2" fill="#fff"/></g><circle cx="50" cy="70" r="3.3" fill="#2a1f1f"/><path d="M50 73q-3 3.5-6 1.5M50 73q3 3.5 6 1.5" stroke="#6b3d28" stroke-width="1.4" fill="none" stroke-linecap="round"/><ellipse cx="30" cy="66" rx="4" ry="2.8" fill="#ff9d8a" opacity=".55"/><ellipse cx="70" cy="66" rx="4" ry="2.8" fill="#ff9d8a" opacity=".55"/></g>',
+ panda:'<rect width="100" height="100" fill="#dff4e4"/><g class="a-head"><circle cx="25" cy="28" r="10.5" fill="#2c2c36"/><circle cx="75" cy="28" r="10.5" fill="#2c2c36"/><ellipse cx="50" cy="58" rx="32" ry="29" fill="#fff"/><ellipse cx="36" cy="55" rx="7.5" ry="9.5" transform="rotate(22 36 55)" fill="#2c2c36"/><ellipse cx="64" cy="55" rx="7.5" ry="9.5" transform="rotate(-22 64 55)" fill="#2c2c36"/><g class="a-eyes"><circle cx="37" cy="55" r="3.3" fill="#fff"/><circle cx="63" cy="55" r="3.3" fill="#fff"/><circle cx="37.4" cy="55.4" r="1.9" fill="#111"/><circle cx="62.6" cy="55.4" r="1.9" fill="#111"/></g><ellipse cx="50" cy="66" rx="4.4" ry="3.2" fill="#2c2c36"/><path d="M50 69q-3 4-7 2M50 69q3 4 7 2" stroke="#2c2c36" stroke-width="1.5" fill="none" stroke-linecap="round"/><ellipse cx="28" cy="68" rx="4" ry="2.8" fill="#ffa7b8" opacity=".6"/><ellipse cx="72" cy="68" rx="4" ry="2.8" fill="#ffa7b8" opacity=".6"/></g>',
+ bunny:'<rect width="100" height="100" fill="#fde6f1"/><g class="a-head"><ellipse cx="35" cy="26" rx="8.5" ry="21" fill="#fff"/><ellipse cx="35" cy="27" rx="4" ry="14" fill="#ffbdd2"/><ellipse cx="65" cy="26" rx="8.5" ry="21" fill="#fff"/><ellipse cx="65" cy="27" rx="4" ry="14" fill="#ffbdd2"/><ellipse cx="50" cy="63" rx="30" ry="26" fill="#fff"/><g class="a-eyes"><circle cx="39" cy="60" r="3.7" fill="#3b2a3a"/><circle cx="61" cy="60" r="3.7" fill="#3b2a3a"/><circle cx="40.2" cy="58.8" r="1.2" fill="#fff"/><circle cx="62.2" cy="58.8" r="1.2" fill="#fff"/></g><ellipse cx="50" cy="67" rx="3.2" ry="2.3" fill="#ff8fb0"/><path d="M50 69.3q-4 4-7 1M50 69.3q4 4 7 1" stroke="#a66a80" stroke-width="1.4" fill="none" stroke-linecap="round"/><rect x="47" y="72" width="6" height="5" rx="1.6" fill="#fff" stroke="#e4cfd8" stroke-width="1"/><ellipse cx="30" cy="68" rx="4.4" ry="3" fill="#ffa7c0" opacity=".65"/><ellipse cx="70" cy="68" rx="4.4" ry="3" fill="#ffa7c0" opacity=".65"/></g>',
+ penguin:'<rect width="100" height="100" fill="#d9edff"/><g class="a-head"><ellipse cx="50" cy="58" rx="31" ry="31" fill="#27324f"/><circle cx="39" cy="55" r="14" fill="#fff"/><circle cx="61" cy="55" r="14" fill="#fff"/><ellipse cx="50" cy="68" rx="21" ry="14" fill="#fff"/><g class="a-eyes"><circle cx="40" cy="56" r="3.5" fill="#1b2036"/><circle cx="60" cy="56" r="3.5" fill="#1b2036"/><circle cx="41.2" cy="54.8" r="1.2" fill="#fff"/><circle cx="61.2" cy="54.8" r="1.2" fill="#fff"/></g><path d="M43 63q7-4 14 0q-7 9-14 0Z" fill="#ffa83a"/><ellipse cx="31" cy="64" rx="4" ry="2.8" fill="#ff9fb0" opacity=".65"/><ellipse cx="69" cy="64" rx="4" ry="2.8" fill="#ff9fb0" opacity=".65"/></g>'
 };
-const ANIMALS=Object.keys(CHARS).map(k=>[k,CHARS[k].name]), MASCOT_DEFAULT="chinnu", MASCOT_ZOOM={"chinnu-idle":1.08};
-const clipOf=(ch,ev)=>{ const c=CHARS[ch]||CHARS[MASCOT_DEFAULT]; return c[ev]||c.all||c.in||c.still; };
-const reduceMotion=()=>{ try{ return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }catch(e){ return false; } };
-// corner circle: the character's picture; while you're clocked in it loops its working clip (silent)
-function mascotEl(ch, play){
-  const still=clipOf(ch,"still"), z=MASCOT_ZOOM[still]||1;
-  if(!play){ const im=document.createElement("img"); im.alt=""; im.src="mascots/"+still+".jpg"; im.style.transform="scale("+z+")"; return im; }
-  const id=clipOf(ch,"work"), v=document.createElement("video"); v.className="av-vid"; v.poster="mascots/"+id+".jpg"; v.src="mascots/"+id+".mp4"; v.muted=true; v.defaultMuted=true; v.loop=true; v.playsInline=true; v.preload="auto"; v.setAttribute("playsinline",""); v.setAttribute("muted",""); v.setAttribute("aria-hidden","true"); v.disablePictureInPicture=true; v.style.transform="scale("+(MASCOT_ZOOM[id]||1)+")"; return v; }
-function syncMascots(){ const want=!!openShift() && !reduceMotion();
-  document.querySelectorAll("#avFace .av-vid, #fsAvFace .av-vid").forEach(v=>{ if(want){ if(v.paused){ const p=v.play(); if(p&&p.catch) p.catch(()=>{}); } } else if(!v.paused){ v.pause(); try{ v.currentTime=0; }catch(e){} } }); }
-// big moments: the chosen character plays a short clip, with its music, when you clock in, take a break, clock out or log a payment
-let momentTimer=null;
-function closeMoment(){ const v=$("momentVid"); clearTimeout(momentTimer); try{ v.pause(); }catch(e){} v.removeAttribute("src"); try{ v.load(); }catch(e){} $("momentBg").hidden=true; }
-function moment(ev, cap){
-  const pf=profile(); if(effKind(pf)!=="animal" || reduceMotion()) return;
-  const id=clipOf(pf.animal,ev), v=$("momentVid"); clearTimeout(momentTimer);
-  v.onended=closeMoment; v.onerror=closeMoment; v.poster="mascots/"+id+".jpg"; v.src="mascots/"+id+".mp4"; v.loop=false; v.playsInline=true; v.muted=!!pf.mute; v.volume=0.9;
-  $("momentCap").textContent=cap||""; $("momentBg").hidden=false;
-  const p=v.play(); if(p&&p.catch) p.catch(()=>{ v.muted=true; const q=v.play(); if(q&&q.catch) q.catch(closeMoment); });
-  momentTimer=setTimeout(closeMoment,9000); }
-$("momentBg").addEventListener("click",closeMoment);
-function profile(){ const p=db.profile||{}; return {name:p.name||"", kind:p.kind||"initials", animal:CHARS[p.animal]?p.animal:MASCOT_DEFAULT, photo:p.photo||"", mute:!!p.mute}; }
+const animalSvg=k=>'<svg viewBox="0 0 100 100" aria-hidden="true">'+(AV_SVG[k]||AV_SVG.lion)+'</svg>';
+function profile(){ const p=db.profile||{}; return {name:p.name||"", kind:p.kind||"initials", animal:p.animal||"lion", photo:p.photo||""}; }
 function initialsOf(n){ const w=String(n||"").trim().split(/\s+/).filter(Boolean); if(!w.length) return ""; const f=Array.from(w[0])[0]||"", l=w.length>1?(Array.from(w[w.length-1])[0]||""):""; return (f+l).toUpperCase(); }
 function nameHue(n){ let h=0; for(const ch of String(n)) h=(h*31+ch.charCodeAt(0))%360; return h; }
-function paintFace(el, kind, pf, still){
+function paintFace(el, kind, pf){
   el.textContent=""; el.style.background="";
-  if(kind==="animal"){ el.appendChild(mascotEl(pf.animal, !still)); return; }
+  if(kind==="animal"){ el.innerHTML=animalSvg(pf.animal); return; }
   if(kind==="photo" && pf.photo){ const im=document.createElement("img"); im.alt=""; im.src=pf.photo; el.appendChild(im); return; }
   const ini=initialsOf(pf.name), h=nameHue(pf.name||"x");
   if(ini){ el.style.background="linear-gradient(135deg,hsl("+h+" 72% 58%),hsl("+((h+42)%360)+" 70% 44%))"; const s=document.createElement("span"); s.className="av-ini"; s.textContent=ini; el.appendChild(s); }
@@ -1867,8 +1847,7 @@ function paintFace(el, kind, pf, still){
 function effKind(pf){ return pf.kind==="photo" && !pf.photo ? "initials" : pf.kind; }
 function updateAvatar(){
   const pf=profile(), b=$("avatarBtn"); if(!b) return;
-  const sig=JSON.stringify([effKind(pf), pf.name, pf.animal, pf.photo.length, !!openShift()]); if(sig!==updateAvatar.sig){ updateAvatar.sig=sig; paintFace($("avFace"), effKind(pf), pf, !openShift()); paintFace($("fsAvFace"), effKind(pf), pf, false); }
-  syncMascots();
+  const sig=JSON.stringify([effKind(pf), pf.name, pf.animal, pf.photo.length]); if(sig!==updateAvatar.sig){ updateAvatar.sig=sig; paintFace($("avFace"), effKind(pf), pf); paintFace($("fsAvFace"), effKind(pf), pf); }
   b.classList.toggle("working", !!openShift());
   b.setAttribute("aria-label", (pf.name?pf.name+", ":"")+"profile and settings"+(openShift()?" (clocked in)":""));
 }
@@ -1876,18 +1855,16 @@ function renderProfile(){
   const pf=profile(), kind=effKind(pf), grid=$("avGrid"); grid.textContent="";
   if(document.activeElement!==$("profName")) $("profName").value=pf.name;
   { const t=$("nameText"); t.textContent=pf.name||"Add your name"; t.classList.toggle("empty",!pf.name); }
-  paintFace($("profPrev").firstElementChild, kind, pf, true);
+  paintFace($("profPrev").firstElementChild, kind, pf);
   const tile=(label, on, paint, fn)=>{ const b=document.createElement("button"); b.type="button"; b.className="av-tile"+(on?" on":""); b.setAttribute("aria-label",label); b.setAttribute("aria-pressed",on?"true":"false");
     const f=document.createElement("span"); f.className="av-face still"; paint(f); b.appendChild(f); const t=document.createElement("small"); t.textContent=label; b.appendChild(t); b.onclick=fn; grid.appendChild(b); };
   tile("Initials", kind==="initials", f=>paintFace(f,"initials",{name:pf.name}), ()=>setProfile({kind:"initials"}));
   tile("Photo", kind==="photo", f=>{ if(pf.photo) paintFace(f,"photo",pf); else { f.style.background="var(--chip)"; f.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:46%;height:46%;color:var(--muted)" aria-hidden="true"><path d="M4 8h3l1.6-2.2h6.8L17 8h3v11H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg>'; } }, ()=>{ if(pf.photo) setProfile({kind:"photo"}); else $("avFile").click(); });
-  ANIMALS.forEach(([k,n])=>tile(n, kind==="animal"&&pf.animal===k, f=>paintFace(f,"animal",{animal:k},true), ()=>{ setProfile({kind:"animal", animal:k}); moment("in","Meet "+n+"!"); }));
-  $("mascotSoundRow").hidden=kind!=="animal"; $("mascotSound").setAttribute("aria-checked",pf.mute?"false":"true");
+  ANIMALS.forEach(([k,n])=>tile(n, kind==="animal"&&pf.animal===k, f=>paintFace(f,"animal",{animal:k}), ()=>setProfile({kind:"animal", animal:k})));
   $("avUpload").textContent=pf.photo?"Change photo":"Upload a photo"; $("avRemove").hidden=!pf.photo;
 }
-$("mascotSound").onclick=()=>{ const m=!!profile().mute; setProfile({mute:m?0:1}); };
-function setProfile(patch){ db.profile=Object.assign({name:"",kind:"initials",animal:MASCOT_DEFAULT}, db.profile||{}, patch); save(); updateAvatar(); renderProfile(); }
-$("profName").addEventListener("input",e=>{ const v=cleanText(e.target.value,30).replace(/\s+/g," "); db.profile=Object.assign({name:"",kind:"initials",animal:MASCOT_DEFAULT}, db.profile||{}, {name:v}); save(); updateAvatar(); paintFace($("profPrev").firstElementChild, effKind(profile()), profile(), true); renderProfileTilesOnly(); });
+function setProfile(patch){ db.profile=Object.assign({name:"",kind:"initials",animal:"lion"}, db.profile||{}, patch); save(); updateAvatar(); renderProfile(); }
+$("profName").addEventListener("input",e=>{ const v=cleanText(e.target.value,30).replace(/\s+/g," "); db.profile=Object.assign({name:"",kind:"initials",animal:"lion"}, db.profile||{}, {name:v}); save(); updateAvatar(); paintFace($("profPrev").firstElementChild, effKind(profile()), profile()); renderProfileTilesOnly(); });
 function nameEditing(on){ $("nameBox").hidden=!on; $("nameView").hidden=on; if(on){ $("profName").value=profile().name; try{ $("profName").focus(); }catch(e){} } else { renderProfile(); } }
 $("nameEdit").onclick=()=>nameEditing(true); $("nameText").onclick=()=>nameEditing(true);
 $("nameDone").onclick=()=>nameEditing(false);
@@ -2000,7 +1977,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.19.51";
+const APP_VERSION="2026.10.19.52";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -2296,7 +2273,7 @@ $("paySave").onclick=()=>{
   const gv=db.netTrack&&$("payGross").value!==""?parseFloat($("payGross").value):undefined; if(gv!==undefined&&!(gv>=amt)){ alert("Gross wages can't be less than what you received."); return; }
   const c=cleanPayment({id:payEditing||uid(), ts, amount:amt, note, gross:gv, job:hasJobs()?$("payJobSel").value:""}); if(!c){ alert("That payment doesn't look right."); return; }
   if(payEditing){ const i=pays().findIndex(x=>x.id===payEditing); if(i>=0) db.payments[i]=c; else pays().push(c); } else pays().push(c);
-  const wasNew=!payEditing; save(); closePay(); render(); queueSync({action:"pupsert", payment:payPayload(c)}); if(wasNew) moment("pay","Payday! "+money(c.amount)+" received.");
+  save(); closePay(); render(); queueSync({action:"pupsert", payment:payPayload(c)});
 };
 
 // ---------- Pay statement (for the owner): shifts, wages, tips, payments and the balance ----------
@@ -2490,7 +2467,7 @@ function brkText(m){ const h=Math.floor(m/60), r=m%60; return h?(r?h+"h "+r+"m":
   const close=()=>$("brkBg").classList.remove("open");
   $("fsBreak").onclick=()=>{ const o=openShift(); if(!o) return; $("brkBg").classList.add("open"); $("brkClear").hidden=!(o.brk>0); setPaid(!!o.bp); setTimeout(()=>setWheels(o.brk||0),30); };
   $("brkCancel").onclick=close; $("brkBg").addEventListener("click",e=>{ if(e.target===$("brkBg")) close(); }); sheetDrag($("brkBg"), close);
-  $("brkSave").onclick=()=>{ const o=openShift(); if(!o){ close(); return; } const t=val(wh)*60+val(wm); if(t>0){ o.brk=t; if(paid) o.bp=1; else delete o.bp; } else { delete o.brk; delete o.bp; } save(); close(); tickFs(); if(t>0) moment("brk","Break time. Enjoy your coffee!"); };
+  $("brkSave").onclick=()=>{ const o=openShift(); if(!o){ close(); return; } const t=val(wh)*60+val(wm); if(t>0){ o.brk=t; if(paid) o.bp=1; else delete o.bp; } else { delete o.brk; delete o.bp; } save(); close(); tickFs(); };
   $("brkClear").onclick=()=>{ const o=openShift(); if(o){ delete o.brk; delete o.bp; save(); tickFs(); } close(); };
 })();
 
