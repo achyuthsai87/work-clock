@@ -687,7 +687,7 @@ $("mwBack").onclick=()=>{ if(dr.level===2){ dr.mk=monthKey(dr.wk+3*86400000); dr
 $("wkChart").addEventListener("click",e=>{ if(!drGeom||dr.level>=2) return; const r=$("wkChart").getBoundingClientRect(), i=Math.floor((e.clientX-r.left-drGeom.padL)/drGeom.cw); if(i<0||i>=drGeom.n) return;
   if(dr.level===0){ dr.mk=drGeom.targets[i]; dr.level=1; } else { dr.wk=drGeom.targets[i]; dr.level=2; } renderWeek(); });
 const closeMon=()=>{ $("monBg").classList.remove("open"); navBack=null; syncBack(); };
-$("mwHome").onclick=()=>{ const nb=navBack; closeMon(); if(!nb) return; document.querySelector('[data-tab="'+nb.tab+'"]').click(); setTimeout(()=>window.scrollTo(0,nb.y),60); };
+$("mwHome").onclick=()=>{ if(dr.level>dr.floor){ $("mwBack").onclick(); return; } const nb=navBack; closeMon(); if(!nb) return; document.querySelector('[data-tab="'+nb.tab+'"]').click(); setTimeout(()=>window.scrollTo(0,nb.y),60); };
 $("mwClose").onclick=closeMon; $("monBg").addEventListener("click",e=>{ if(e.target===$("monBg")) closeMon(); }); sheetDrag($("monBg"), closeMon);
 [["monthStat","wages",1],["allStat","wages",0],["tipWeekStat","tips",2],["tipMonthStat","tips",1],["tipTot","tips",0]].forEach(([id,mode,lv])=>{ const el=$(id); el.addEventListener("click",()=>goDrill(mode,lv)); el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); el.click(); } }); });
 $("monPrev").onclick=()=>{ monOff--; drawChart(); }; $("monNext").onclick=()=>{ if(monOff<0){ monOff++; drawChart(); } };
@@ -1995,7 +1995,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.20.61";
+const APP_VERSION="2026.10.20.62";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
