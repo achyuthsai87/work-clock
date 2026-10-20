@@ -530,9 +530,10 @@
     <h2 id="planTitle">Plan a shift</h2>
     <div class="cfm-msg" style="margin-bottom:12px">Clocks you in and out at these times. The app can't run while it's closed, so it fills the shift in the next time you open it, with hours counted from the exact times. You can still edit it in History.</div>
     <div class="field" id="planJobF" hidden><label>Job</label><select id="planJob"></select></div>
+    <div class="field"><label>Date</label><input type="date" id="planDate"></div>
     <div class="field"><label>Starts</label><input type="time" id="planStart" value="15:00"></div>
     <div class="field"><label>Ends</label><input type="time" id="planEnd" value="23:00"></div>
-    <div class="field"><label id="planRepeatL">Repeat weekly on (leave empty for one day only)</label>
+    <div class="field"><label id="planRepeatL">Also repeat weekly on <span style="font-weight:400;opacity:.7">(optional, from that date on)</span></label>
       <div class="daychips" id="planDays"><button type="button" data-d="1">Mon</button><button type="button" data-d="2">Tue</button><button type="button" data-d="3">Wed</button><button type="button" data-d="4">Thu</button><button type="button" data-d="5">Fri</button><button type="button" data-d="6">Sat</button><button type="button" data-d="0">Sun</button></div></div>
     <button type="button" class="link danger-link" id="planRemove" style="display:none">Remove plan</button>
     <div class="btn-row">

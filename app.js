@@ -59,7 +59,7 @@ function cleanPlan(p){   // today's/auto schedule: start+end as HH:MM, optional 
   if(p.job != null && ID_RE.test(String(p.job))) o.job = String(p.job);
   if(typeof p.since === "string" && DAY_RE.test(p.since)) o.since = p.since;
   const days = Array.isArray(p.days) ? Array.from(new Set(p.days.map(Number).filter(n => Number.isInteger(n) && n >= 0 && n <= 6))).sort() : [];
-  if(days.length) o.days = days; else if(DAY_RE.test(String(p.once))) o.once = String(p.once); else return null;
+  if(days.length) o.days = days; if(DAY_RE.test(String(p.once))) o.once = String(p.once); if(!o.days && !o.once) return null;
   return o;
 }
 function cleanCore(d){   // the user's data only (shifts + display prefs)
@@ -228,7 +228,7 @@ function missedList(){   // planned shifts whose time has passed with nothing lo
       out.push({plan,dk,k,S,E}); } });
   return out.sort((a,b)=>a.S-b.S);
 }
-function planApplies(plan, d){ if(plan.job && jobLeft(plan.job)) return false; return plan.once ? plan.once===dayKey(d.getTime()) : (plan.days||[]).includes(d.getDay()); }
+function planApplies(plan, d){ if(plan.job && jobLeft(plan.job)) return false; const k=dayKey(d.getTime()); return plan.once===k || ((plan.days||[]).includes(d.getDay()) && (!plan.once || k>=plan.once)); }
 function nextPlanned(days){   // soonest planned shift that hasn't started (looks ahead, skips days off)
   const pls=db.plans||[]; const base=new Date(); base.setHours(0,0,0,0);
   for(let i=0;i<(days||21);i++){ const d=new Date(base); d.setDate(base.getDate()+i); const dk=dayKey(d.getTime()); if(db.daysOff&&db.daysOff[dk]) continue;
@@ -240,7 +240,7 @@ function applyPlan(){
   let changed=false; const now=Date.now();
   db.shifts.forEach(s=>{ if(s.end==null && s.autoEnd && now>=s.autoEnd){ s.end=s.autoEnd; delete s.autoEnd; changed=true; queueSync({action:"upsert", shift:shiftPayload(s)}); } });
   const plans=db.plans||[]; if(plans.length){   // planned shifts never start the clock by themselves; finished one-day plans are tidied away once you've answered for them
-    const drop=plans.filter(p=>p.once && p.once<dayKey(now) && db.planDone && db.planDone[p.id+":"+p.once]).map(p=>p.id);
+    const drop=plans.filter(p=>p.once && !p.days && p.once<dayKey(now) && db.planDone && db.planDone[p.id+":"+p.once]).map(p=>p.id);
     if(drop.length){ db.plans=plans.filter(p=>!drop.includes(p.id)); if(!db.plans.length) delete db.plans; changed=true; }
   }
   if(changed) save(); return changed;
@@ -380,7 +380,7 @@ function render(){
   { const line=$("planLine"), pls=db.plans||[]; const dn=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
     const f=t=>{ const [hh,mm]=t.split(":").map(Number); const d=new Date(); d.setHours(hh,mm,0,0); return fmtTime(d.getTime()); };
     if(pls.length===1){ const pl=pls[0];
-      line.textContent=f(pl.start)+" – "+f(pl.end)+" · "+(pl.once?(pl.once===dayKey(Date.now())?"today":fmtDay(new Date(pl.once+"T12:00:00").getTime())):[1,2,3,4,5,6,0].filter(x=>pl.days.includes(x)).map(x=>dn[x]).join(" "));
+      line.textContent=f(pl.start)+" – "+f(pl.end)+" · "+(pl.days?"weekly "+[1,2,3,4,5,6,0].filter(x=>pl.days.includes(x)).map(x=>dn[x]).join(" ")+(pl.once&&pl.once>dayKey(Date.now())?" from "+fmtDay(new Date(pl.once+"T12:00:00").getTime()):""):(pl.once===dayKey(Date.now())?"today":fmtDay(new Date(pl.once+"T12:00:00").getTime())));
       line.style.display=""; $("planBtn").textContent="Edit"; }
     else if(pls.length>1){ const nx=nextPlanned(); line.textContent=pls.length+" planned shifts"+(nx?" · next "+(nx.today?"today ":fmtDay(nx.day)+" ")+f(nx.plan.start):""); line.style.display=""; $("planBtn").textContent="Calendar"; }
     else { line.textContent="Nothing planned yet"; line.style.display=""; $("planBtn").textContent="Plan a shift"; } }
@@ -466,7 +466,7 @@ function renderCalendar(){
   for(let i=0;i<35 && c<8;i++){ const d=new Date(base); d.setDate(base.getDate()+i); const ps=plansOn(d).filter(p=>planTimes(p,d).E>Date.now());
     ps.sort((a,b)=>a.start<b.start?-1:1).forEach(p=>{ if(c>=8) return; c++;
       const r=document.createElement("button"); r.type="button"; r.className="job-row"; const a=document.createElement("span"); a.textContent=(i===0?"Today":fmtDay(d.getTime()));
-      const m=document.createElement("span"); m.className="job-rate"; m.textContent=ft(p,d)+(hasJobs()?" \u00b7 "+jobName(p.job):"")+(p.once?"":" \u00b7 weekly"); r.appendChild(a); r.appendChild(m);
+      const m=document.createElement("span"); m.className="job-rate"; m.textContent=ft(p,d)+(hasJobs()?" \u00b7 "+jobName(p.job):"")+(p.days?" \u00b7 weekly":""); r.appendChild(a); r.appendChild(m);
       r.onclick=()=>openPlan(p, dayKey(d.getTime())); L.appendChild(r); }); }
   if(!c){ const e=document.createElement("div"); e.className="empty"; e.textContent="Nothing planned. Tap a day to plan a shift or mark a day off."; L.appendChild(e); }
 }
@@ -476,7 +476,7 @@ function openDay(k){
   const B=$("dayBody"); B.innerHTML="";
   const row=(a,b,fn)=>{ const r=document.createElement("button"); r.type="button"; r.className="job-row"; const x=document.createElement("span"); x.textContent=a; const y=document.createElement("span"); y.className="job-rate"; y.textContent=b; r.appendChild(x); r.appendChild(y); if(fn) r.onclick=fn; B.appendChild(r); };
   db.shifts.filter(s=>dayKey(s.start)===k && !jobLeft(s.job)).sort((a,b)=>a.start-b.start).forEach(s=>row(fmtTime(s.start)+(s.end?" \u2013 "+fmtTime(s.end):" \u2013 now"), s.end?money(pay(s))+(hasJobs()?" \u00b7 "+jobName(s.job):""):"in progress", ()=>{ closeDay(); if(s.end) openModal(s); }));
-  plansOn(d).forEach(p=>{ const {S,E}=planTimes(p,d); row("Planned "+fmtTime(S)+" \u2013 "+fmtTime(E), p.once?"one day":"weekly", ()=>{ closeDay(); openPlan(p,k); }); });
+  plansOn(d).forEach(p=>{ const {S,E}=planTimes(p,d); row("Planned "+fmtTime(S)+" \u2013 "+fmtTime(E), p.days?"weekly":"one day", ()=>{ closeDay(); openPlan(p,k); }); });
   if(off){ const n=document.createElement("div"); n.className="job-hint"; n.textContent="Marked as a day off. Planned shifts are skipped, and it isn't counted in your daily averages or projection."; B.appendChild(n); }
   if(!B.children.length){ const n=document.createElement("div"); n.className="empty"; n.textContent=isPast?"No shifts this day.":"Nothing planned yet."; B.appendChild(n); }
   $("dayHol").style.display=db.holPct>0?"":"none"; $("dayHol").textContent=(db.holidays&&db.holidays[k])?"Remove holiday":"Mark as holiday"; $("dayPlan").style.display=isPast?"none":""; $("dayOff").textContent=off?"Remove day off":"Mark as day off";
@@ -1483,11 +1483,10 @@ function closePlan(){ $("planBg").classList.remove("open"); }
 let planEditId=null, planDate=null;   // planDate: the single day this plan is for (YYYY-MM-DD) when no weekdays are chosen
 function openPlan(plan, dateKey){
   planEditId=plan?plan.id:null; planDate=(plan&&plan.once)||dateKey||dayKey(Date.now());
-  const isToday=planDate===dayKey(Date.now());
   $("planTitle").textContent=plan?"Edit planned shift":"Plan a shift";
   $("planStart").value=plan?plan.start:"15:00"; $("planEnd").value=plan?plan.end:"23:00";
   document.querySelectorAll("#planDays button").forEach(b=>b.classList.toggle("on", !!(plan&&plan.days&&plan.days.includes(Number(b.dataset.d)))));
-  $("planRepeatL").textContent="Repeat weekly on (leave empty for "+(isToday?"today":fmtDay(new Date(planDate+"T12:00:00").getTime()))+" only)";
+  $("planDate").value=planDate;
   fillJobSelect($("planJob"), plan?plan.job:db.activeJob); $("planJobF").hidden=!(db.jobs&&db.jobs.length);
   $("planRemove").style.display=plan?"":"none"; $("planBg").classList.add("open"); }
 $("planBtn").onclick=()=>{ const pls=db.plans||[];
@@ -1503,10 +1502,11 @@ $("planRemove").onclick=async()=>{ if(!await askConfirm("Remove this planned shi
 $("planSave").onclick=async()=>{
   const days=[...document.querySelectorAll("#planDays button.on")].map(b=>Number(b.dataset.d));
   const job=$("planJobF").hidden?undefined:($("planJob").value||undefined);
-  const plan=cleanPlan({id:planEditId||undefined, start:$("planStart").value, end:$("planEnd").value, days:days, once:planDate, job:job});
+  const plan=cleanPlan({id:planEditId||undefined, start:$("planStart").value, end:$("planEnd").value, days:days, once:$("planDate").value||undefined, job:job});
   if(!plan){ alert("Pick a start and an end time that are different."); return; }
   const todayK=dayKey(Date.now());
-  if(!days.length && planDate<todayK){ alert("Pick today or a day in the future."); return; }
+  const dv=$("planDate").value; if(!dv){ alert("Pick a date."); return; }
+  if(!days.length && dv<todayK){ alert("Pick today or a day in the future."); return; }
   db.planDone=db.planDone||{};
   const prev=(db.plans||[]).find(p=>p.id===planEditId); plan.since=(prev&&prev.since)||todayK;
   if(planEditId) Object.keys(db.planDone).forEach(k=>{ if(k.startsWith(planEditId+":") && k.split(":").pop()>=todayK) delete db.planDone[k]; });
@@ -1978,7 +1978,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.19.59";
+const APP_VERSION="2026.10.20.60";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
