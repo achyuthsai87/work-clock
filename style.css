@@ -1114,3 +1114,9 @@ html[data-theme] #cfmBg.center .modal, #cfmBg.center .modal{border-radius:30px; 
 #cfmBg.center .cfm-msg{margin-bottom:18px}
 #cfmBg.center.open .modal{animation:cfmPop .28s cubic-bezier(.2,1.2,.4,1) backwards}
 @keyframes cfmPop{from{transform:scale(.9); opacity:0} to{transform:scale(1); opacity:1}}
+
+.earn3{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:6px}
+.earn3 > div{display:flex; flex-direction:column; gap:3px; min-width:0}
+.earn3 small{font-size:13px; color:var(--muted)}
+.earn3 b{font-size:21px; font-weight:750; font-variant-numeric:tabular-nums; letter-spacing:-.2px}
+.earn3 span{font-size:11.5px; color:var(--muted); line-height:1.3}

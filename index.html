@@ -118,17 +118,14 @@
   <section class="tabpane" id="tab-analytics">
   <div class="page-title">Analytics</div>
   <div class="anajob-row" id="anaJobRow" hidden><div class="jchips" id="anaChips"></div><select id="anaJob" aria-label="Job" hidden></select></div>
-<div class="card goal-card" style="margin-top:12px">
-    <div class="ring-wrap">
-      <svg viewBox="0 0 120 120" class="ring" aria-hidden="true"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3ee6b0"/><stop offset="1" stop-color="#4aa8ff"/></linearGradient></defs><circle class="ring-bg" cx="60" cy="60" r="48"/><circle class="ring-fg" id="goalRing" cx="60" cy="60" r="48" stroke-dasharray="301.59" stroke-dashoffset="301.59" transform="rotate(-90 60 60)"/></svg>
-      <div class="ring-mid"><div class="ring-pct" id="goalPct">—</div><div class="ring-sub">this week</div></div>
+<div class="card" style="margin-top:12px">
+    <div class="pay-h">Earned</div>
+    <div class="earn3">
+      <div><small>This week</small><b id="ernWeek">$0.00</b><span id="ernWeekS"></span></div>
+      <div><small>This month</small><b id="ernMonth">$0.00</b><span id="ernMonthS"></span></div>
+      <div><small>All time</small><b id="ernAll">$0.00</b><span id="ernAllS"></span></div>
     </div>
-    <div class="goal-text">
-      <div class="t">Weekly goal</div>
-      <div class="goal-line" id="goalSub">No goal yet</div>
-      <div class="goal-msg" id="goalMsg"></div>
-      <button class="link" id="goalSet" style="padding:6px 0 0">Set goal</button>
-    </div>
+    <div class="sub" style="margin-top:8px">Wages from your hours plus tips.</div>
   </div>
 
 <div class="card" style="margin-top:12px">
@@ -257,7 +254,6 @@
     <div class="settings-row"><span>Pay cycle<small>how often you're paid</small></span><select id="cycleInput" aria-label="Pay cycle"><option value="">Not set</option><option value="weekly">Every week</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly, on a date</option></select></div>
     <div class="settings-row" id="paydayRow"><span>Payday<small>day of each month</small></span><select id="paydayInput" aria-label="Payday"></select></div>
     <div class="settings-row" id="anchorRow" style="display:none"><span>A payday<small>any past or upcoming one</small></span><input id="anchorInput" type="date" aria-label="A payday"></div>
-    <div class="settings-row"><span>Weekly goal</span><select id="goalInput" aria-label="Weekly goal"></select></div>
     <div class="settings-row"><span>Weekend premium<small>extra % on Sat and Sun, new shifts</small></span><input id="wkndInput" type="number" min="0" max="300" step="1" inputmode="decimal" placeholder="0"></div>
     <div class="settings-row"><span>Tax set-aside<small>% of wages and tips to keep aside</small></span><input id="taxInput" type="number" min="0" max="60" step="0.5" inputmode="decimal" placeholder="0"></div>
     <div class="settings-row"><span>Mileage rate<small>$ per mile, used for mileage</small></span><input id="mileInput" type="number" min="0" max="10" step="0.005" inputmode="decimal" placeholder="0"></div>

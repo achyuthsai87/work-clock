@@ -68,7 +68,6 @@ function cleanCore(d){   // the user's data only (shifts + display prefs)
   const out = {rate: 14, theme: "auto", shifts: []};
   if(!d || typeof d !== "object") return out;
   const r = Number(d.rate); if(Number.isFinite(r) && r >= 0 && r <= 100000) out.rate = r;
-  const g = Number(d.goal); if(Number.isFinite(g) && g > 0 && g <= 1000000) out.goal = g;
   if(["auto","light","dark"].includes(d.theme)) out.theme = d.theme;
   if(["week","month","year"].includes(d.anaPeriod)) out.anaPeriod = d.anaPeriod;
   const bm = Math.round(Number(d.breakMin)); if(Number.isFinite(bm) && bm > 0 && bm <= 120) out.breakMin = bm;
@@ -882,18 +881,11 @@ function renderFun(){
   const dayMap={}; done.forEach(s=>{ const k=dayKey(s.start), h=hrs(s); const o=dayMap[k]||(dayMap[k]={h:0,e:0,t:0}); o.h+=h; o.e+=pay(s); o.t+=tipOf(s); });
   heatData=dayMap;
 
-  // weekly goal ring
-  const wk=buildBuckets("week",0).B, wkE=wk.reduce((a,x)=>a+x.earned,0), goal=db.goal||0, C=2*Math.PI*48, ring=$("goalRing");
-  if(goal>0){
-    const pct=wkE/goal;
-    $("goalPct").textContent=Math.round(pct*100)+"%"; $("goalSub").textContent=money(wkE)+" of "+money(goal);
-    $("goalMsg").textContent = pct>=1 ? "Goal smashed this week 🎉" : (rate>0 ? "About "+((goal-wkE)/rate).toFixed(1)+"h to go" : "Keep going");
-    ring.classList.toggle("done", pct>=1); $("goalSet").textContent="Change goal";
-    requestAnimationFrame(()=>ring.setAttribute("stroke-dashoffset", String(C*(1-Math.min(pct,1)))));
-  } else {
-    $("goalPct").textContent="—"; $("goalSub").textContent="No goal yet"; $("goalMsg").textContent="Pick a number to aim for each week";
-    ring.classList.remove("done"); ring.setAttribute("stroke-dashoffset", String(C)); $("goalSet").textContent="Set goal";
-  }
+  // earned (wages + tips) for this week, this month and all time
+  { const wk0=startOfWeek(Date.now()), mo0=new Date(new Date().getFullYear(),new Date().getMonth(),1).getTime();
+    const sum=f=>{ const l=done.filter(f); const w=l.reduce((a,x)=>a+pay(x),0), t=l.reduce((a,x)=>a+tipOf(x),0), h=l.reduce((a,x)=>a+hrs(x),0); return {w,t,h}; };
+    [["Week",x=>x.start>=wk0],["Month",x=>x.start>=mo0],["All",x=>true]].forEach(([id,f])=>{ const a=sum(f);
+      $("ern"+id).textContent=money(a.w+a.t); $("ern"+id+"S").textContent=a.h.toFixed(1)+"h \u00b7 "+money(a.w)+" + "+money(a.t)+" tips"; }); }
 
   // activity heatmap: 15 weeks x 7 days, Monday first
   const grid=$("hm"); grid.textContent="";
@@ -1001,16 +993,11 @@ function fillSettingsPickers(){
   fillPicker($("breakAfterInput"),null,[3,4,5,6,7,8,9,10],h=>h+"+ hours",db.breakAfter||6);
   $("breakAfterRow").style.display = db.breakMin>0 ? "" : "none";    // only matters once a break is set
   fillPicker($("paydayInput"),"Not set",Array.from({length:28},(_,i)=>i+1),ordinal,db.payday||0);
-  // weekly goal: $10 steps, capped at what is possible in a 168-hour week at your pay rate; each choice shows its hours
-  const top = rate>0 ? Math.floor(rate*168/10)*10 : 1000, goals=[]; for(let g=10; g<=top; g+=10) goals.push(g);
-  fillPicker($("goalInput"),"No goal",goals,g=>"$"+g+(rate>0 ? " · "+(Math.round(g/rate*10)/10)+" h" : ""),db.goal||0);
 }
 fillSettingsPickers();
 $("breakInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>0) db.breakMin=Math.min(v,120); else delete db.breakMin; e.target.value=db.breakMin||""; save(); render(); queueSettings(); });
 $("breakAfterInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); if(Number.isFinite(v)&&v>=1) db.breakAfter=Math.min(v,24); else delete db.breakAfter; e.target.value=db.breakAfter||""; save(); render(); queueSettings(); });
 $("paydayInput").addEventListener("change",e=>{ const v=Math.round(parseFloat(e.target.value)); if(Number.isFinite(v)&&v>=1&&v<=28){ db.payday=v; db.payCycle="monthly"; } else delete db.payday; e.target.value=db.payday||""; save(); render(); queueMeta(); queueSettings(); });
-$("goalInput").addEventListener("change",e=>{ const v=parseFloat(e.target.value); db.goal=(Number.isFinite(v)&&v>0)?Math.min(v,1000000):0; if(!db.goal) delete db.goal; save(); renderAnalytics(); queueSettings(); });
-$("goalSet").addEventListener("click",()=>{ document.querySelector('[data-tab="settings"]').click(); setTimeout(()=>$("goalInput").focus(),350); });
 
 function renderInsights(){
   const done=S().filter(x=>x.end).sort((a,b)=>a.start-b.start);
@@ -1109,7 +1096,7 @@ function shiftPayload(s, rate){
 // Before the pay rate changes, lock every older shift to the rate it was worked at, so a raise only affects new shifts.
 function stampRates(){ db.shifts.forEach(s=>{ if(s.rate==null) s.rate=jobRate(s.job); }); }
 function queueRestamp(){ const l=db.shifts.filter(s=>s.end).map(s=>shiftPayload(s)); if(l.length) queueSync({action:"bulk", shifts:l}); }
-function settingsPayload(){ return {rate:db.rate, goal:db.goal||0, payday:db.payday||0, breakMin:db.breakMin||0, breakAfter:db.breakAfter||6}; }
+function settingsPayload(){ return {rate:db.rate, goal:0, payday:db.payday||0, breakMin:db.breakMin||0, breakAfter:db.breakAfter||6}; }
 function cleanSettings(x){
   if(!x || typeof x !== "object") return null;
   const o = {}, r = Number(x.rate), g = Number(x.goal), p = Math.round(Number(x.payday));
@@ -1212,7 +1199,7 @@ async function syncPull(applySettings, t){
   if(applySettings && !OB.some(e=>e.action==="sset")){
     try{
       const sj=await syncCall({action:"sget"},t), c=cleanSettings(sj.settings);
-      if(c){ if(c.rate!=null && c.rate!==db.rate){ stampRates(); db.rate=c.rate; } if(c.goal!=null){ if(c.goal>0) db.goal=c.goal; else delete db.goal; } if(c.payday!=null){ if(c.payday>0) db.payday=c.payday; else delete db.payday; }
+      if(c){ if(c.rate!=null && c.rate!==db.rate){ stampRates(); db.rate=c.rate; } if(c.payday!=null){ if(c.payday>0) db.payday=c.payday; else delete db.payday; }
         if(c.breakMin!=null){ if(c.breakMin>0) db.breakMin=c.breakMin; else delete db.breakMin; } if(c.breakAfter!=null) db.breakAfter=c.breakAfter;
         added+=0; save(); render(); }
     }catch(e){ if(e.message!=="Unknown action") throw e; }
@@ -1817,7 +1804,7 @@ $("csvBtn").onclick=()=>{
   });
   download("workclock.csv",csv,"text/csv");
 };
-$("jsonBtn").onclick=()=>{ db.lastBackup=Date.now(); save(); updateNudge(); }; $("jsonBtn").addEventListener("click",()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, goal:db.goal, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, shifts:db.shifts, payments:db.payments||[], jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, payCycle:db.payCycle, payAnchor:db.payAnchor, plans:db.plans, daysOff:db.daysOff, expenses:db.expenses},null,2),"application/json"));  // never includes sync URL/secret
+$("jsonBtn").onclick=()=>{ db.lastBackup=Date.now(); save(); updateNudge(); }; $("jsonBtn").addEventListener("click",()=>download("workclock-backup.json",JSON.stringify({rate:db.rate, theme:db.theme, anaPeriod:db.anaPeriod, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, shifts:db.shifts, payments:db.payments||[], jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, payCycle:db.payCycle, payAnchor:db.payAnchor, plans:db.plans, daysOff:db.daysOff, expenses:db.expenses},null,2),"application/json"));  // never includes sync URL/secret
 $("importBtn").onclick=()=>$("importFile").click();
 $("importFile").addEventListener("change",e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -1833,7 +1820,7 @@ $("importFile").addEventListener("change",e=>{
   r.readAsText(f); e.target.value="";
 });
 $("wipeBtn").onclick=async()=>{ if(await askConfirm("Delete all data?","Every shift and payment on this phone will be erased. You get a few seconds to undo it afterwards, so back up first if you're not sure.","Delete everything",true)){
-  const keep={rate:db.rate, goal:db.goal, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, payCycle:db.payCycle, payAnchor:db.payAnchor, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock, loc:db.loc, profile:db.profile};
+  const keep={rate:db.rate, payday:db.payday, breakMin:db.breakMin, breakAfter:db.breakAfter, jobs:db.jobs, jobName:db.jobName, wkndPct:db.wkndPct, taxPct:db.taxPct, mileRate:db.mileRate, otWeek:db.otWeek, otDay:db.otDay, otPct:db.otPct, holPct:db.holPct, holidays:db.holidays, netTrack:db.netTrack, payCycle:db.payCycle, payAnchor:db.payAnchor, activeJob:db.activeJob, theme:db.theme, anaPeriod:db.anaPeriod, sync:db.sync, lock:db.lock, loc:db.loc, profile:db.profile};
   const snapAll=JSON.stringify(Object.assign({},db,{sync:undefined, lock:undefined, outbox:undefined, loc:undefined, profile:undefined}));
   db=Object.assign({shifts:[], outbox:[]}, keep); mirrors().forEach(m=>{ m.outbox=[]; }); save(); render(); updateSyncStatus();
   showUndo("All data deleted.", ()=>{ const o=JSON.parse(snapAll); db=Object.assign(o,{sync:db.sync, lock:db.lock, outbox:db.outbox, lastSync:db.lastSync, loc:db.loc, profile:db.profile}); save(); render(); updateSyncStatus();
@@ -1995,7 +1982,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.20.62";
+const APP_VERSION="2026.10.20.63";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));

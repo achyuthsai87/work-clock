@@ -8,7 +8,7 @@ browser's `localStorage` on your phone, plus your own Google Sheet if sync is on
   `onerror=` handlers are blocked. Network access is limited to this site and `script.google.com`.
 - **All data is validated** (storage, imported backups, sheet replies): bad IDs, impossible times and
   oversized values are dropped, so crafted data can't inject HTML or script.
-- **New data is held to the same rules**: payments, notes, per-shift rates, and the pay-rate/goal/payday/break
+- **New data is held to the same rules**: payments, notes, per-shift rates, and the pay-rate/payday/break
   settings are range-checked everywhere they enter (storage, backups, the sheet, the sync queue). Notes are plain
   text only: no control characters or `<>`, and a leading `= + - @` is stripped so a sheet can't read a note as a formula.
 - **The pay statement and everything on screen** is built with text nodes, never raw HTML from your data.
