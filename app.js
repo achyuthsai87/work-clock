@@ -320,6 +320,9 @@ function planOf(o){   // the planned shift this clock-in belongs to, if any
   for(const back of [0,1]){ const base=new Date(d0); base.setDate(base.getDate()-back);
     for(const p of (db.plans||[])){ if(!planApplies(p,base) || (p.job||"")!==(o.job||"")) continue; const t=planTimes(p,base); if(o.start>=t.S-2*3600000 && o.start<t.E) return t; } }
   return null; }
+function hoursCard(){ const wk0=startOfWeek(Date.now()), mk=monthKey(Date.now()); let hw=0, hm=0;
+  db.shifts.filter(s=>jobOk(s,homeJob)).forEach(s=>{ const h=hrs(s.end?s:Object.assign({},s,{end:Date.now()})); if(s.start>=wk0) hw+=h; if(monthKey(s.start)===mk) hm+=h; });
+  $("hrsWeek").textContent=hw.toFixed(1)+"h"; $("hrsMonth").textContent=hm.toFixed(1)+"h"; }
 function tickFs(){ const o=openShift(); if(!o){ hideFs(); return; } const el=Math.max(0,Date.now()-o.start)/1000, h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60), p2=n=>String(n).padStart(2,"0");
   $("fsH").textContent=p2(h); $("fsM").textContent=p2(m); $("fsS").textContent=p2(s);
   const pl=planOf(o), tr=$("fsTrack"), cap=$("fsPlan"); tr.hidden=false; tr.classList.toggle("idle",!pl); cap.hidden=!pl;
@@ -345,7 +348,7 @@ function render(){
   if(open){
     btn.textContent="Clock Out"; btn.classList.add("out"); $("startEdit").style.display="block";
     cancel.style.display="block";
-    const tick=()=>{ const el=(Date.now()-open.start)/1000;
+    const tick=()=>{ hoursCard(); const el=(Date.now()-open.start)/1000;
       const h=Math.floor(el/3600), m=Math.floor(el%3600/60), s=Math.floor(el%60);
       line.innerHTML='<div class="live-row"><span class="live-l"><span class="dot"></span>Shift in progress</span><b class="live-t">'+
         String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+'</b></div><div class="live-s">Clocked in at '+esc(fmtTime(open.start))+(hasJobs()?" · "+esc(jobName(open.job)):"")+" · tap for full screen</div>"+(h>=10?'<div class="long">Still clocked in after '+h+'h. Forgot to clock out?</div>':''); };
@@ -364,6 +367,7 @@ function render(){
     if(dayKey(s.start)===today){ th+=h; et+=p; } if(monthKey(s.start)===mk){ mh+=h; em+=p; } });
   hv.forEach(s=>{ const tp=tipOf(s); if(!tp) return; ta+=tp; if(s.start>=wk0) tw+=tp; if(dayKey(s.start)===today) tt+=tp; if(monthKey(s.start)===mk) tm+=tp; });
   { const nm=homeJob==="all"?"":" \u00b7 "+jobName(homeJob==="main"?"":homeJob); $("tipHead").textContent="Tips"+nm; $("wageHead").textContent="Wages"+nm; }
+  hoursCard();
   $("tipDay").textContent=money(tt); $("tipWeek").textContent=money(tw); $("tipMonth").textContent=money(tm); $("tipAll").textContent=money(ta);
   $("statToday").innerHTML = money(et)+"<small>"+th.toFixed(1)+"h</small>";
   $("statMonth").innerHTML = money(em)+"<small>"+mh.toFixed(1)+"h</small>";
@@ -1982,7 +1986,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.20.63";
+const APP_VERSION="2026.10.21.64";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
