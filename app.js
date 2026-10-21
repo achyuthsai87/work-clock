@@ -149,8 +149,16 @@ function cleanLocal(d){  // everything persisted on this device, incl. sync + lo
 }
 let otCache = null;
 let db = {rate: 14, theme: "auto", shifts: []};
-try { const raw = localStorage.getItem(KEY); if (raw) db = cleanLocal(JSON.parse(raw)); } catch(e){}
-function save(){ otCache=null; try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} }
+let loadedEmpty = true;
+try { const raw = localStorage.getItem(KEY); if (raw){ loadedEmpty = false; db = cleanLocal(JSON.parse(raw)); } } catch(e){ loadedEmpty = true; }
+// a second copy in IndexedDB, so if the phone ever clears this app's local storage everything comes straight back
+let safeT = null;
+function safeNow(){ try{ clearTimeout(safeT); const txt = JSON.stringify(db), r = indexedDB.open("workclock-safe", 1); r.onupgradeneeded = () => r.result.createObjectStore("k"); r.onsuccess = () => { try{ const tx = r.result.transaction("k", "readwrite"); tx.objectStore("k").put(txt, "db"); tx.oncomplete = () => r.result.close(); }catch(_){} }; }catch(_){} }
+function save(){ otCache=null; try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} clearTimeout(safeT); safeT = setTimeout(safeNow, 600); }
+document.addEventListener("visibilitychange", () => { if(document.hidden) safeNow(); }); window.addEventListener("pagehide", safeNow);
+try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(_){}
+if(loadedEmpty){ try{ const r=indexedDB.open("workclock-safe",1); r.onupgradeneeded=()=>r.result.createObjectStore("k");
+  r.onsuccess=()=>{ try{ const g=r.result.transaction("k","readonly").objectStore("k").get("db"); g.onsuccess=()=>{ try{ if(!g.result) return; const c=cleanLocal(JSON.parse(g.result)); if((c.shifts&&c.shifts.length)||c.profile||(c.payments&&c.payments.length)){ db=c; save(); render(); } }catch(_){} }; }catch(_){} }; }catch(_){} }
 if(!db.loc || !db.loc.at){ db.loc=db.loc||{on:1,work:{}}; db.loc.work=db.loc.work||{}; db.loc.at={"":1}; (db.jobs||[]).forEach(j=>{ db.loc.at[j.id]=1; }); save(); }   // existing jobs keep recording; new jobs start "on the road"
 
 function applyTheme(){
@@ -1986,7 +1994,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.21.64";
+const APP_VERSION="2026.10.21.65";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
@@ -2380,7 +2388,6 @@ setTimeout(replayActive,80);
 setTimeout(showMissed,1200);
 let hidAt=0;
 document.addEventListener("visibilitychange",()=>{ if(document.hidden){ hidAt=Date.now(); } else if(Date.now()-hidAt>4000){ for(const k in counted) delete counted[k]; setTimeout(replayActive,150); } });
-try{ indexedDB.deleteDatabase("workclock-sounds"); localStorage.removeItem("workclock.alarm"); }catch(_){}
 // ---- break: iPhone-style wheels for hours and minutes ----
 function brkText(m){ const h=Math.floor(m/60), r=m%60; return h?(r?h+"h "+r+"m":h+"h"):r+" min"; }
 (function(){
