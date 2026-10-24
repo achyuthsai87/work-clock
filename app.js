@@ -1055,6 +1055,7 @@ function renderInsights(){
 let anaRaf=0;
 const RM=()=>window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
 function drawAnaChart(days, p){
+  anaCur={days,p}; hideAnaTip();
   cancelAnimationFrame(anaRaf);
   if(RM()){ drawAnaFrame(days,p,null); return; }
   const t0=performance.now(), n=days.length, DUR=520, STAG=Math.min(40,300/Math.max(1,n));
@@ -1064,6 +1065,27 @@ function drawAnaChart(days, p){
   };
   anaRaf=requestAnimationFrame(step);
 }
+// tap a bar: a small black pop-up with when you worked and what you earned; tap anywhere else and it goes
+let anaCur={days:[],p:"week"};
+function hideAnaTip(){ const t=$("anaTip"); if(t) t.hidden=true; }
+function showAnaTip(i){
+  const d=anaCur.days[i], cv=$("anaChart"), tip=$("anaTip"); if(!d||!tip) return;
+  const list=S().filter(x=>x.end && x.start>=d.a && x.start<d.b).sort((x,y)=>x.start-y.start);
+  let l1;
+  if(anaCur.p==="year") l1=d.hours>0 ? d.hours.toFixed(1)+"h worked" : "Not worked";
+  else if(!list.length) l1="Not worked";
+  else l1=list.slice(0,2).map(x=>fmtTime(x.start)+" \u2013 "+fmtTime(x.end)).join(", ")+(list.length>2?" +"+(list.length-2)+" more":"");
+  tip.innerHTML="<span></span><b></b>"; tip.firstChild.textContent=l1; tip.lastChild.textContent=money(d.earned);
+  tip.hidden=false;
+  const W=cv.clientWidth, H=cv.clientHeight, n=anaCur.days.length, slot=W/n, x=i*slot+slot/2, padB=22, padT=24;
+  const maxH=Math.max(0.5,...anaCur.days.map(q=>q.hours)), h=Math.max(2,(d.hours/maxH)*(H-padB-padT)), top=H-padB-h;
+  const tw=tip.offsetWidth, th=tip.offsetHeight;
+  let left=cv.offsetLeft+Math.min(Math.max(x-tw/2,0),W-tw), y=cv.offsetTop+Math.max(0,top-th-10);
+  tip.style.left=left+"px"; tip.style.top=y+"px"; tip.style.setProperty("--ax",(cv.offsetLeft+x-left)+"px"); }
+$("anaChart").addEventListener("click",e=>{ e.stopPropagation(); const cv=$("anaChart"), r=cv.getBoundingClientRect(), n=anaCur.days.length; if(!n) return;
+  const i=Math.floor((e.clientX-r.left)/(r.width/n)); if(i<0||i>=n) return; const t=$("anaTip"); if(!t.hidden && t.dataset.i===String(i)){ hideAnaTip(); return; } t.dataset.i=i; showAnaTip(i); });
+document.addEventListener("pointerdown",e=>{ if(e.target.closest("#anaTip")||e.target.id==="anaChart") return; hideAnaTip(); });
+document.addEventListener("scroll",hideAnaTip,{passive:true});
 function drawAnaFrame(days, p, prog, el){
   const DUR=520, n0=days.length, STAG=Math.min(40,300/Math.max(1,n0));
   const kOf=i=> prog==null ? 1 : (()=>{ const u=Math.min(1,Math.max(0,(el-i*STAG)/DUR)); return 1-Math.pow(1-u,3); })();
@@ -1994,7 +2016,7 @@ async function autoSync(){ const c=syncCfg(); if(!c.enabled||!c.url||!navigator.
   progFinish(); updateSyncStatus(); }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) autoSync(); });
 // app updates without deleting the app
-const APP_VERSION="2026.10.21.65";
+const APP_VERSION="2026.10.24.66";
 $("appVer").textContent=APP_VERSION;
 $("updateBtn").onclick=async()=>{ $("updateBtn").textContent="Updating…";
   try{ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister()));
